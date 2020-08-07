@@ -14,7 +14,7 @@ contract IndexFund is BaseERC20 {
   using FixedPoint for FixedPoint.uq144x112;
 
   // Maximum value of a 112 bit uint.
-  uint256 constant MAX_UINT112 = 2**112 - 1;
+  uint256 internal constant MAX_UINT112 = 2**112 - 1;
 
   uint256 public immutable indexSize;
   address[] public indexedTokens;
