@@ -10,14 +10,14 @@ import "./interfaces/IERC20.sol";
 contract UniSwapV2PriceOracle {
   // Minimum time elapsed between updates
   uint32 public constant MIN_UPDATE_PERIOD = uint32(1 days);
-  // Uniswap factory address
-  address public constant UNISWAP_FACTORY = address(0);
   // Maximum value of a 24 bit integer
   uint24 public constant MAX_24_BIT = uint24(2**24 - 1);
 
+  // Uniswap factory address
+  address public uniswapFactory;
   // Address of the token used to compare prices.
   // Should be a stablecoin such as DAI or USDC.
-  address public constant STABLECOIN = address(0);
+  address public stableCoin;
 
   struct PriceObservation {
     uint32 timestamp;
@@ -27,6 +27,11 @@ contract UniSwapV2PriceOracle {
   mapping(address => PriceObservation) public lastObservedPrices;
 
   event PriceUpdated(address token, uint224 priceCumulativeLast);
+
+  constructor(address _uniswapFactory, address _stableCoin) public {
+    uniswapFactory = _uniswapFactory;
+    stableCoin = _stableCoin;
+  }
 
   /**
    * @dev Update the price stored for a token.
@@ -42,6 +47,13 @@ contract UniSwapV2PriceOracle {
   }
 
   /**
+   * @dev Update the price for multiple tokens.
+   */
+  function updatePrices(address[] memory tokens) public {
+    for (uint256 i = 0; i < tokens.length; i++) updatePrice(tokens[i]);
+  }
+
+  /**
    * @dev Compute the average market cap of a token over the recent period.
    * Queries the current cumulative price and retrieves the last stored
    * cumulative price, then calculates the average price and multiplies it
@@ -49,7 +61,8 @@ contract UniSwapV2PriceOracle {
    * Note: Price must have been updated within the last MIN_UPDATE_PERIOD
    * seconds.
    */
-  function computeAverageMarketCap(address token) public view returns (uint144 marketCap) {
+  function computeAverageMarketCap(address token)
+  public view returns (uint144 marketCap) {
     // Get the stored price observation
     PriceObservation memory observation1 = lastObservedPrices[token];
     // Get the current cumulative price
@@ -134,7 +147,7 @@ contract UniSwapV2PriceOracle {
    */
   function _observePrice(address token) internal view returns (PriceObservation memory) {
     (uint priceCumulative, uint32 blockTimestamp) = UniV2Oracle.getCurrentCumulativePrice(
-      UNISWAP_FACTORY, token, STABLECOIN
+      uniswapFactory, token, stableCoin
     );
     return PriceObservation(blockTimestamp, uint224(priceCumulative));
   }
