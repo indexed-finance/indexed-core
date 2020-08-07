@@ -1,0 +1,19 @@
+{
+  "wrapped_tokens": [
+    {
+      "name": "Wrapped Bitcoin",
+      "symbol": "WBTC",
+      "initialPrice": 12000
+    },
+    {
+      "name": "Wrapped Litecoin",
+      "symbol": "WLTC",
+      "initialPrice": 200
+    },
+    {
+      "name": "Wrapped Ether",
+      "symbol": "WETH",
+      "initialPrice": 390
+    }
+  ]
+}
