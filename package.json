@@ -27,6 +27,10 @@
     "chai": "^4.2.0",
     "ethereum-waffle": "^3.0.2",
     "ethers": "^5.0.8",
+    "prettier": "^2.0.5",
+    "prettier-plugin-solidity": "^1.0.0-alpha.55",
+    "solium": "^1.2.5",
+    "solium-plugin-security": "^0.1.1",
     "web3": "^1.2.11"
   },
   "dependencies": {
