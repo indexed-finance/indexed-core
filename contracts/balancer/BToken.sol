@@ -26,6 +26,7 @@ interface IERC20 {
   ) external returns (bool);
 }
 
+
 contract BTokenBase is BNum {
   mapping(address => uint256) internal _balance;
   mapping(address => mapping(address => uint256)) internal _allowance;
@@ -66,6 +67,7 @@ contract BTokenBase is BNum {
     _move(from, address(this), amt);
   }
 }
+
 
 contract BToken is BTokenBase, IERC20 {
   string private _name = "Balancer Pool Token";

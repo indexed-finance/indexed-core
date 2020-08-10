@@ -3,6 +3,7 @@ pragma solidity ^0.6.0;
 
 import "./BConst.sol";
 
+
 contract BNum is BConst {
   function btoi(uint256 a) internal pure returns (uint256) {
     return a / BONE;

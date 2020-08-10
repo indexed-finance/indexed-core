@@ -4,6 +4,7 @@ pragma solidity ^0.6.0;
 import "./BToken.sol";
 import "./BMath.sol";
 
+
 contract BPool is BBronze, BToken, BMath {
   struct Record {
     bool bound; // is token bound to pool

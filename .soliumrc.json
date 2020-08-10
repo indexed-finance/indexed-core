@@ -10,6 +10,8 @@
     "no-experimental": "off",
     "security/no-inline-assembly": "off",
     "security/no-block-members": "off",
-    "security/no-assign-params": "off"
+    "security/no-assign-params": "off",
+    "function-order": "off",
+    "camelcase": "off"
   }
 }
