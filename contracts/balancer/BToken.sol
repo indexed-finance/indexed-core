@@ -70,9 +70,20 @@ contract BTokenBase is BNum {
 
 
 contract BToken is BTokenBase, IERC20 {
-  string private _name = "Balancer Pool Token";
-  string private _symbol = "BPT";
+  string private _name;
+  string private _symbol;
   uint8 private _decimals = 18;
+
+  function _initializeToken(string memory name, string memory symbol) internal {
+    require(
+      bytes(_name).length == 0 &&
+      bytes(name).length != 0 &&
+      bytes(symbol).length != 0,
+      "ERR_BTOKEN_INITIALIZED"
+    );
+    _name = name;
+    _symbol = symbol;
+  }
 
   function name() public view returns (string memory) {
     return _name;
