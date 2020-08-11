@@ -4,6 +4,7 @@ pragma solidity ^0.6.0;
 // Builds new BPools, logging their addresses and providing `isBPool(address) -> (bool)`
 
 import "./BPool.sol";
+import "../lib/ProxyLib.sol";
 
 
 contract BFactory is BBronze {
@@ -17,18 +18,31 @@ contract BFactory is BBronze {
     return _isBPool[b];
   }
 
-  function newBPool() external returns (BPool) {
-    BPool bpool = new BPool();
-    _isBPool[address(bpool)] = true;
-    emit LOG_NEW_POOL(msg.sender, address(bpool));
-    bpool.setController(msg.sender);
+  function newBPool(
+    uint256 categoryID,
+    uint256 indexSize,
+    string calldata name,
+    string calldata symbol
+  ) external returns (BPool) {
+    bytes32 salt = keccak256(abi.encodePacked(categoryID, indexSize));
+    address bpoolAddress = ProxyLib.deployProxy(_poolContract, salt);
+    BPool bpool = BPool(bpoolAddress);
+    bpool.initialize(
+      msg.sender,
+      name,
+      symbol
+    );
+    _isBPool[bpoolAddress] = true;
+    emit LOG_NEW_POOL(msg.sender, bpoolAddress);
     return bpool;
   }
 
   address private _blabs;
+  address private _poolContract;
 
   constructor() public {
     _blabs = msg.sender;
+    _poolContract = address(new BPool());
   }
 
   function getBLabs() external view returns (address) {
