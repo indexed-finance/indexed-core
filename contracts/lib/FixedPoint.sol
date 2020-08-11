@@ -2,7 +2,7 @@
 
 pragma solidity >=0.4.0;
 
-import './Babylonian.sol';
+import "./Babylonian.sol";
 
 // a library for handling binary fixed point numbers (https://en.wikipedia.org/wiki/Q_(number_format))
 library FixedPoint {
@@ -34,7 +34,7 @@ library FixedPoint {
 
   // divide a UQ112x112 by a uint112, returning a UQ112x112
   function div(uq112x112 memory self, uint112 x) internal pure returns (uq112x112 memory) {
-    require(x != 0, 'FixedPoint: DIV_BY_ZERO');
+    require(x != 0, "FixedPoint: DIV_BY_ZERO");
     return uq112x112(self._x / uint224(x));
   }
 
@@ -68,7 +68,7 @@ library FixedPoint {
 
   // take the reciprocal of a UQ112x112
   function reciprocal(uq112x112 memory self) internal pure returns (uq112x112 memory) {
-    require(self._x != 0, 'FixedPoint: ZERO_RECIPROCAL');
+    require(self._x != 0, "FixedPoint: ZERO_RECIPROCAL");
     return uq112x112(uint224(Q224 / self._x));
   }
 
