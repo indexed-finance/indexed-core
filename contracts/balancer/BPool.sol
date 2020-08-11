@@ -67,13 +67,27 @@ contract BPool is BBronze, BToken, BMath {
   mapping(address => Record) private _records;
   uint256 private _totalWeight;
 
-  constructor() public {
-    _controller = msg.sender;
+  function initialize(
+    address controller,
+    string calldata name,
+    string calldata symbol
+  )
+    external
+  {
+    require(
+      _controller == address(0) &&
+      controller != address(0),
+      "ERR_INITIALIZED"
+    );
+    _controller = controller;
     _factory = msg.sender;
     _swapFee = MIN_FEE;
     _publicSwap = false;
     _finalized = false;
+    _initializeToken(name, symbol);
   }
+
+  /* <-- Queries --> */
 
   function isPublicSwap() external view returns (bool) {
     return _publicSwap;
@@ -98,6 +112,18 @@ contract BPool is BBronze, BToken, BMath {
     returns (address[] memory tokens)
   {
     return _tokens;
+  }
+
+  function getCurrentTokensAndDenormalizedWeights()
+    external
+    view
+    _viewlock_
+    returns (address[] memory tokens, uint256[] memory weights)
+  {
+    tokens = _tokens;
+    for (uint256 i = 0; i < tokens.length; i++) {
+      weights[i] = _records[tokens[i]].denorm;
+    }
   }
 
   function getFinalTokens()
@@ -158,6 +184,7 @@ contract BPool is BBronze, BToken, BMath {
     return _controller;
   }
 
+  /* <-- Administrative Actions --> */
   function setSwapFee(uint256 swapFee) external _logs_ _lock_ {
     require(!_finalized, "ERR_IS_FINALIZED");
     require(msg.sender == _controller, "ERR_NOT_CONTROLLER");
@@ -189,6 +216,18 @@ contract BPool is BBronze, BToken, BMath {
     _pushPoolShare(msg.sender, INIT_POOL_SUPPLY);
   }
 
+  /* <-- Token Actions --> */
+
+  /**
+   * @dev Binds the token with address `token`.
+   * Creates the token record and then calls `rebind` for updating pool weights and token transfers.
+   * Tokens will be pushed/pulled from caller to adjust match new balance.
+   * Token must not already be bound.
+   * `balance` must be a valid balance and denorm must be a valid denormalized weight.
+   * @param token address of token to bind (must not already be bound)
+   * @param balance balance of the token to be pulled from caller
+   * @param denorm denormalized weight
+   */
   function bind(
     address token,
     uint256 balance,
@@ -199,8 +238,8 @@ contract BPool is BBronze, BToken, BMath {
   // _lock_  Bind does not lock because it jumps to `rebind`, which does
   {
     require(msg.sender == _controller, "ERR_NOT_CONTROLLER");
-    require(!_records[token].bound, "ERR_IS_BOUND");
     require(!_finalized, "ERR_IS_FINALIZED");
+    require(!_records[token].bound, "ERR_IS_BOUND");
 
     require(_tokens.length < MAX_BOUND_TOKENS, "ERR_MAX_TOKENS");
 
@@ -220,38 +259,25 @@ contract BPool is BBronze, BToken, BMath {
     uint256 denorm
   ) public _logs_ _lock_ {
     require(msg.sender == _controller, "ERR_NOT_CONTROLLER");
-    require(_records[token].bound, "ERR_NOT_BOUND");
     require(!_finalized, "ERR_IS_FINALIZED");
+    _rebind(token, balance, denorm);
+  }
 
-    require(denorm >= MIN_WEIGHT, "ERR_MIN_WEIGHT");
-    require(denorm <= MAX_WEIGHT, "ERR_MAX_WEIGHT");
-    require(balance >= MIN_BALANCE, "ERR_MIN_BALANCE");
-
-    // Adjust the denorm and totalWeight
-    uint256 oldWeight = _records[token].denorm;
-    if (denorm > oldWeight) {
-      _totalWeight = badd(_totalWeight, bsub(denorm, oldWeight));
-      require(_totalWeight <= MAX_TOTAL_WEIGHT, "ERR_MAX_TOTAL_WEIGHT");
-    } else if (denorm < oldWeight) {
-      _totalWeight = bsub(_totalWeight, bsub(oldWeight, denorm));
-    }
-    _records[token].denorm = denorm;
-
-    // Adjust the balance record and actual token balance
-    uint256 oldBalance = _records[token].balance;
-    _records[token].balance = balance;
-    if (balance > oldBalance) {
-      _pullUnderlying(token, msg.sender, bsub(balance, oldBalance));
-    } else if (balance < oldBalance) {
-      // In this case liquidity is being withdrawn, so charge EXIT_FEE
-      uint256 tokenBalanceWithdrawn = bsub(oldBalance, balance);
-      uint256 tokenExitFee = bmul(tokenBalanceWithdrawn, EXIT_FEE);
-      _pushUnderlying(
-        token,
-        msg.sender,
-        bsub(tokenBalanceWithdrawn, tokenExitFee)
-      );
-      _pushUnderlying(token, _factory, tokenExitFee);
+  function rebind(
+    address[] memory tokens,
+    uint256[] memory balances,
+    uint256[] memory denorms
+  ) public _logs_ _lock_ {
+    require(msg.sender == _controller, "ERR_NOT_CONTROLLER");
+    require(!_finalized, "ERR_IS_FINALIZED");
+    uint256 len = tokens.length;
+    require(
+      balances.length == len &&
+      denorms.length == len,
+      "ERR_ARR_SIZE"
+    );
+    for (uint256 i = 0; i < len; i++) {
+      _rebind(tokens[i], balances[i], denorms[i]);
     }
   }
 
@@ -284,6 +310,7 @@ contract BPool is BBronze, BToken, BMath {
     _records[token].balance = IERC20(token).balanceOf(address(this));
   }
 
+  /* <-- Price Queries --> */
   function getSpotPrice(address tokenIn, address tokenOut)
     external
     view
@@ -323,6 +350,8 @@ contract BPool is BBronze, BToken, BMath {
         0
       );
   }
+
+  /* <-- Liquidity Provider Actions --> */
 
   function joinPool(uint256 poolAmountOut, uint256[] calldata maxAmountsIn)
     external
@@ -378,6 +407,7 @@ contract BPool is BBronze, BToken, BMath {
     }
   }
 
+  /* <-- Swap Actions --> */
   function swapExactAmountIn(
     address tokenIn,
     uint256 tokenAmountIn,
@@ -668,7 +698,62 @@ contract BPool is BBronze, BToken, BMath {
     return poolAmountIn;
   }
 
-  // ==
+  /* <-- Token Binding Internal Functions --> */
+  function _rebind(
+    address token,
+    uint256 balance,
+    uint256 suggestedDenorm
+  ) internal {
+    require(_records[token].bound, "ERR_NOT_BOUND");
+    require(suggestedDenorm >= MIN_WEIGHT, "ERR_MIN_WEIGHT");
+    require(suggestedDenorm <= MAX_WEIGHT, "ERR_MAX_WEIGHT");
+    require(balance >= MIN_BALANCE, "ERR_MIN_BALANCE");
+
+    // The maximum weight adjustment, as a percentage, that can be executed at
+    // one time is equal to the swap fee.
+    uint256 oldWeight = _records[token].denorm;
+    uint256 maxDiff = bmul(oldWeight, _swapFee);
+    uint256 denorm = suggestedDenorm;
+    // Restrict the proportional weight change to swapFee
+    // Adjust the denorm and totalWeight
+    if (denorm > oldWeight) {
+      uint256 diff = bsub(denorm, oldWeight);
+      if (oldWeight != 0 && diff > maxDiff) {
+        denorm = oldWeight + maxDiff;
+        diff = maxDiff;
+      }
+      _totalWeight = badd(_totalWeight, diff);
+      require(_totalWeight <= MAX_TOTAL_WEIGHT, "ERR_MAX_TOTAL_WEIGHT");
+    } else if (oldWeight > denorm) {
+      uint256 diff = bsub(oldWeight, denorm);
+      if (diff > maxDiff) {
+        denorm = oldWeight - maxDiff;
+        diff = maxDiff;
+      }
+      _totalWeight = bsub(_totalWeight, diff);
+    }
+
+    _records[token].denorm = denorm;
+
+    // Adjust the balance record and actual token balance
+    uint256 oldBalance = _records[token].balance;
+    _records[token].balance = balance;
+    if (balance > oldBalance) {
+      _pullUnderlying(token, msg.sender, bsub(balance, oldBalance));
+    } else if (balance < oldBalance) {
+      // In this case liquidity is being withdrawn, so charge EXIT_FEE
+      uint256 tokenBalanceWithdrawn = bsub(oldBalance, balance);
+      uint256 tokenExitFee = bmul(tokenBalanceWithdrawn, EXIT_FEE);
+      _pushUnderlying(
+        token,
+        msg.sender,
+        bsub(tokenBalanceWithdrawn, tokenExitFee)
+      );
+      _pushUnderlying(token, _factory, tokenExitFee);
+    }
+  }
+
+  /* <-- Underlying Token Internal Functions --> */
   // 'Underlying' token-manipulation functions make external calls but are NOT locked
   // You must `_lock_` or otherwise ensure reentry-safety
 
@@ -690,6 +775,7 @@ contract BPool is BBronze, BToken, BMath {
     require(xfer, "ERR_ERC20_FALSE");
   }
 
+  /* <-- Pool Share Internal Functions --> */
   function _pullPoolShare(address from, uint256 amount) internal {
     _pull(from, amount);
   }
