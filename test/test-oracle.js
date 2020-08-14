@@ -199,7 +199,6 @@ describe("Greeter", () => {
       const receipt = await marketOracle.orderCategoryTokensByMarketCap(
         1, categorySorted.map((t) => t.token)
       ).then((r) => r.wait());
-      console.log()
       const categoryAfterSort = await getCategoryData(1);
       expect(
         mapToHex(categoryAfterSort.map((t) => t.marketCap))

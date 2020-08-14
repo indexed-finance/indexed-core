@@ -22,6 +22,7 @@ describe('Mock Proxy Factory', async () => {
     const codeMatches = await proxyFactory.compareCodeHash(salt);
     expect(codeMatches).to.be.true;
     proxy = new web3.eth.Contract(proxyLogicABI, proxyAddress);
+    console.log(`Proxy Deployment Cost: ${receipt.gasUsed}`);
   });
 
   it('Queries the stored value', async () => {
