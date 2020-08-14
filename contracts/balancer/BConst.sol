@@ -5,6 +5,8 @@ import "./BColor.sol";
 
 
 contract BConst is BBronze {
+  uint256 public constant MIN_WEIGHT_DELAY = 1 hours;
+
   uint256 public constant BONE = 10**18;
 
   uint256 public constant MIN_BOUND_TOKENS = 2;
