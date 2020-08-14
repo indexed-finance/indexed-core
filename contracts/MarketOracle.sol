@@ -4,13 +4,13 @@ pragma experimental ABIEncoderV2;
 import "./UniSwapV2PriceOracle.sol";
 
 contract MarketOracle is UniSwapV2PriceOracle {
-  // 100k stablecoin units (100,000 * 10**decimals)
-  // uint256 public stablecoinUSD100k;
-
   // Address that can update the categories.
   address public manager;
   // Number of categories in the oracle.
   uint256 public categoryIndex = 1;
+
+  // Max time between a category being sorted and a query for the top n tokens.
+  uint256 public constant MAX_SORT_DELAY = 1 days;
 
   // Array of tokens for each category.
   mapping(uint256 => address[]) internal _categoryTokens;
@@ -18,6 +18,8 @@ contract MarketOracle is UniSwapV2PriceOracle {
   mapping(address => uint256) internal _tokenCategories;
   // IPFS hash for metadata about token categories.
   mapping(uint256 => bytes32) public categoryMetadata;
+  // Last time a category was sorted
+  mapping(uint256 => uint256) public lastCategoryUpdate;
 
   /**
    * @dev Data structure for adding many new tokens to a category.
@@ -44,6 +46,11 @@ contract MarketOracle is UniSwapV2PriceOracle {
   }
 
   /* <-- CATEGORY QUERIES --> */
+
+  function hasCategory(uint256 categoryID) external view returns (bool) {
+    return categoryID < categoryIndex;
+  }
+
   /**
    * @dev Return the array of tokens for a category.
    */
@@ -80,13 +87,23 @@ contract MarketOracle is UniSwapV2PriceOracle {
   /**
    * @dev Adds a new token to a category.
    */
-  function addToken(address token, uint256 categoryID) public onlyManager {
+  function _addToken(address token, uint256 categoryID) internal {
     require(categoryID < categoryIndex, "Category does not exist.");
     require(_tokenCategories[token] == 0, "Token already listed.");
     _tokenCategories[token] = categoryID;
     _categoryTokens[categoryID].push(token);
     updatePrice(token);
     emit TokenAdded(token, categoryID);
+  }
+
+  /**
+   * @dev Adds a new token to a category.
+   */
+  function addToken(address token, uint256 categoryID) public onlyManager {
+    _addToken(token, categoryID);
+    // Decrement the timestamp for the last category sort to ensure
+    // the new token is sorted before the top n tokens can be queried.
+    lastCategoryUpdate[categoryID] -= MAX_SORT_DELAY;
   }
 
   /**
@@ -98,21 +115,29 @@ contract MarketOracle is UniSwapV2PriceOracle {
     for (uint256 u = 0; u < updates.length; u++) {
       NewCategoryTokens memory update = updates[u];
       for (uint256 t = 0; t < update.tokens.length; t++) {
-        addToken(update.tokens[t], update.categoryID);
+        _addToken(update.tokens[t], update.categoryID);
       }
+      // Decrement the timestamp for the last category sort to ensure
+      // the new token is sorted before the top n tokens can be queried.
+      lastCategoryUpdate[update.categoryID] -= MAX_SORT_DELAY;
     }
   }
 
-  /* <-- TOKEN SORTING ACTIONS --> */
+  /* <-- TOKEN SORTING --> */
   /**
    * @dev Update the order of tokens in a category by descending market cap.
    * @param categoryID Category to sort
    * @param orderedTokens Pre-sorted array of tokens
    */
-  function orderCategoryTokensByMarketCap(uint256 categoryID, address[] memory orderedTokens)
-  public {
+  function orderCategoryTokensByMarketCap(
+    uint256 categoryID,
+    address[] memory orderedTokens
+  ) public {
     address[] storage categoryTokens = _categoryTokens[categoryID];
-    require(orderedTokens.length == categoryTokens.length, "Incorrect number of tokens.");
+    require(
+      orderedTokens.length == categoryTokens.length,
+      "Incorrect number of tokens."
+    );
     uint144[] memory marketCaps = computeAverageMarketCaps(orderedTokens);
     categoryTokens[0] = orderedTokens[0];
     for (uint256 i = 1; i < marketCaps.length; i++) {
@@ -122,5 +147,26 @@ contract MarketOracle is UniSwapV2PriceOracle {
       require(marketCaps[i] <= marketCaps[i-1], "Tokens out of order");
       categoryTokens[i] = token;
     }
+    lastCategoryUpdate[categoryID] = now;
+  }
+
+  /**
+   * @dev Get the top tokens in a category.
+   * Note: The category must have been sorted by market cap
+   * in the last `MAX_SORT_DELAY` seconds.
+   */
+  function getTopCategoryTokens(uint256 categoryID, uint256 num)
+  external view returns (address[] memory tokens) {
+    address[] storage categoryTokens = _categoryTokens[categoryID];
+    require(
+      num <= categoryTokens.length,
+      "Category does not have sufficient tokens."
+    );
+    require(
+      now - lastCategoryUpdate[categoryID] <= MAX_SORT_DELAY,
+      "Category not sorted recently."
+    );
+    tokens = new address[](num);
+    for (uint256 i = 0; i < num; i++) tokens[i] = categoryTokens[i];
   }
 }
