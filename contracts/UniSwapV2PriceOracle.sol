@@ -15,6 +15,7 @@ contract UniSwapV2PriceOracle {
 
   // Uniswap factory address
   address public uniswapFactory;
+
   // Address of the token used to compare prices.
   // Should be a stablecoin such as DAI or USDC.
   address public stableCoin;

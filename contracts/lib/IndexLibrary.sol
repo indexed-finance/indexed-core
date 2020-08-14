@@ -55,7 +55,7 @@ library IndexLibrary {
   function computeTokenWeights(
     address[] memory tokens,
     FixedPoint.uq112x112[] memory averagePrices
-  ) public view returns (FixedPoint.uq112x112[] memory weights) {
+  ) internal view returns (FixedPoint.uq112x112[] memory weights) {
     // Get the square roots of token market caps
     uint112[] memory sqrts = computeMarketCapSqrts(tokens, averagePrices);
     uint112 rootSum;
