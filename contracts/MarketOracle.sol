@@ -3,6 +3,7 @@ pragma experimental ABIEncoderV2;
 
 import "./UniSwapV2PriceOracle.sol";
 
+
 contract MarketOracle is UniSwapV2PriceOracle {
   // Address that can update the categories.
   address public manager;
@@ -48,7 +49,7 @@ contract MarketOracle is UniSwapV2PriceOracle {
   /* <-- CATEGORY QUERIES --> */
 
   function hasCategory(uint256 categoryID) external view returns (bool) {
-    return categoryID < categoryIndex;
+    return categoryID < categoryIndex && categoryID > 0;
   }
 
   /**
