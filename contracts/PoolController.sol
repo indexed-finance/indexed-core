@@ -1,36 +1,48 @@
 pragma solidity ^0.6.0;
 pragma experimental ABIEncoderV2;
 
-import "./balancer/BFactory.sol";
 import { BPool } from "./balancer/BPool.sol";
+import "./interfaces/IERC20.sol";
 import "./lib/FixedPoint.sol";
+import "./lib/ProxyLib.sol";
 import { IndexLibrary as Index } from "./lib/IndexLibrary.sol";
 import { MarketOracle } from "./MarketOracle.sol";
 
 
-contract PoolController is BFactory {
-  uint256 public constant MIN_POOL_SIZE = 2;
-  uint256 public constant MAX_POOL_SIZE = 8;
-  uint256 public constant BONE = 10**18;
-  uint256 public constant MAX_WEIGHT = BONE * 50;
-
+contract PoolController {
   using FixedPoint for FixedPoint.uq112x112;
   using FixedPoint for FixedPoint.uq144x112;
 
-  uint256 public constant WEIGHT_UPDATE_PERIOD = 7 days;
+  uint256 public constant MIN_POOL_SIZE = 2;
+  uint256 public constant MAX_POOL_SIZE = 8;
+  uint256 public constant BONE = 10**18;
+  uint256 public constant WEIGHT_MULTIPLIER = BONE * 25;
+  uint256 public constant POOL_REWEIGH_DELAY = 7 days;
+
+  event LOG_NEW_POOL(address indexed caller, address indexed pool, uint256 categoryID, uint256 indexSize);
+  event LOG_BLABS(address indexed caller, address indexed blabs);
+
+  address internal _poolContract;
+  mapping(address => bool) internal _isBPool;
+
   mapping(address => uint256) public lastPoolReweighs;
   MarketOracle public oracle;
 
-  constructor (address _oracle) public BFactory() {
+  constructor (address _oracle) public {
     oracle = MarketOracle(_oracle);
+    _poolContract = address(new BPool());
+  }
+
+  function isBPool(address b) external view returns (bool) {
+    return _isBPool[b];
   }
 
   function shouldPoolReweigh(address pool) public view returns (bool) {
-    return now - lastPoolReweighs[pool] >= WEIGHT_UPDATE_PERIOD;
+    return now - lastPoolReweighs[pool] >= POOL_REWEIGH_DELAY;
   }
 
   function computePoolAddress(uint256 categoryID, uint256 indexSize)
-    external
+    public
     view
     returns (address)
   {
@@ -43,57 +55,52 @@ contract PoolController is BFactory {
 
   /**
    * @dev Deploy a new indexed pool with the category ID and index size.
+   * TODO: Currently this just assumes that the pool controller already owns the tokens.
+   * This should be updated to gradually purchase tokens from UniSwap.
    * @param categoryID Identifier for the indexed category
    * @param indexSize Number of tokens to hold in the index fund
    * @param name Name of the index token - should indicate the category and size
    * @param symbol Symbol for the index token
+   * @param initialStablecoinValue Total initial value of the pool
    */
   function deployIndexPool(
     uint256 categoryID,
     uint256 indexSize,
     string calldata name,
-    string calldata symbol
+    string calldata symbol,
+    uint256 initialStablecoinValue
   ) external {
     require(indexSize >= MIN_POOL_SIZE, "Less than minimum index size.");
     require(indexSize <= MAX_POOL_SIZE, "Exceeds maximum index size");
     require(oracle.hasCategory(categoryID), "Category does not exist");
-    BPool bpool = _newBPool(categoryID, indexSize);
-    bpool.initialize(
-      address(this),
-      name,
-      symbol
-    );
-  }
-
-  /**
-   * @dev Initialize a pool with tokens, balances and weights.
-   * TODO: Currently this just assumes that the pool controller already owns the tokens.
-   * This should be updated to gradually purchase tokens from UniSwap.
-   * Note: The call to the pool will throw if it is already initialized, so we don't check
-   * in the controller to save gas.
-   */
-  function initializePool(
-    uint256 categoryID,
-    uint256 indexSize,
-    uint256 initialStablecoinValue
-  ) external {
     bytes32 salt = keccak256(abi.encodePacked(categoryID, indexSize));
-    address poolAddress = ProxyLib.computeProxyAddress(
-      _poolContract,
-      salt
-    );
-    require(_isBPool[poolAddress], "Pool does not exist");
+    address bpoolAddress = ProxyLib.deployProxy(_poolContract, salt);
+    _isBPool[bpoolAddress] = true;
+    emit LOG_NEW_POOL(msg.sender, bpoolAddress, categoryID, indexSize);
+    BPool bpool = BPool(bpoolAddress);
     (
       address[] memory tokens,
       uint96[] memory denormalizedWeights,
       uint256[] memory balances
     ) = getInitialTokenWeightsAndBalances(categoryID, indexSize, initialStablecoinValue);
     for (uint256 i = 0; i < indexSize; i++) {
-      IERC20(tokens[i]).approve(poolAddress, balances[i]);
+      IERC20(tokens[i]).approve(bpoolAddress, balances[i]);
     }
-    BPool(poolAddress).bindInitialTokens(tokens, balances, denormalizedWeights);
+    bpool.initialize(
+      address(this),
+      name,
+      symbol,
+      tokens,
+      balances,
+      denormalizedWeights
+    );
   }
 
+  /**
+   * @dev Queries the top n tokens in a category from the market oracle,
+   * computes their relative weights by market cap square root and determines
+   * the weighted balance of each token to meet a specified total value.
+   */
   function getInitialTokenWeightsAndBalances(
     uint256 categoryID,
     uint256 indexSize,
@@ -119,21 +126,43 @@ contract PoolController is BFactory {
     }
   }
 
-  // /**
-  //  * TODO Implement functionality to replace the indexed tokens.
-  //  */
-  // function updatePoolWeights(address poolAddress) external {
-  //   require(shouldPoolReweigh(poolAddress), "ERR_POOL_NOT_READY");
-  //   lastPoolReweighs[poolAddress] = now;
-  //   BPool pool = BPool(poolAddress);
-  //   (address[] memory tokens) = pool.getCurrentTokens();
+  // function reIndexPool(
+  //   uint256 categoryID,
+  //   uint256 indexSize
+  // )
+  //   public
+  //   view
+  //   returns (
+  //     address[] memory tokens,
+  //     uint96[] memory denormalizedWeights,
+  //     uint256[] memory balances
+  //   )
+  // {
+  //   tokens = oracle.getTopCategoryTokens(categoryID, indexSize);
+  //   address poolAddress = computePoolAddress(categoryID, indexSize);
   //   FixedPoint.uq112x112[] memory prices = oracle.computeAveragePrices(tokens);
   //   FixedPoint.uq112x112[] memory weights = Index.computeTokenWeights(tokens, prices);
-  //   uint96[] memory denormalizedWeights = new uint96[](tokens.length);
-  //   for (uint256 i = 0; i < denormalizedWeights.length; i++) {
-  //     denormalizedWeights[i] = denormalizeFractionalWeight(weights[i]);
-  //   }
+  //   balances = new uint256[](indexSize);
+    
   // }
+
+  /**
+   * @dev Reweighs the assets in a pool by market cap and sets the
+   * desired new weights, which will be adjusted over time.
+   */
+  function reweighPool(address poolAddress) external {
+    require(_isBPool[poolAddress], "ERR_NOT_POOL");
+    require(shouldPoolReweigh(poolAddress), "ERR_POOL_REWEIGH_DELAY");
+    address[] memory tokens = BPool(poolAddress).getCurrentTokens();
+    FixedPoint.uq112x112[] memory prices = oracle.computeAveragePrices(tokens);
+    FixedPoint.uq112x112[] memory weights = Index.computeTokenWeights(tokens, prices);
+    uint96[] memory denormalizedWeights = new uint96[](tokens.length);
+    for (uint256 i = 0; i < tokens.length; i++) {
+      denormalizedWeights[i] = denormalizeFractionalWeight(weights[i]);
+    }
+    BPool(poolAddress).reweighTokens(tokens, denormalizedWeights);
+    lastPoolReweighs[poolAddress] = now;
+  }
 
   /**
    * @dev Converts a fixed point fraction to a denormalized weight.
@@ -144,6 +173,6 @@ contract PoolController is BFactory {
     pure
     returns (uint96)
   {
-    return uint96(fraction.mul(MAX_WEIGHT).decode144());
+    return uint96(fraction.mul(WEIGHT_MULTIPLIER).decode144());
   }
 }
