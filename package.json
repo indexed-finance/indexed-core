@@ -4,7 +4,9 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "npx buidler test"
+    "test:pool": "buidler test ./test/test-pool",
+    "test:controller": "buidler test ./test/test-controller-and-pool",
+    "test:oracle": "buidler test ./test/test-oracle"
   },
   "repository": {
     "type": "git",
@@ -20,12 +22,15 @@
   "devDependencies": {
     "@nomiclabs/buidler": "^1.4.3",
     "@nomiclabs/buidler-ethers": "^2.0.0",
+    "@nomiclabs/buidler-truffle5": "^1.3.4",
     "@nomiclabs/buidler-waffle": "^2.0.0",
     "@nomiclabs/buidler-web3": "^1.3.4",
     "@uniswap/v2-core": "^1.0.1",
     "@uniswap/v2-periphery": "^1.1.0-beta.0",
+    "assert": "^2.0.0",
     "chai": "^4.2.0",
     "chai-as-promised": "^7.1.1",
+    "decimal.js": "^10.2.0",
     "ethereum-waffle": "^3.0.2",
     "ethers": "^5.0.8",
     "prettier": "^2.0.5",
