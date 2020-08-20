@@ -90,7 +90,10 @@ contract BPoolBase is BBronze, BToken, BMath {
   function initialize(
     address controller,
     string calldata name,
-    string calldata symbol
+    string calldata symbol,
+    address[] calldata tokens,
+    uint256[] calldata balances,
+    uint96[] calldata denorms
   )
     external
   {
@@ -102,9 +105,42 @@ contract BPoolBase is BBronze, BToken, BMath {
     _controller = controller;
     _factory = msg.sender;
     // default fee is 2.5%
-    _swapFee = MAX_FEE / 4;
-    _publicSwap = false;
+    _swapFee = BONE / 40;
     _initializeToken(name, symbol);
+    uint256 len = tokens.length;
+    require(len >= MIN_BOUND_TOKENS, "ERR_MIN_TOKENS");
+    require(len <= MAX_BOUND_TOKENS, "ERR_MAX_TOKENS");
+    require(
+      balances.length == len &&
+      denorms.length == len,
+      "ERR_ARR_LEN"
+    );
+    uint256 totalWeight = 0;
+    for (uint256 i = 0; i < len; i++) {
+      // _bind(tokens[i], balances[i], denorms[i]);
+      address token = tokens[i];
+      uint96 denorm = denorms[i];
+      uint256 balance = balances[i];
+      require(denorm >= MIN_WEIGHT, "ERR_MIN_WEIGHT");
+      require(denorm <= MAX_WEIGHT, "ERR_MAX_WEIGHT");
+      require(balance >= MIN_BALANCE, "ERR_MIN_BALANCE");
+      _records[token] = Record({
+        bound: true,
+        lastDenormUpdate: uint48(now),
+        denorm: denorm,
+        desiredDenorm: denorm,
+        index: uint8(_tokens.length),
+        balance: balance
+      });
+      _tokens.push(token);
+      totalWeight = badd(totalWeight, denorm);
+      _pullUnderlying(token, msg.sender, balance);
+    }
+    require(totalWeight <= MAX_TOTAL_WEIGHT, "ERR_MAX_TOTAL_WEIGHT");
+    _totalWeight = totalWeight;
+    _publicSwap = true;
+    _mintPoolShare(INIT_POOL_SUPPLY);
+    _pushPoolShare(msg.sender, INIT_POOL_SUPPLY);
   }
 
   // Absorb any tokens that have been sent to this contract into the pool
@@ -130,14 +166,13 @@ contract BPoolBase is BBronze, BToken, BMath {
     require(_records[tokenOut].bound, "ERR_NOT_BOUND");
     require(_publicSwap, "ERR_SWAP_NOT_PUBLIC");
 
-    Record storage inRecord = _records[address(tokenIn)];
-    Record storage outRecord = _records[address(tokenOut)];
+    Record memory inRecord = _records[address(tokenIn)];
+    Record memory outRecord = _records[address(tokenOut)];
 
     require(
       tokenAmountIn <= bmul(inRecord.balance, MAX_IN_RATIO),
       "ERR_MAX_IN_RATIO"
     );
-
     uint256 spotPriceBefore = calcSpotPrice(
       inRecord.balance,
       inRecord.denorm,
@@ -156,9 +191,16 @@ contract BPoolBase is BBronze, BToken, BMath {
       _swapFee
     );
     require(tokenAmountOut >= minAmountOut, "ERR_LIMIT_OUT");
-
+    // Update the in-memory record for the spotPriceAfter calculation,
+    // then update the storage record with the local balance.
     inRecord.balance = badd(inRecord.balance, tokenAmountIn);
+    _records[address(tokenIn)].balance = inRecord.balance;
     outRecord.balance = bsub(outRecord.balance, tokenAmountOut);
+    _records[address(tokenOut)].balance = outRecord.balance;
+
+    bool didUpdateIn = _updateDenorm(inRecord, address(tokenIn));
+    bool didUpdateOut = _updateDenorm(outRecord, address(tokenOut));
+    bool didUpdate = didUpdateIn || didUpdateOut;
 
     spotPriceAfter = calcSpotPrice(
       inRecord.balance,
@@ -167,7 +209,8 @@ contract BPoolBase is BBronze, BToken, BMath {
       outRecord.denorm,
       _swapFee
     );
-    require(spotPriceAfter >= spotPriceBefore, "ERR_MATH_APPROX");
+    // Only validate the resulting spot price if the weights did not change.
+    require(didUpdate || spotPriceAfter >= spotPriceBefore, "ERR_MATH_APPROX");
     require(spotPriceAfter <= maxPrice, "ERR_LIMIT_PRICE");
     require(
       spotPriceBefore <= bdiv(tokenAmountIn, tokenAmountOut),
@@ -198,8 +241,8 @@ contract BPoolBase is BBronze, BToken, BMath {
     require(_records[tokenOut].bound, "ERR_NOT_BOUND");
     require(_publicSwap, "ERR_SWAP_NOT_PUBLIC");
 
-    Record storage inRecord = _records[address(tokenIn)];
-    Record storage outRecord = _records[address(tokenOut)];
+    Record memory inRecord = _records[address(tokenIn)];
+    Record memory outRecord = _records[address(tokenOut)];
 
     require(
       tokenAmountOut <= bmul(outRecord.balance, MAX_OUT_RATIO),
@@ -225,8 +268,17 @@ contract BPoolBase is BBronze, BToken, BMath {
     );
     require(tokenAmountIn <= maxAmountIn, "ERR_LIMIT_IN");
 
+    // Update the in-memory record for the spotPriceAfter calculation,
+    // then update the storage record with the local balance.
     inRecord.balance = badd(inRecord.balance, tokenAmountIn);
+    _records[address(tokenIn)].balance = inRecord.balance;
     outRecord.balance = bsub(outRecord.balance, tokenAmountOut);
+    _records[address(tokenOut)].balance = outRecord.balance;
+
+    bool didUpdate = (
+      _updateDenorm(inRecord, address(tokenIn)) &&
+      _updateDenorm(outRecord, address(tokenOut))
+    );
 
     spotPriceAfter = calcSpotPrice(
       inRecord.balance,
@@ -235,7 +287,8 @@ contract BPoolBase is BBronze, BToken, BMath {
       outRecord.denorm,
       _swapFee
     );
-    require(spotPriceAfter >= spotPriceBefore, "ERR_MATH_APPROX");
+    // Only validate the resulting spot price if the weights did not change.
+    require(didUpdate || spotPriceAfter >= spotPriceBefore, "ERR_MATH_APPROX");
     require(spotPriceAfter <= maxPrice, "ERR_LIMIT_PRICE");
     require(
       spotPriceBefore <= bdiv(tokenAmountIn, tokenAmountOut),
@@ -248,6 +301,23 @@ contract BPoolBase is BBronze, BToken, BMath {
     _pushUnderlying(tokenOut, msg.sender, tokenAmountOut);
 
     return (tokenAmountIn, spotPriceAfter);
+  }
+
+  /* <-- Pool Share Internal Functions --> */
+  function _pullPoolShare(address from, uint256 amount) internal {
+    _pull(from, amount);
+  }
+
+  function _pushPoolShare(address to, uint256 amount) internal {
+    _push(to, amount);
+  }
+
+  function _mintPoolShare(uint256 amount) internal {
+    _mint(amount);
+  }
+
+  function _burnPoolShare(uint256 amount) internal {
+    _burn(amount);
   }
 
   /* <-- Underlying Token Internal Functions --> */
@@ -270,6 +340,141 @@ contract BPoolBase is BBronze, BToken, BMath {
   ) internal {
     bool xfer = IERC20(erc20).transfer(to, amount);
     require(xfer, "ERR_ERC20_FALSE");
+  }
+
+  /* <-- Token Binding Internal Functions --> */
+  /**
+   * @dev Directly bind a token by address.
+   * Note: Token must not already be bound.
+   * Note: `balance` must be a valid balance and denorm must be a valid denormalized weight.
+   * Note: `balance` should match the weight which will immediately be set, i.e. max()
+   */
+  function _bind(
+    address token,
+    uint256 balance,
+    uint96 denorm
+  ) internal {
+    require(!_records[token].bound, "ERR_IS_BOUND");
+
+    require(denorm >= MIN_WEIGHT, "ERR_MIN_WEIGHT");
+    require(denorm <= MAX_WEIGHT, "ERR_MAX_WEIGHT");
+    require(balance >= MIN_BALANCE, "ERR_MIN_BALANCE");
+
+    require(_tokens.length < MAX_BOUND_TOKENS, "ERR_MAX_TOKENS");
+    _records[token] = Record({
+      bound: true,
+      lastDenormUpdate: uint48(now),
+      denorm: denorm,
+      desiredDenorm: denorm,
+      index: uint8(_tokens.length),
+      balance: balance
+    });
+    _tokens.push(token);
+    uint256 totalWeight = badd(_totalWeight, denorm);
+    require(totalWeight <= MAX_TOTAL_WEIGHT, "ERR_MAX_TOTAL_WEIGHT");
+    _totalWeight = totalWeight;
+    _pullUnderlying(token, msg.sender, balance);
+  }
+
+  function _setDesiredDenorm(address token, uint96 desiredDenorm) internal {
+    Record memory record = _records[token];
+    require(record.bound, "ERR_NOT_BOUND");
+    // If the desired weight is 0, this will trigger a gradual unbinding of the token.
+    // Therefore the weight only needs to be greater than the minimum weight if it isn't 0.
+    require(desiredDenorm >= MIN_WEIGHT || desiredDenorm == 0, "ERR_MIN_WEIGHT");
+    require(desiredDenorm <= MAX_WEIGHT, "ERR_MAX_WEIGHT");
+    record.desiredDenorm = desiredDenorm;
+    _records[token].desiredDenorm = desiredDenorm;
+    _updateDenorm(record, token);
+  }
+
+  /**
+   * @dev Executes the logic to remove a token:
+   * Replaces the address in the tokens array with the last address,
+   * then removes it from the array.
+   * Note: This should only be called after the total weight has been adjusted.
+   * Note: Must be called in a function with:
+   * - _lock_ modifier to prevent reentrance
+   * - requirement that the token is bound
+   */
+  function _onUnbind(address token) internal {
+    Record memory record = _records[token];
+    uint256 tokenBalance = record.balance;
+    uint256 tokenExitFee = bmul(tokenBalance, EXIT_FEE);
+
+    // Swap the token-to-unbind with the last token,
+    // then delete the last token
+    uint256 index = record.index;
+    uint256 last = _tokens.length - 1;
+    // Only swap the token with the last token if it is not
+    // already at the end of the array.
+    if (index != last) {
+      _tokens[index] = _tokens[last];
+      _records[_tokens[index]].index = uint8(index);
+    }
+    _tokens.pop();
+    _records[token] = Record({
+      bound: false,
+      lastDenormUpdate: 0,
+      denorm: 0,
+      desiredDenorm: 0,
+      index: 0,
+      balance: 0
+    });
+    // transfer any remaining tokens out
+    _pushUnderlying(token, msg.sender, bsub(tokenBalance, tokenExitFee));
+    _pushUnderlying(token, _factory, tokenExitFee);
+  }
+
+  /**
+   * @dev Move a record's denorm value closer to its desired denorm.
+   * Note: Does not verify that the record is bound.
+   */
+  function _updateDenorm(Record memory record, address token)
+    internal
+    returns (bool didUpdate)
+  {
+    // Don't do anything if there's no change ready.
+    if (
+      record.desiredDenorm == record.denorm ||
+      now - record.lastDenormUpdate < MIN_WEIGHT_DELAY
+    ) return false;
+    uint96 oldWeight = record.denorm;
+
+    uint256 maxDiff = bmul(oldWeight, _swapFee);
+    uint96 denorm = record.desiredDenorm;
+    // Restrict the proportional weight change to swapFee
+    // Adjust the denorm and totalWeight
+    if (denorm > oldWeight) {
+      uint256 diff = bsub(denorm, oldWeight);
+      if (oldWeight != 0 && diff > maxDiff) {
+        denorm = uint96(badd(oldWeight, maxDiff));
+        diff = maxDiff;
+      }
+      _totalWeight = badd(_totalWeight, diff);
+      require(_totalWeight <= MAX_TOTAL_WEIGHT, "ERR_MAX_TOTAL_WEIGHT");
+    } else {
+      uint256 diff = bsub(oldWeight, denorm);
+      if (diff > maxDiff) {
+        denorm = uint96(bsub(oldWeight, maxDiff));
+        diff = maxDiff;
+      }
+      _totalWeight = bsub(_totalWeight, diff);
+      // Don't need to verify total weight since it is decreasing
+    }
+
+    // If the new weight is 0, unbind it.
+    if (denorm == 0) {
+      _onUnbind(token);
+    } else {
+      // Update the in-memory denorm value, because it is needed in some functions
+      // the timestamp is never needed within the contract.
+      record.denorm = denorm;
+      // Update the storage record
+      _records[token].denorm = denorm;
+      _records[token].lastDenormUpdate = uint48(now);
+    }
+    return true;
   }
 }
 
@@ -317,20 +522,6 @@ contract BPoolQueries is BPoolBase {
     return _tokens;
   }
 
-  // /**
-  //  * @dev There is no such thing as "final tokens" in this framework,
-  //  * but the function was kept for compatibility with external balancer
-  //  * libraries.
-  //  */
-  // function getFinalTokens()
-  //   external
-  //   view
-  //   _viewlock_
-  //   returns (address[] memory tokens)
-  // {
-  //   return _tokens;
-  // }
-
   function getDenormalizedWeight(address token)
     external
     view
@@ -339,6 +530,16 @@ contract BPoolQueries is BPoolBase {
   {
     require(_records[token].bound, "ERR_NOT_BOUND");
     return _records[token].denorm;
+  }
+
+  function getTokenRecord(address token)
+    external
+    view
+    _viewlock_
+    returns (Record memory record)
+  {
+    record = _records[token];
+    require(record.bound, "ERR_NOT_BOUND");
   }
 
   function getTotalDenormalizedWeight()
@@ -482,7 +683,6 @@ contract BPoolShares is BPoolBase {
       tokenAmountIn <= bmul(_records[tokenIn].balance, MAX_IN_RATIO),
       "ERR_MAX_IN_RATIO"
     );
-
     Record storage inRecord = _records[tokenIn];
 
     poolAmountOut = calcPoolOutGivenSingleIn(
@@ -622,23 +822,6 @@ contract BPoolShares is BPoolBase {
 
     return poolAmountIn;
   }
-
-  /* <-- Pool Share Internal Functions --> */
-  function _pullPoolShare(address from, uint256 amount) internal {
-    _pull(from, amount);
-  }
-
-  function _pushPoolShare(address to, uint256 amount) internal {
-    _push(to, amount);
-  }
-
-  function _mintPoolShare(uint256 amount) internal {
-    _mint(amount);
-  }
-
-  function _burnPoolShare(uint256 amount) internal {
-    _burn(amount);
-  }
 }
 
 
@@ -655,11 +838,6 @@ contract BPoolControls is BPoolShares {
     _swapFee = swapFee;
   }
 
-  function setController(address manager) external _logs_ _lock_ {
-    require(msg.sender == _controller, "ERR_NOT_CONTROLLER");
-    _controller = manager;
-  }
-
   /**
    * @dev Public swapping is enabled as soon as tokens are bound,
    * but this function exists in case of an emergency.
@@ -669,55 +847,11 @@ contract BPoolControls is BPoolShares {
     _publicSwap = public_;
   }
 
-  /* <-- Token Binding Actions --> */
-  function bindInitialTokens(
-    address[] calldata tokens,
-    uint256[] calldata balances,
-    uint96[] calldata denorms
-  )
-    external
-    _logs_
-    _lock_
-  {
-    require(_tokens.length == 0, "ERR_HAS_TOKENS");
-    require(msg.sender == _controller, "ERR_NOT_CONTROLLER");
-    uint256 len = tokens.length;
-    require(len >= MIN_BOUND_TOKENS, "ERR_MIN_TOKENS");
-    require(
-      balances.length == len &&
-      denorms.length == len,
-      "ERR_ARR_LEN"
-    );
-    for (uint256 i = 0; i < len; i++) {
-      _bind(tokens[i], balances[i], denorms[i]);
-    }
-    _publicSwap = true;
-    _mintPoolShare(INIT_POOL_SUPPLY);
-    _pushPoolShare(msg.sender, INIT_POOL_SUPPLY);
-  }
-
-  // /**
-  //  * @dev Binds the token with address `token`.
-  //  * Sets `desiredDenorm` to `denorm`, then calls `_updateDenorm`.
-  //  * Tokens will be pulled from caller to match new balance.
-  //  * @param token address of token to bind (must not already be bound)
-  //  * @param balance balance of the token to be pulled from caller
-  //  * @param denorm denormalized weight
-  //  */
-  // function bind(
-  //   address token,
-  //   uint256 balance,
-  //   uint96 denorm
-  // )
-  //   external
-  //   _logs_
-  //   _lock_
-  // {
-  //   require(msg.sender == _controller, "ERR_NOT_CONTROLLER");
-  //   _bind(token, balance, denorm);
-  // }
-
-  function setDesiredDenorm(
+  /**
+   * @dev Sets the desired weights for the pool tokens
+   * and executes the first weight adjustment.
+   */
+  function reweighTokens(
     address[] calldata tokens,
     uint96[] calldata desiredDenorms
   )
@@ -731,14 +865,6 @@ contract BPoolControls is BPoolShares {
     for (uint256 i = 0; i < len; i++) _setDesiredDenorm(tokens[i], desiredDenorms[i]);
   }
 
-  // /**
-  //  * @dev Moves the denormalized weight for an array of tokens closer to
-  //  * their desired denormalized weights.
-  //  */
-  // function updateDenorm(address[] calldata tokens) external _logs_ _lock_ {
-  //   for (uint256 i = 0; i < tokens.length; i++) _updateDenorm(tokens[i]);
-  // }
-
   /**
    * @dev Unbinds a token from the pool.
    * Note: Should only be used as a last resort if a token is experiencing
@@ -751,133 +877,6 @@ contract BPoolControls is BPoolShares {
 
     _totalWeight = bsub(_totalWeight, _records[token].denorm);
     _onUnbind(token);
-  }
-
-  /* <-- Token Binding Internal Functions --> */
-  /**
-   * @dev Directly bind a token by address.
-   * Note: Token must not already be bound.
-   * Note: `balance` must be a valid balance and denorm must be a valid denormalized weight.
-   * Note: `balance` should match the weight which will immediately be set, i.e. max()
-   */
-  function _bind(
-    address token,
-    uint256 balance,
-    uint96 denorm
-  ) internal {
-    require(!_records[token].bound, "ERR_IS_BOUND");
-
-    require(denorm >= MIN_WEIGHT, "ERR_MIN_WEIGHT");
-    require(denorm <= MAX_WEIGHT, "ERR_MAX_WEIGHT");
-    require(balance >= MIN_BALANCE, "ERR_MIN_BALANCE");
-
-    require(_tokens.length < MAX_BOUND_TOKENS, "ERR_MAX_TOKENS");
-    // balance and denorm will be validated and set by `rebind`
-    _records[token] = Record({
-      bound: true,
-      lastDenormUpdate: uint48(now),
-      denorm: denorm,
-      desiredDenorm: denorm,
-      index: uint8(_tokens.length),
-      balance: balance
-    });
-    _tokens.push(token);
-    _totalWeight = badd(_totalWeight, denorm);
-    require(_totalWeight <= MAX_TOTAL_WEIGHT, "ERR_MAX_TOTAL_WEIGHT");
-    _records[token].denorm = denorm;
-    _pullUnderlying(token, msg.sender, balance);
-  }
-
-  function _setDesiredDenorm(address token, uint96 desiredDenorm) internal {
-    require(_records[token].bound, "ERR_NOT_BOUND");
-    // If the desired weight is 0, this will trigger a gradual unbinding of the token.
-    // Therefore the weight must only be greater than the minimum weight if it isn't 0.
-    require(desiredDenorm >= MIN_WEIGHT || desiredDenorm == 0, "ERR_MIN_WEIGHT");
-    require(desiredDenorm <= MAX_WEIGHT, "ERR_MAX_WEIGHT");
-    _records[token].desiredDenorm = desiredDenorm;
-    // Because this does not reset the timestamp for the record's last update,
-    // the updateDenorm call will cause this to reject if the record is not ready
-    // for an update. This prevents setDesiredDenorm from being used to get around
-    // the imposed weight change delay.
-    _updateDenorm(token);
-  }
-
-  /**
-   * @dev Executes the logic to remove a token:
-   * Replaces the address in the tokens array with the last address,
-   * then removes it from the array.
-   * Note: This should only be called after the total weight has been adjusted.
-   * Note: Must be called in a function with:
-   * - _lock_ modifier to prevent reentrance
-   * - requirement that the token is bound
-   */
-  function _onUnbind(address token) internal {
-    Record memory record = _records[token];
-    uint256 tokenBalance = record.balance;
-    uint256 tokenExitFee = bmul(tokenBalance, EXIT_FEE);
-
-    // Swap the token-to-unbind with the last token,
-    // then delete the last token
-    uint256 index = record.index;
-    uint256 last = _tokens.length - 1;
-    // Only swap the token with the last token if it is not
-    // already at the end of the array.
-    if (index != last) {
-      _tokens[index] = _tokens[last];
-      _records[_tokens[index]].index = uint8(index);
-    }
-    _tokens.pop();
-    _records[token] = Record({
-      bound: false,
-      lastDenormUpdate: 0,
-      denorm: 0,
-      desiredDenorm: 0,
-      index: 0,
-      balance: 0
-    });
-    // transfer any remaining tokens out
-    _pushUnderlying(token, msg.sender, bsub(tokenBalance, tokenExitFee));
-    _pushUnderlying(token, _factory, tokenExitFee);
-  }
-
-  function _updateDenorm(address token) internal {
-    Record memory record = _records[token];
-    require(record.bound, "ERR_NOT_BOUND");
-    // Don't do anything if there's no change.
-    if (record.desiredDenorm == record.denorm) return;
-    require(
-      now - record.lastDenormUpdate >= MIN_WEIGHT_DELAY,
-      "ERR_WEIGHT_DELAY"
-    );
-    uint96 oldWeight = record.denorm;
-    uint256 maxDiff = bmul(oldWeight, _swapFee);
-    uint96 denorm = record.desiredDenorm;
-    // Restrict the proportional weight change to swapFee
-    // Adjust the denorm and totalWeight
-    if (denorm > oldWeight) {
-      uint256 diff = bsub(denorm, oldWeight);
-      if (oldWeight != 0 && diff > maxDiff) {
-        denorm = uint96(badd(oldWeight, maxDiff));
-        diff = maxDiff;
-      }
-      _totalWeight = badd(_totalWeight, diff);
-      require(_totalWeight <= MAX_TOTAL_WEIGHT, "ERR_MAX_TOTAL_WEIGHT");
-    } else if (oldWeight > denorm) {
-      uint256 diff = bsub(oldWeight, denorm);
-      if (diff > maxDiff) {
-        denorm = uint96(bsub(oldWeight, maxDiff));
-        diff = maxDiff;
-      }
-      _totalWeight = bsub(_totalWeight, diff);
-    }
-
-    // If the new weight is 0, unbind it.
-    if (denorm == 0) {
-      _onUnbind(token);
-    } else {
-      _records[token].denorm = denorm;
-      _records[token].lastDenormUpdate = uint48(now);
-    }
   }
 }
 
