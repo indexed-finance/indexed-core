@@ -91,4 +91,17 @@ library IndexLibrary {
     // Multiply by reciprocal to avoid rounding in intermediary steps.
     return averagePrice.reciprocal().mul(desiredValue).decode144();
   }
+
+  function computePoolValue(
+    address poolAddress,
+    address[] memory tokens,
+    FixedPoint.uq112x112[] memory averagePrices
+  ) internal view returns (uint256 totalValue) {
+    for (uint256 i = 0; i < tokens.length; i++) {
+      IERC20 token = IERC20(tokens[i]);
+      FixedPoint.uq112x112 memory averagePrice = averagePrices[i];
+      uint256 balance = token.balanceOf(poolAddress);
+      totalValue += averagePrice.mul(balance).decode144();
+    }
+  }
 }
