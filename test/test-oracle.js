@@ -7,12 +7,11 @@ const { setupUniSwapV2 } = require('./lib/uniswap-setup');
 const keccak256 = (data) => `0x${createKeccakHash('keccak256').digest().toString('hex')}`;
 
 const { wrapped_tokens: wrappedTokens } = require('./testData/categories.json');
-// const oneToken = new BN('de0b6b3a7640000', 'hex'); // 10 ** decimals
 const { nTokens, nTokensHex } = require('./lib/tokens');
 
 const toBN = (bn) => new BN(bn._hex.slice(2), 'hex');
 
-describe("Greeter", () => {
+describe("Market Oracle", () => {
   let uniswapFactory, uniswapRouter, weth;
   let from;
   let stablecoin;
@@ -187,12 +186,12 @@ describe("Greeter", () => {
 
     it('Should sort the tokens and update the category', async () => {
       const category = await getCategoryData(1);
-      const marketCaps = [12000, 200, 390].map(n => nTokens(n * 150));
+      const marketCaps = [700, 200, 390].map(n => nTokens(n * 150));
       expect(
         mapToHex(category.map((t) => t.marketCap))
       ).to.deep.equal(mapToHex(marketCaps));
       const categorySorted = sortArr(category);
-      const marketCapsSorted = [12000, 390, 200].map(n => nTokens(n * 150));
+      const marketCapsSorted = [700, 390, 200].map(n => nTokens(n * 150));
       expect(
         mapToHex(categorySorted.map((t) => t.marketCap))
       ).to.deep.equal(mapToHex(marketCapsSorted));

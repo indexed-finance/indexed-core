@@ -44,10 +44,10 @@ class UniswapHelper {
     const token = this.getToken(symbol).token;
     const amountToken = nTokensHex(liquidity);
     const amountStablecoin = nTokensHex(liquidity * price);
-    await token.getFreeTokens(this.from, amountToken).then(r => r.wait());
-    await this.stablecoin.getFreeTokens(this.from, amountStablecoin).then(r => r.wait());
-    await token.approve(this.uniswapRouter.options.address, amountToken).then(r => r.wait());
-    await this.stablecoin.approve(this.uniswapRouter.options.address, amountStablecoin).then(r => r.wait());
+    await token.getFreeTokens(this.from, amountToken).then(r => r.wait && r.wait());
+    await this.stablecoin.getFreeTokens(this.from, amountStablecoin).then(r => r.wait && r.wait());
+    await token.approve(this.uniswapRouter.options.address, amountToken).then(r => r.wait && r.wait());
+    await this.stablecoin.approve(this.uniswapRouter.options.address, amountStablecoin).then(r => r.wait && r.wait());
     const timestamp = this.getTimestamp() + 1000;
     await this.uniswapRouter.methods.addLiquidity(
       token.address,
@@ -64,7 +64,7 @@ class UniswapHelper {
   // Deploys an ERC20 and creates a uniswap market between it
   // and the selected stablecoin
   async deployTokenAndMarket(name, symbol, initialPrice, liquidity) {
-    const token = await this.erc20Factory.deploy("DAI Stablecoin", "DAI");
+    const token = await this.erc20Factory.deploy(name, symbol);
     // const { address, initialPrice, token } = tokenObj;
     const result = await this.uniswapFactory.methods.createPair(
       token.address,
