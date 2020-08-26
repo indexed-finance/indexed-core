@@ -10,15 +10,15 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/d1ll0n/eth-index.git"
+    "url": "git+https://github.com/indexed-finance/index-fund.git"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "bugs": {
-    "url": "https://github.com/d1ll0n/eth-index/issues"
+    "url": "https://github.com/indexed-finance/index-fund/issues"
   },
-  "homepage": "https://github.com/d1ll0n/eth-index#readme",
+  "homepage": "https://github.com/indexed-finance/index-fund#readme",
   "devDependencies": {
     "@nomiclabs/buidler": "^1.4.3",
     "@nomiclabs/buidler-ethers": "^2.0.0",
@@ -40,6 +40,13 @@
     "web3": "^1.2.11"
   },
   "dependencies": {
-    "keccak": "^3.0.1"
+    "axios": "^0.20.0",
+    "cids": "^1.0.0",
+    "keccak": "^3.0.1",
+    "multihashes": "^3.0.1",
+    "multihashing": "^0.3.3",
+    "querystring": "^0.2.0",
+    "request-promise": "^4.2.6",
+    "request-promise-native": "^1.0.9"
   }
 }
