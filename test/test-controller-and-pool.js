@@ -55,8 +55,10 @@ describe("Pool Controller", () => {
   });
 
   it('Should deploy the Pool Controller', async () => {
+    const poolFactory = await ethers.getContractFactory("BPool");
+    const pool = await poolFactory.deploy();
     const controllerFactory = await ethers.getContractFactory("PoolController");
-    poolController = await controllerFactory.deploy(marketOracle.address);
+    poolController = await controllerFactory.deploy(marketOracle.address, pool.address);
   });
 
   describe('Initialize Markets', async () => {
