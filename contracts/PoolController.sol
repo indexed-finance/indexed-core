@@ -22,15 +22,22 @@ contract PoolController {
   event LOG_NEW_POOL(address indexed caller, address indexed pool, uint256 categoryID, uint256 indexSize);
   event LOG_BLABS(address indexed caller, address indexed blabs);
 
+  address internal _manager;
   address internal _poolContract;
   mapping(address => bool) internal _isBPool;
 
   mapping(address => uint256) public lastPoolReweighs;
   MarketOracle public oracle;
 
-  constructor (address _oracle) public {
+  constructor(address _oracle, address poolContract) public {
+    _manager = msg.sender;
     oracle = MarketOracle(_oracle);
-    _poolContract = address(new BPool());
+    _poolContract = poolContract;
+  }
+
+  modifier onlyManager {
+    require(msg.sender == _manager, "ERR_ONLY_MANAGER");
+    _;
   }
 
   function isBPool(address b) external view returns (bool) {
@@ -69,7 +76,7 @@ contract PoolController {
     string calldata name,
     string calldata symbol,
     uint256 initialStablecoinValue
-  ) external {
+  ) external onlyManager {
     require(indexSize >= MIN_POOL_SIZE, "Less than minimum index size.");
     require(indexSize <= MAX_POOL_SIZE, "Exceeds maximum index size");
     require(oracle.hasCategory(categoryID), "Category does not exist");
@@ -143,7 +150,6 @@ contract PoolController {
   //   FixedPoint.uq112x112[] memory prices = oracle.computeAveragePrices(tokens);
   //   FixedPoint.uq112x112[] memory weights = Index.computeTokenWeights(tokens, prices);
   //   balances = new uint256[](indexSize);
-    
   // }
 
   /**
