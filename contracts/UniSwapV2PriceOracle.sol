@@ -43,7 +43,7 @@ contract UniSwapV2PriceOracle {
     PriceObservation memory observation2 = _observePrice(token);
     lastObservedPrices[token] = observation2;
     uint32 timeElapsed = uint32(observation2.timestamp - observation1.timestamp);
-    require(timeElapsed >= MIN_UPDATE_PERIOD, "Price update not ready.");
+    require(timeElapsed >= MIN_UPDATE_PERIOD, "ERR_MIN_UPDATE_PERIOD");
     emit PriceUpdated(token, observation2.priceCumulativeLast);
   }
 
