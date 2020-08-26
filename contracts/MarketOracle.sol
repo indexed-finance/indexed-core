@@ -12,6 +12,8 @@ contract MarketOracle is UniSwapV2PriceOracle {
 
   // Max time between a category being sorted and a query for the top n tokens.
   uint256 public constant MAX_SORT_DELAY = 1 days;
+  // Maximum number of tokens in a category.
+  uint256 public constant MAX_CATEGORY_TOKENS = 15;
 
   // Array of tokens for each category.
   mapping(uint256 => address[]) internal _categoryTokens;
@@ -32,6 +34,7 @@ contract MarketOracle is UniSwapV2PriceOracle {
 
   event CategoryAdded(uint256 categoryID, bytes32 metadataHash);
   event TokenAdded(address token, uint256 categoryID);
+  event CategorySorted(uint256 categoryID);
 
   constructor(
     address _uniswapFactory,
@@ -89,8 +92,8 @@ contract MarketOracle is UniSwapV2PriceOracle {
    * @dev Adds a new token to a category.
    */
   function _addToken(address token, uint256 categoryID) internal {
-    require(categoryID < categoryIndex, "Category does not exist.");
-    require(_tokenCategories[token] == 0, "Token already listed.");
+    require(categoryID < categoryIndex, "ERR_CATEGORY_ID");
+    require(_tokenCategories[token] == 0, "ERR_TOKEN_EXISTS");
     _tokenCategories[token] = categoryID;
     _categoryTokens[categoryID].push(token);
     updatePrice(token);
@@ -102,6 +105,10 @@ contract MarketOracle is UniSwapV2PriceOracle {
    */
   function addToken(address token, uint256 categoryID) public onlyManager {
     _addToken(token, categoryID);
+    require
+      (_categoryTokens[categoryID].length <= MAX_CATEGORY_TOKENS,
+      "ERR_MAX_CATEGORY_TOKENS"
+    );
     // Decrement the timestamp for the last category sort to ensure
     // the new token is sorted before the top n tokens can be queried.
     lastCategoryUpdate[categoryID] -= MAX_SORT_DELAY;
@@ -118,6 +125,10 @@ contract MarketOracle is UniSwapV2PriceOracle {
       for (uint256 t = 0; t < update.tokens.length; t++) {
         _addToken(update.tokens[t], update.categoryID);
       }
+      require(
+        _categoryTokens[update.categoryID].length <= MAX_CATEGORY_TOKENS,
+        "ERR_MAX_CATEGORY_TOKENS"
+      );
       // Decrement the timestamp for the last category sort to ensure
       // the new token is sorted before the top n tokens can be queried.
       lastCategoryUpdate[update.categoryID] -= MAX_SORT_DELAY;
@@ -149,6 +160,7 @@ contract MarketOracle is UniSwapV2PriceOracle {
       categoryTokens[i] = token;
     }
     lastCategoryUpdate[categoryID] = now;
+    emit CategorySorted(categoryID);
   }
 
   /**
