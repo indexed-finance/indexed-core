@@ -53,6 +53,9 @@ contract BPoolBase is BBronze, BToken, BMath {
 
   event LOG_CALL(bytes4 indexed sig, address indexed caller, bytes data);
 
+  event LOG_DENORM_UPDATED(address token, uint256 newDenorm);
+  event LOG_DESIRED_DENORM_SET(address token, uint256 desiredDenorm);
+
   modifier _logs_() {
     emit LOG_CALL(msg.sig, msg.sender, msg.data);
     _;
@@ -384,6 +387,7 @@ contract BPoolBase is BBronze, BToken, BMath {
     require(desiredDenorm <= MAX_WEIGHT, "ERR_MAX_WEIGHT");
     record.desiredDenorm = desiredDenorm;
     _records[token].desiredDenorm = desiredDenorm;
+    emit LOG_DESIRED_DENORM_SET(token, desiredDenorm);
     _updateDenorm(record, token);
   }
 
@@ -462,6 +466,7 @@ contract BPoolBase is BBronze, BToken, BMath {
       // Don't need to verify total weight since it is decreasing
     }
 
+    emit LOG_DENORM_UPDATED(token, denorm);
     // If the new weight is 0, unbind it.
     if (denorm == 0) {
       _onUnbind(token);
