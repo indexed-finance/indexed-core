@@ -1,0 +1,33 @@
+{
+  "name": "server",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "start": "cd ./src && node ./server.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "axios": "^0.20.0",
+    "body-parser": "^1.19.0",
+    "cids": "^1.0.0",
+    "cors": "^2.8.5",
+    "dotenv": "^8.2.0",
+    "express": "^4.17.1",
+    "ganache-cli": "^6.10.1",
+    "ganache-core": "^2.11.2",
+    "multihashes": "^3.0.1",
+    "multihashing": "^0.3.3",
+    "querystring": "^0.2.0",
+    "request-promise": "^4.2.6",
+    "request-promise-native": "^1.0.9",
+    "web3": "^1.2.11",
+    "web3-utils": "^1.2.11"
+  },
+  "devDependencies": {
+    "chai": "^4.2.0",
+    "mocha": "^8.1.1"
+  }
+}
