@@ -11,9 +11,9 @@ contract MarketOracle is UniSwapV2PriceOracle {
   uint256 public categoryIndex = 1;
 
   // Max time between a category being sorted and a query for the top n tokens.
-  uint256 public constant MAX_SORT_DELAY = 1 days;
+  uint256 internal constant MAX_SORT_DELAY = 1 days;
   // Maximum number of tokens in a category.
-  uint256 public constant MAX_CATEGORY_TOKENS = 15;
+  uint256 internal constant MAX_CATEGORY_TOKENS = 15;
 
   // Array of tokens for each category.
   mapping(uint256 => address[]) internal _categoryTokens;
@@ -38,9 +38,9 @@ contract MarketOracle is UniSwapV2PriceOracle {
 
   constructor(
     address _uniswapFactory,
-    address _stableCoin,
+    address _weth,
     address _manager
-  ) public UniSwapV2PriceOracle(_uniswapFactory, _stableCoin) {
+  ) public UniSwapV2PriceOracle(_uniswapFactory, _weth) {
     manager = _manager;
   }
 

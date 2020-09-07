@@ -16,9 +16,8 @@ contract UniSwapV2PriceOracle {
   // Uniswap factory address
   address public uniswapFactory;
 
-  // Address of the token used to compare prices.
-  // Should be a stablecoin such as DAI or USDC.
-  address public stableCoin;
+  // Wrapped ether token address
+  address public weth;
 
   struct PriceObservation {
     uint32 timestamp;
@@ -29,9 +28,9 @@ contract UniSwapV2PriceOracle {
 
   event PriceUpdated(address token, uint224 priceCumulativeLast);
 
-  constructor(address _uniswapFactory, address _stableCoin) public {
+  constructor(address _uniswapFactory, address _weth) public {
     uniswapFactory = _uniswapFactory;
-    stableCoin = _stableCoin;
+    weth = _weth;
   }
 
   /**
@@ -64,26 +63,15 @@ contract UniSwapV2PriceOracle {
    */
   function computeAverageMarketCap(address token)
   public view returns (uint144 marketCap) {
-    // Get the stored price observation
-    PriceObservation memory observation1 = lastObservedPrices[token];
-    // Get the current cumulative price
-    PriceObservation memory observation2 = _observePrice(token);
-    // Extrapolate the average value of the total supply.
-    uint32 timeElapsed = uint32(observation2.timestamp - observation1.timestamp);
-    require(timeElapsed <= MIN_UPDATE_PERIOD, "Outdated price info.");
     uint256 totalSupply = IERC20(token).totalSupply();
-    return UniV2Oracle.computeAverageAmountOut(
-      observation1.priceCumulativeLast, observation2.priceCumulativeLast,
-      timeElapsed, totalSupply
-    );
+    return computeAverageAmountOut(token, totalSupply);
   }
 
   /**
-   * @dev Compute the average value in stablecoins of a given amount
-   * of a token.
-   * Queries the current cumulative price and retrieves the last stored
-   * cumulative price, then calculates the average price and multiplies it
-   * by the input amount.
+   * @dev Compute the average value in weth of a given amount
+   * of a token. Queries the current cumulative price and retrieves
+   * the last stored cumulative price, then calculates the average
+   * price and multiplies it by the input amount.
    */
   function computeAverageAmountOut(address token, uint256 amountIn)
   public view returns (uint144 amountOut) {
@@ -95,13 +83,15 @@ contract UniSwapV2PriceOracle {
     uint32 timeElapsed = uint32(observation2.timestamp - observation1.timestamp);
     require(timeElapsed <= MIN_UPDATE_PERIOD, "Outdated price info.");
     return UniV2Oracle.computeAverageAmountOut(
-      observation1.priceCumulativeLast, observation2.priceCumulativeLast,
-      timeElapsed, amountIn
+      observation1.priceCumulativeLast,
+      observation2.priceCumulativeLast,
+      timeElapsed,
+      amountIn
     );
   }
 
   /**
-   * @dev Returns the average market caps for each token.
+   * @dev Returns the average market cap for each token.
    */
   function computeAverageMarketCaps(address[] memory tokens)
   public view returns (uint144[] memory marketCaps) {
@@ -148,7 +138,7 @@ contract UniSwapV2PriceOracle {
    */
   function _observePrice(address token) internal view returns (PriceObservation memory) {
     (uint priceCumulative, uint32 blockTimestamp) = UniV2Oracle.getCurrentCumulativePrice(
-      uniswapFactory, token, stableCoin
+      uniswapFactory, token, weth
     );
     return PriceObservation(blockTimestamp, uint224(priceCumulative));
   }
