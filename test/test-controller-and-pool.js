@@ -23,12 +23,12 @@ const errorDelta = 10 ** -8;
 
 
 describe("Pool Controller", () => {
-  let uniswapHelper, from, marketOracle, weth, poolController, indexPool;
+  let uniswapHelper, from, marketOracle, weth, poolController, indexPool, erc20Factory;
   let timestampAddition = 0;
 
   const getTimestamp = () => Math.floor(new Date().getTime() / 1000) + timestampAddition;
-  const increaseTimeByOneDay = () => {
-    timestampAddition += 24 * 60 * 60;
+  const increaseTimeByDays = (days = 1) => {
+    timestampAddition += days * 24 * 60 * 60;
     const timestamp = getTimestamp();
     return web3.currentProvider._sendJsonRpcRequest({
       method: "evm_setNextBlockTimestamp",
@@ -42,7 +42,7 @@ describe("Pool Controller", () => {
 
   before(async () => {
     [from] = await web3.eth.getAccounts();
-    const erc20Factory = await ethers.getContractFactory("MockERC20");
+    erc20Factory = await ethers.getContractFactory("MockERC20");
     uniswapHelper = new UniswapHelper(web3, from, erc20Factory, getTimestamp);
     await uniswapHelper.init();
     weth = uniswapHelper.weth;
@@ -99,7 +99,7 @@ describe("Pool Controller", () => {
     });
 
     it('Should update the block timestamp', async () => {
-      await increaseTimeByOneDay();
+      await increaseTimeByDays();
     });
 
     it('Should return the correct market caps', async () => {
@@ -350,7 +350,7 @@ describe("Pool Controller", () => {
     return new PoolHelper(tokens, swapFee, 0);
   }
 
-  describe('Swap & Join', async () => {
+  describe('Pool Swap & Join', async () => {
     let poolHelper, tokens, balances, normalizedWeights;
     before(async () => {
       ({ tokens, balances, normalizedWeights } = await getPoolData());
@@ -616,6 +616,113 @@ describe("Pool Controller", () => {
         const relDiff = calcRelativeDiff(expected, actual);
         expect(relDiff.toNumber()).to.be.lte(errorDelta);
       }
+    });
+  });
+
+  describe('Add token to a category', async () => {
+    let poolHelper, tokens, balances, normalizedWeights;
+    let newToken, newTokenAddress;
+
+    const updateTokenPrices = async () => {
+      for (let token of wrappedTokens) {
+        await uniswapHelper.addTokenLiquidity(token.symbol, token.initialPrice, 5);
+        if (await marketOracle.canUpdatePrice(token.address)) {
+          await marketOracle.updatePrice(token.address);
+        }
+        token.totalSupply = +fromWei(await token.token.totalSupply());
+        poolHelper.records[token.address].totalSupply = token.totalSupply;
+      }
+    }
+
+    const addLiquidityToAll = async () => {
+      for (let token of wrappedTokens) {
+        await uniswapHelper.addTokenLiquidity(token.symbol, token.initialPrice, 5);
+        token.totalSupply = +fromWei(await token.token.totalSupply());
+      }
+    }
+
+    const sortCategory = async () => {
+      const category = await getCategoryData(1);
+      const categorySorted = sortArr(category);
+      const receipt = await marketOracle.orderCategoryTokensByMarketCap(
+        1, categorySorted.map((t) => t.token)
+      ).then((r) => r.wait());
+    }
+
+    before(async () => {
+      poolHelper = await getPoolHelper();
+      ({
+        token: newToken,
+        address: newTokenAddress
+      } = await uniswapHelper.deployTokenAndMarket('NewToken', 'NTK', 5, 251));
+      await newToken.getFreeTokens(from, nTokensHex(10000));
+      const t = {
+        initialPrice: 5,
+        price: 5,
+        token: newToken,
+        address: newTokenAddress,
+        totalSupply: 10251,
+        symbol: 'NTK'
+      };
+      await marketOracle.addToken(newTokenAddress, 1);
+      wrappedTokens.push(t);
+      poolHelper.addToken(t);
+      ({ tokens, balances, normalizedWeights } = await getPoolData());
+      console.log(wrappedTokens[3].totalSupply)
+      await increaseTimeByDays();
+      await updateTokenPrices()
+    });
+
+    
+    const mapToHex = (arr) => arr.map((i) => i.toString('hex'));
+    const sortArr = (arr) => arr.sort((a, b) => {
+      if (a.marketCap.lt(b.marketCap)) return 1;
+      if (a.marketCap.gt(b.marketCap)) return -1;
+      return 0;
+    });
+
+    async function getCategoryData(id) {
+      const tokens = await marketOracle.getCategoryTokens(id);
+      const marketCaps = await marketOracle.getCategoryMarketCaps(id);
+      const arr = [];
+      for (let i = 0; i < tokens.length; i++) {
+        arr.push({
+          token: tokens[i],
+          marketCap: toBN(marketCaps[i])
+        });
+      }
+      return arr;
+    }
+
+    it('Re-indexes the pool', async () => {
+      await increaseTimeByDays(14);
+      await updateTokenPrices();
+      await poolController.reweighPool(indexPool.address);
+      await increaseTimeByDays(14);
+      await updateTokenPrices();
+      await poolController.reweighPool(indexPool.address);
+      await increaseTimeByDays(14);
+      await updateTokenPrices();
+      await poolController.reweighPool(indexPool.address);
+      await increaseTimeByDays(14);
+      await updateTokenPrices();
+      await addLiquidityToAll();
+      await sortCategory();
+      await poolController.reindexPool(1, 3);
+    });
+
+    it('Marked the lowest token for removal', async () => {
+      const lastToken = await marketOracle.getCategoryTokens(1).then(arr => arr[3]);
+      const oldRecord = await indexPool.getTokenRecord(lastToken);
+      expect(oldRecord.bound).to.be.true;
+      expect(oldRecord.ready).to.be.true;
+      expect(oldRecord.desiredDenorm).to.eq(0);
+    });
+
+    it('Added the new token to the pool', async () => {
+      const newRecord = await indexPool.getTokenRecord(newTokenAddress);
+      expect(newRecord.bound).to.be.true;
+      expect(newRecord.ready).to.be.false;
     });
   });
 });
