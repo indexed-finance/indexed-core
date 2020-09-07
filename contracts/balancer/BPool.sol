@@ -49,10 +49,9 @@ contract BPool is BBronze, BToken, BMath {
     uint256 tokenAmountOut
   );
 
-  event LOG_CALL(bytes4 indexed sig, address indexed caller, bytes data);
-
   event LOG_DENORM_UPDATED(address token, uint256 newDenorm);
   event LOG_DESIRED_DENORM_SET(address token, uint256 desiredDenorm);
+  event LOG_TOKEN_REMOVED(address token);
 
   modifier _lock_() {
     require(!_mutex, "ERR_REENTRY");
@@ -1029,6 +1028,7 @@ contract BPool is BBronze, BToken, BMath {
     });
     // transfer any remaining tokens out
     _pushUnderlying(token, _controller, tokenBalance);
+    emit LOG_TOKEN_REMOVED(token);
   }
 
   function _increaseDenorm(Record memory record, address token) internal {
