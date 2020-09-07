@@ -33,6 +33,12 @@ contract UniSwapV2PriceOracle {
     weth = _weth;
   }
 
+  function canUpdatePrice(address token) external view returns (bool) {
+    PriceObservation memory observation1 = lastObservedPrices[token];
+    uint32 timeElapsed = uint32(now - observation1.timestamp);
+    return timeElapsed >= MIN_UPDATE_PERIOD;
+  }
+
   /**
    * @dev Update the price stored for a token.
    * Note: May only be called once every MIN_UPDATE_PERIOD seconds.
