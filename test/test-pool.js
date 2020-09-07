@@ -595,8 +595,8 @@ describe('BPool', async () => {
       expect(record.ready).to.be.false;
       expect(record.bound).to.be.true;
       expect(toBN(record.denorm).toNumber()).to.eq(0);
-      expect(fromWei(record.desiredDenorm)).to.equal(poolHelper.records[newTokenAddress].desiredDenorm.toString());
-      expect(toBN(record.balance).toNumber()).to.eq(0)
+      expect(+fromWei(record.desiredDenorm)).to.equal(poolHelper.records[newTokenAddress].desiredDenorm);
+      expect(toBN(record.balance).toNumber()).to.eq(0);
       const minBal = await indexPool.getMinimumBalance(newTokenAddress);
       expect(
         poolHelper.records[newTokenAddress].minimumBalance.toString()

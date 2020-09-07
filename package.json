@@ -42,6 +42,7 @@
   "dependencies": {
     "axios": "^0.20.0",
     "cids": "^1.0.0",
+    "graphql-request": "^3.0.0",
     "keccak": "^3.0.1",
     "multihashes": "^3.0.1",
     "multihashing": "^0.3.3",
