@@ -100,7 +100,9 @@ describe('BPool', async () => {
     const balances = await Promise.all(tokens.map(t => indexPool.getBalance(t).then(toBN)));
     const denormTotal = await indexPool.getTotalDenormalizedWeight().then(toBN);
     const normalizedWeights = denormalizedWeights.map(
-      (denorm) => Decimal(denorm.toString(10)).div(Decimal(denormTotal.toString(10)))
+      (denorm) => Decimal(
+        (denorm.eqn(0) ? denormTotal.divn(25) : denorm).toString(10)
+      ).div(Decimal(denormTotal.toString(10)))
     );
     return {
       tokens,
@@ -138,7 +140,9 @@ describe('BPool', async () => {
     await token.getFreeTokens(from, amountHex);
     await token.approve(indexPool.address, amountHex);
     const amountDec = Decimal(fromWei(new BN(amountHex.slice(2), 'hex')));
-    poolHelper.records[tokenAddress].totalSupply = poolHelper.records[tokenAddress].totalSupply.add(amountDec);
+    poolHelper.records[tokenAddress].totalSupply = Decimal(
+      poolHelper.records[tokenAddress].totalSupply
+    ).add(amountDec);
   }
 
   describe('Swap, Mint, Burn', async () => {
@@ -466,23 +470,6 @@ describe('BPool', async () => {
         records[token] = await indexPool.getTokenRecord(token);
       }
     });
-
-    /* it('Adjusts the weights by a maximum of swapFee', async () => {
-      for (let token of poolHelper.tokens) {
-        // const { denorm: oldWeight } = oldRecords[token];
-        const oldWeight = toBN(oldRecords[token].denorm);
-        const weight = toBN(records[token].denorm);
-        let expected = fromWei(oldWeight.divn(40));
-        let actual = fromWei(weight.sub(oldWeight).abs());
-        let relDiff = calcRelativeDiff(expected, actual);
-        expect(relDiff.toNumber()).to.be.lte(errorDelta);
-        poolHelper.updateWeight(token);
-        expected = poolHelper.records[token].denorm;
-        actual = fromWei(weight);
-        relDiff = calcRelativeDiff(expected, actual);
-        expect(relDiff.toNumber()).to.be.lte(errorDelta);
-      }
-    }); */
   });
 
   describe('Adjust weights during swaps', async () => {
@@ -490,7 +477,6 @@ describe('BPool', async () => {
     before(async () => {
       ({ tokens, balances, normalizedWeights } = await getPoolData());
     });
-
   
     it('swapExactAmountIn', async () => {
       const maxPrice = web3.utils.toTwosComplement(-1);
@@ -575,9 +561,112 @@ describe('BPool', async () => {
           expect(relDiff.toNumber()).to.be.lte(errorDelta);
         }
       }
-      console.log(costs)
       const averageCost = costs.reduce((a,b) => a+b, 0) / costs.length;
       console.log(`swapExactAmountOut average cost ${averageCost.toFixed(0)}`)
+    });
+  });
+
+  describe('Add new tokens', async () => {
+    let newToken, newTokenAddress;
+    let tokens, balances, normalizedWeights;
+    before(async () => {
+      newToken = await erc20Factory.deploy('NewToken', 'NTK');
+      const t = {
+        price: 1.5,
+        token: newToken,
+        address: newToken.address,
+        totalSupply: 10000
+      };
+      newTokenAddress = t.address;
+      wrappedTokens.push(t);
+      poolHelper.addToken(t);
+      ({ tokens, balances, normalizedWeights } = await getPoolData());
+    });
+
+    it('Reindexes the pool', async () => {
+      const balances = poolHelper.tokens.map(t => decToWeiHex(poolHelper.records[t].minimumBalance || 0));
+      const denorms = poolHelper.tokens.map(t => decToWeiHex(poolHelper.records[t].desiredDenorm));
+      await indexPool.reindexTokens(poolHelper.tokens, denorms, balances);
+    });
+
+    it('Adds the correct values for new token', async () => {
+      const record = await indexPool.getTokenRecord(newTokenAddress);
+      expect(record).to.be.not.null;
+      expect(record.ready).to.be.false;
+      expect(record.bound).to.be.true;
+      expect(toBN(record.denorm).toNumber()).to.eq(0);
+      expect(fromWei(record.desiredDenorm)).to.equal(poolHelper.records[newTokenAddress].desiredDenorm.toString());
+      expect(toBN(record.balance).toNumber()).to.eq(0)
+      const minBal = await indexPool.getMinimumBalance(newTokenAddress);
+      expect(
+        poolHelper.records[newTokenAddress].minimumBalance.toString()
+      ).to.eq(fromWei(minBal));
+    });
+
+    it('Keeps the other tokens marked as ready', async () => {
+      for (let token of poolHelper.tokens) {
+        if (token == newTokenAddress) continue;
+        const record = await indexPool.getTokenRecord(token);
+        expect(record.ready).to.be.true;
+      }
+    });
+
+    describe('Prices the new token using the minimum balance', () => {
+      it('swapExactAmountIn', async () => {
+        const maxPrice = web3.utils.toTwosComplement(-1);
+        const amountIn = poolHelper.records[newTokenAddress].minimumBalance.div(5);
+        await mintAndApprove(newTokenAddress, decToWeiHex(amountIn));
+        for (let tokenOut of poolHelper.tokens) {
+          if (tokenOut == newTokenAddress) continue;
+          const output = await indexPool.callStatic.swapExactAmountIn(
+            newTokenAddress,
+            decToWeiHex(amountIn),
+            tokenOut,
+            0,
+            maxPrice
+          );
+          const computed = poolHelper.calcOutGivenIn(newTokenAddress, tokenOut, amountIn, true);
+          let expected = computed[0];
+          let actual = Decimal(fromWei(output[0]));
+          let relDiff = calcRelativeDiff(expected, actual);
+          expect(relDiff.toNumber()).to.be.lte(errorDelta);
+          expected = computed[1];
+          actual = fromWei(output[1]);
+          relDiff = calcRelativeDiff(expected, actual);
+          expect(relDiff.toNumber()).to.be.lte(errorDelta);
+        }
+      });
+
+      it('swapExactAmountOut', async () => {
+        const maxPrice = web3.utils.toTwosComplement(-1);
+        const tokenIn = newTokenAddress;
+        const maxAmountIn = maxPrice;
+        for (let tokenOut of poolHelper.tokens) {
+          if (tokenOut == newTokenAddress) continue;
+          const tokenAmountOut = poolHelper.records[tokenOut].balance / 50;
+          const computed = poolHelper.calcInGivenOut(tokenIn, tokenOut, tokenAmountOut, true);
+          // increase the approved tokens by 1% because the math on the decimal -> bn
+          // has minor rounding errors
+          await mintAndApprove(tokenIn, decToWeiHex(computed[0].mul(1.01)));
+          const output = await indexPool.callStatic.swapExactAmountOut(
+            tokenIn,
+            maxAmountIn,
+            tokenOut,
+            decToWeiHex(tokenAmountOut),
+            maxPrice,
+          );
+          // Check the token input amount
+          let expected = computed[0];
+          let actual = Decimal(fromWei(output[0]));
+          let relDiff = calcRelativeDiff(expected, actual);
+          expect(relDiff.toNumber()).to.be.lte(errorDelta);
+          // Check the resulting spot price
+          expected = computed[1];
+          actual = fromWei(output[1]);
+          relDiff = calcRelativeDiff(expected, actual);
+          expect(relDiff.toNumber()).to.be.lte(errorDelta);
+        }
+      });
     });
   });
 });
