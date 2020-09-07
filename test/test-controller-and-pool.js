@@ -23,7 +23,7 @@ const errorDelta = 10 ** -8;
 
 
 describe("Pool Controller", () => {
-  let uniswapHelper, from, marketOracle, stablecoin, poolController, indexPool;
+  let uniswapHelper, from, marketOracle, weth, poolController, indexPool;
   let timestampAddition = 0;
 
   const getTimestamp = () => Math.floor(new Date().getTime() / 1000) + timestampAddition;
@@ -45,18 +45,20 @@ describe("Pool Controller", () => {
     const erc20Factory = await ethers.getContractFactory("MockERC20");
     uniswapHelper = new UniswapHelper(web3, from, erc20Factory, getTimestamp);
     await uniswapHelper.init();
-    stablecoin = uniswapHelper.stablecoin;
+    weth = uniswapHelper.weth;
     const oracleFactory = await ethers.getContractFactory("MarketOracle");
     marketOracle = await oracleFactory.deploy(
       uniswapHelper.uniswapFactory.options.address,
-      stablecoin.address,
+      weth.options.address,
       from
     );
   });
 
   it('Should deploy the Pool Controller', async () => {
     const poolFactory = await ethers.getContractFactory("BPool");
+    console.log('poolfactory', !!poolFactory);
     const pool = await poolFactory.deploy();
+    console.log('pool', !!pool.address);
     const controllerFactory = await ethers.getContractFactory("PoolController");
     poolController = await controllerFactory.deploy(marketOracle.address, pool.address);
   });
@@ -65,9 +67,9 @@ describe("Pool Controller", () => {
     it('Should deploy the wrapped token market pairs', async () => {
       for (let i = 0; i < wrappedTokens.length; i++) {
         const { name, symbol, initialPrice } = wrappedTokens[i];
-        const token = await uniswapHelper.deployTokenAndMarket(name, symbol, initialPrice, 25100);
+        const token = await uniswapHelper.deployTokenAndMarket(name, symbol, initialPrice, 251);
         wrappedTokens[i] = token;
-        await token.token.getFreeTokens(from, nTokensHex(50000));
+        await token.token.getFreeTokens(from, nTokensHex(5000));
       }
     });
   });
@@ -106,8 +108,8 @@ describe("Pool Controller", () => {
         const { symbol, address, initialPrice } = wrappedTokens[i];
         // In order to update the cumulative prices on the market pairs,
         // we need to add some more liquidity (could also execute trades)
-        await uniswapHelper.addTokenLiquidity(symbol, initialPrice, 25050);
-        const expectedMarketCap = nTokens(100150).muln(initialPrice);
+        await uniswapHelper.addTokenLiquidity(symbol, initialPrice, 255);
+        const expectedMarketCap = nTokens(5506).muln(initialPrice);
         const realMarketCap = await marketOracle.computeAverageMarketCap(address)
           .then(toBN);
         const pct = realMarketCap.div(expectedMarketCap);
@@ -142,12 +144,12 @@ describe("Pool Controller", () => {
 
     it('Should sort the tokens and update the category', async () => {
       const category = await getCategoryData(1);
-      const marketCaps = [700, 200, 390].map(n => nTokens(100150).muln(n));
+      const marketCaps = [10, 1, 2].map(n => nTokens(5506).muln(n));
       expect(
         mapToHex(category.map((t) => t.marketCap))
       ).to.deep.equal(mapToHex(marketCaps));
       const categorySorted = sortArr(category);
-      const marketCapsSorted = [700, 390, 200].map(n => nTokens(100150).muln(n));
+      const marketCapsSorted = [10, 2, 1].map(n => nTokens(5506).muln(n));
       expect(
         mapToHex(categorySorted.map((t) => t.marketCap))
       ).to.deep.equal(mapToHex(marketCapsSorted));
@@ -171,13 +173,13 @@ describe("Pool Controller", () => {
       sortedTokens = sortedTokenAddresses.map(addr => uniswapHelper.getTokenByAddress(addr));
       let sum_qrts = 0;
       for (let token of sortedTokens) {
-        const mkt_cap = Math.sqrt(100150 * token.initialPrice);
+        const mkt_cap = Math.sqrt(5506 * token.initialPrice);
         sum_qrts += mkt_cap;
       }
-      const totalValue = nTokens(100000);
+      const totalValue = nTokens(20);
       const max_weight = nTokens(50);
       for (let token of sortedTokens) {
-        const mkt_cap = Math.sqrt(100150 * token.initialPrice);
+        const mkt_cap = Math.sqrt(5506 * token.initialPrice);
         const weight = mkt_cap / sum_qrts;
         normalizedWeights_real.push(weight);
         denormalizedWeights_real.push(max_weight.muln(weight));
@@ -192,7 +194,7 @@ describe("Pool Controller", () => {
     }
 
     it('Computes the correct balances and denormalized weights', async () => {
-      const { balances, denormalizedWeights } = await poolController.getInitialTokenWeightsAndBalances(1, 3, nTokensHex(100000));
+      const { balances, denormalizedWeights } = await poolController.getInitialTokenWeightsAndBalances(1, 3, nTokensHex(20));
       for (let i = 0; i < balances.length; i++) {
         const balance = toBN(balances[i]);
         const denormalizedWeight = toBN(denormalizedWeights[i]);
@@ -205,8 +207,8 @@ describe("Pool Controller", () => {
       }
     });
     
-    it('Give tokens to the pool controller', async () => {
-      const { tokens, balances } = await poolController.getInitialTokenWeightsAndBalances(1, 3, nTokensHex(100000));
+    it('Gives tokens to the pool controller', async () => {
+      const { tokens, balances } = await poolController.getInitialTokenWeightsAndBalances(1, 3, nTokensHex(20));
       const controllerAddress = poolController.address;
       for (let i = 0; i < balances.length; i++) {
         const token = await ethers.getContractAt('MockERC20', tokens[i]);
@@ -235,7 +237,7 @@ describe("Pool Controller", () => {
         3,
         "Top 3 Wrapped Tokens Index",
         "WTI3",
-        nTokensHex(100000)
+        nTokensHex(20)
       );
       const { events, gasUsed } = await receipt.wait();
       console.log(`Pool Deployment Cost: ${gasUsed}`);
@@ -275,7 +277,7 @@ describe("Pool Controller", () => {
     let tokens, balances, denormalizedWeights;
 
     before(async () => {
-      ({ tokens, balances, denormalizedWeights } = await poolController.getInitialTokenWeightsAndBalances(1, 3, nTokensHex(100000)))
+      ({ tokens, balances, denormalizedWeights } = await poolController.getInitialTokenWeightsAndBalances(1, 3, nTokensHex(20)))
     });
 
     it('Set the correct tokens', async () => {
@@ -450,6 +452,10 @@ describe("Pool Controller", () => {
       let previousPoolBalance = '100';
       const maxPrice = web3.utils.toTwosComplement(-1);
       let poolAmountOut = '1';
+      for (let _token of tokens) {
+        const token = await ethers.getContractAt('MockERC20', _token);
+        await token.approve(indexPool.address, maxPrice).then(r => r.wait);
+      }
       await indexPool.joinPool(toWei(poolAmountOut), [maxPrice, maxPrice, maxPrice]);
       let currentPoolBalance = Decimal(previousPoolBalance).plus(Decimal(poolAmountOut))
       for (let i = 0; i < tokens.length; i++) {

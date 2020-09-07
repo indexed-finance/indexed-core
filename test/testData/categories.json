@@ -3,17 +3,17 @@
     {
       "name": "Wrapped Bitcoin",
       "symbol": "WBTC",
-      "initialPrice": 700
+      "initialPrice": 10
     },
     {
       "name": "Wrapped Litecoin",
       "symbol": "WLTC",
-      "initialPrice": 200
+      "initialPrice": 1
     },
     {
-      "name": "Wrapped Ether",
-      "symbol": "WETH",
-      "initialPrice": 390
+      "name": "Wrapped Token",
+      "symbol": "WTKN",
+      "initialPrice": 2
     }
   ]
 }

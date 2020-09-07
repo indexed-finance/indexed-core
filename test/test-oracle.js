@@ -14,7 +14,7 @@ const toBN = (bn) => new BN(bn._hex.slice(2), 'hex');
 describe("Market Oracle", () => {
   let uniswapFactory, uniswapRouter, weth;
   let from;
-  let stablecoin;
+  // let stablecoin;
   let erc20Factory;
   let marketOracle;
   let timestampAddition = 0;
@@ -44,49 +44,56 @@ describe("Market Oracle", () => {
     tokenObj.address = token.address;
   }
 
+  async function getFreeWeth(to, amount) {
+    await weth.methods.deposit().send({
+      from,
+      value: amount
+    });
+    if (to && to != from) {
+      await weth.methods.transfer(to, amount).send({ from: this.from });
+    }
+  }
+
   /**
-   * Add liquidity to uniswap market pair for a token and stablecoin
-   * @param price Amount of stablecoin per token
+   * Add liquidity to uniswap market pair for a token and weth
+   * @param price Amount of weth per token
    * @param liquidity Amount of tokens to add
    */
   async function addTokenLiquidity(token, price, liquidity) {
     const amountToken = nTokensHex(liquidity);
-    const amountStablecoin = nTokensHex(liquidity * price);
+    const amountWeth = nTokensHex(liquidity * price);
     await token.getFreeTokens(from, amountToken).then(r => r.wait());
-    await stablecoin.getFreeTokens(from, amountStablecoin).then(r => r.wait());
+    await getFreeWeth(from, amountWeth);
     await token.approve(uniswapRouter.options.address, amountToken).then(r => r.wait());
-    await stablecoin.approve(uniswapRouter.options.address, amountStablecoin).then(r => r.wait());
+    
+    await weth.methods.approve(uniswapRouter.options.address, amountWeth).send({ from })
     const timestamp = getTimestamp() + 1000;
     await uniswapRouter.methods.addLiquidity(
       token.address,
-      stablecoin.address,
+      weth.options.address,
       amountToken,
-      amountStablecoin,
+      amountWeth,
       amountToken,
-      amountStablecoin,
+      amountWeth,
       from,
       timestamp
     ).send({ from });
   }
 
   /**
-   * Deploy a market pair for (token, stablecoin) and initialize it with liquidity.
+   * Deploy a market pair for (token, weth) and initialize it with liquidity.
    * @param tokenObj - object with token data
    * @param liquidity - amount of tokens to give as liquidity
    */
   async function createTokenMarket(tokenObj, liquidity) {
     const { address, initialPrice, token } = tokenObj;
-    const result = await uniswapFactory.methods.createPair(address, stablecoin.address).send({ from });
+    const result = await uniswapFactory.methods.createPair(address, weth.options.address).send({ from });
     const { pair } = result.events.PairCreated.returnValues;
     tokenObj.pair = pair;
     await addTokenLiquidity(token, initialPrice, liquidity);
   }
 
   describe('Initialize Tokens', async () => {
-    it('Should deploy a stablecoin', async () => {
-      stablecoin = await erc20Factory.deploy("DAI", "DAI");
-    });
-
     it('Should deploy the wrapped token mocks', async () => {
       for (let i = 0; i < wrappedTokens.length; i++) {
         await deployToken(wrappedTokens[i]);
@@ -107,7 +114,7 @@ describe("Market Oracle", () => {
       const oracleFactory = await ethers.getContractFactory("MarketOracle");
       marketOracle = await oracleFactory.deploy(
         uniswapFactory.options.address,
-        stablecoin.address,
+        weth.options.address,
         from
       );
     });
@@ -186,12 +193,12 @@ describe("Market Oracle", () => {
 
     it('Should sort the tokens and update the category', async () => {
       const category = await getCategoryData(1);
-      const marketCaps = [700, 200, 390].map(n => nTokens(n * 150));
+      const marketCaps = [10, 1, 2].map(n => nTokens(n * 150));
       expect(
         mapToHex(category.map((t) => t.marketCap))
       ).to.deep.equal(mapToHex(marketCaps));
       const categorySorted = sortArr(category);
-      const marketCapsSorted = [700, 390, 200].map(n => nTokens(n * 150));
+      const marketCapsSorted = [10, 2, 1].map(n => nTokens(n * 150));
       expect(
         mapToHex(categorySorted.map((t) => t.marketCap))
       ).to.deep.equal(mapToHex(marketCapsSorted));

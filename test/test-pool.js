@@ -43,14 +43,14 @@ describe('BPool', async () => {
     for (let i = 0; i < wrappedTokens.length; i++) {
       const { name, symbol, initialPrice } = wrappedTokens[i];
       const token = await erc20Factory.deploy(name, symbol);
-      await token.getFreeTokens(from, nTokensHex(100000));
+      await token.getFreeTokens(from, nTokensHex(10000));
       const tokenObj = {
         initialPrice,
         name,
         symbol,
         token,
         address: token.address,
-        totalSupply: 100000
+        totalSupply: 10000
       };
       wrappedTokens[i] = tokenObj;
     }
@@ -70,7 +70,7 @@ describe('BPool', async () => {
       });
     }
     poolHelper = new PoolHelper(tokens, swapFee, 0);
-    const totalValue = 100000;
+    const totalValue = 50;
     for (let token of tokens) {
       const { address } = token;
       const { denorm, price } = poolHelper.records[address];
@@ -230,6 +230,9 @@ describe('BPool', async () => {
       let previousPoolBalance = '100';
       const maxPrice = web3.utils.toTwosComplement(-1);
       let poolAmountOut = '1';
+      for (let token of wrappedTokens) {
+        await token.token.approve(indexPool.address, maxPrice)
+      }
       await indexPool.joinPool(toWei(poolAmountOut), [maxPrice, maxPrice, maxPrice]);
       let currentPoolBalance = Decimal(previousPoolBalance).plus(Decimal(poolAmountOut))
       for (let i = 0; i < tokens.length; i++) {
@@ -411,10 +414,11 @@ describe('BPool', async () => {
       const tokens = wrappedTokens.map(t => t.address);
       const denorms = tokens.map(t => decToWeiHex(poolHelper.records[t].desiredDenorm));
       await increaseTimeBySeconds(100 * 60);
-      await indexPool.reweighTokens(tokens, denorms);
+      const receipt = await indexPool.reweighTokens(tokens, denorms).then(r => r.wait());
       for (let token of poolHelper.tokens) {
         records[token] = await indexPool.getTokenRecord(token);
       }
+      console.log(`Cost to reweigh pool ${receipt.cumulativeGasUsed}`)
     });
 
     it('Sets the correct target weights', async () => {
@@ -427,11 +431,11 @@ describe('BPool', async () => {
       }
     });
 
-    it('Adjusts the weights when the targets are set', async () => {
+    it('Does not adjust the weights when the targets are set', async () => {
       for (let token of poolHelper.tokens) {
         const record = records[token];
         const computedRecord = poolHelper.records[token];
-        poolHelper.updateWeight(token);
+        // poolHelper.updateWeight(token);
         let actual = fromWei(record.denorm);
         let expected = computedRecord.denorm;
         const relDiff = calcRelativeDiff(expected, actual);
@@ -463,7 +467,7 @@ describe('BPool', async () => {
       }
     });
 
-    it('Adjusts the weights by a maximum of swapFee', async () => {
+    /* it('Adjusts the weights by a maximum of swapFee', async () => {
       for (let token of poolHelper.tokens) {
         // const { denorm: oldWeight } = oldRecords[token];
         const oldWeight = toBN(oldRecords[token].denorm);
@@ -478,7 +482,7 @@ describe('BPool', async () => {
         relDiff = calcRelativeDiff(expected, actual);
         expect(relDiff.toNumber()).to.be.lte(errorDelta);
       }
-    });
+    }); */
   });
 
   describe('Adjust weights during swaps', async () => {
@@ -491,6 +495,7 @@ describe('BPool', async () => {
     it('swapExactAmountIn', async () => {
       const maxPrice = web3.utils.toTwosComplement(-1);
       await increaseTimeBySeconds(60 * 60);
+      let costs = [];
       for (let i = 0; i < tokens.length; i++) {
         const tokenIn = tokens[i];
         const tokenAmountIn = balances[i].divn(50);
@@ -505,6 +510,14 @@ describe('BPool', async () => {
             0,
             maxPrice
           );
+          const gasCost = await indexPool.estimateGas.swapExactAmountIn(
+            tokenIn,
+            `0x${tokenAmountIn.toString('hex')}`,
+            tokenOut,
+            0,
+            maxPrice
+          );
+          costs.push(toBN(gasCost).toNumber());
           const computed = poolHelper.calcOutGivenIn(tokenIn, tokenOut, fromWei(tokenAmountIn), true);
           let expected = computed[0];
           let actual = Decimal(fromWei(output[0]));
@@ -516,11 +529,14 @@ describe('BPool', async () => {
           expect(relDiff.toNumber()).to.be.lte(errorDelta);
         }
       }
+      const averageCost = costs.reduce((a,b) => a+b, 0) / costs.length;
+      console.log(`swapExactAmountIn average cost ${averageCost.toFixed(0)}`)
     });
   
     it('swapExactAmountOut', async () => {
       const maxPrice = web3.utils.toTwosComplement(-1);
       await increaseTimeBySeconds(60 * 60);
+      let costs = [];
       for (let i = 0; i < tokens.length; i++) {
         const tokenIn = tokens[i];
         const maxAmountIn = maxPrice;
@@ -539,6 +555,14 @@ describe('BPool', async () => {
             `0x${tokenAmountOut.toString('hex')}`,
             maxPrice,
           );
+          const gasCost = await indexPool.estimateGas.swapExactAmountOut(
+            tokenIn,
+            maxAmountIn,
+            tokenOut,
+            `0x${tokenAmountOut.toString('hex')}`,
+            maxPrice,
+          );
+          costs.push(toBN(gasCost).toNumber());
           // Check the token input amount
           let expected = computed[0];
           let actual = Decimal(fromWei(output[0]));
@@ -551,6 +575,9 @@ describe('BPool', async () => {
           expect(relDiff.toNumber()).to.be.lte(errorDelta);
         }
       }
+      console.log(costs)
+      const averageCost = costs.reduce((a,b) => a+b, 0) / costs.length;
+      console.log(`swapExactAmountOut average cost ${averageCost.toFixed(0)}`)
     });
   });
 });
