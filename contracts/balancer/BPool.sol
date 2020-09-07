@@ -49,9 +49,10 @@ contract BPool is BBronze, BToken, BMath {
     uint256 tokenAmountOut
   );
 
-  event LOG_DENORM_UPDATED(address token, uint256 newDenorm);
-  event LOG_DESIRED_DENORM_SET(address token, uint256 desiredDenorm);
+  event LOG_DENORM_UPDATED(address indexed token, uint256 newDenorm);
+  event LOG_DESIRED_DENORM_SET(address indexed token, uint256 desiredDenorm);
   event LOG_TOKEN_REMOVED(address token);
+  event LOG_TOKEN_ADDED(address indexed token, uint256 desiredDenorm, uint256 minimumBalance);
 
   modifier _lock_() {
     require(!_mutex, "ERR_REENTRY");
@@ -976,21 +977,7 @@ contract BPool is BBronze, BToken, BMath {
     });
     _tokens.push(token);
     _minimumBalances[token] = minimumBalance;
-  }
-
-  function _setDesiredDenorm(address token, uint96 desiredDenorm) internal {
-    Record memory record = _records[token];
-    require(record.bound, "ERR_NOT_BOUND");
-    // If the desired weight is 0, this will trigger a gradual unbinding of the token.
-    // Therefore the weight only needs to be above the minimum weight if it isn't 0.
-    require(
-      desiredDenorm >= MIN_WEIGHT || desiredDenorm == 0,
-      "ERR_MIN_WEIGHT"
-    );
-    require(desiredDenorm <= MAX_WEIGHT, "ERR_MAX_WEIGHT");
-    record.desiredDenorm = desiredDenorm;
-    _records[token].desiredDenorm = desiredDenorm;
-    emit LOG_DESIRED_DENORM_SET(token, desiredDenorm);
+    emit LOG_TOKEN_ADDED(token, desiredDenorm, minimumBalance);
   }
 
   /**
@@ -1029,6 +1016,21 @@ contract BPool is BBronze, BToken, BMath {
     // transfer any remaining tokens out
     _pushUnderlying(token, _controller, tokenBalance);
     emit LOG_TOKEN_REMOVED(token);
+  }
+
+  function _setDesiredDenorm(address token, uint96 desiredDenorm) internal {
+    Record memory record = _records[token];
+    require(record.bound, "ERR_NOT_BOUND");
+    // If the desired weight is 0, this will trigger a gradual unbinding of the token.
+    // Therefore the weight only needs to be above the minimum weight if it isn't 0.
+    require(
+      desiredDenorm >= MIN_WEIGHT || desiredDenorm == 0,
+      "ERR_MIN_WEIGHT"
+    );
+    require(desiredDenorm <= MAX_WEIGHT, "ERR_MAX_WEIGHT");
+    record.desiredDenorm = desiredDenorm;
+    _records[token].desiredDenorm = desiredDenorm;
+    emit LOG_DESIRED_DENORM_SET(token, desiredDenorm);
   }
 
   function _increaseDenorm(Record memory record, address token) internal {
