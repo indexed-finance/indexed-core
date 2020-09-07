@@ -19,7 +19,8 @@ module.exports = class PoolHelper {
         marketCap: totalSupply * price,
         lastDenormUpdate: blockTimestamp,
         totalSupply: Decimal(totalSupply),
-        price
+        price,
+        ready: true
       }
     }
     this.setDesiredWeights();
@@ -29,10 +30,31 @@ module.exports = class PoolHelper {
     }
   }
 
+  getTotalValue() {
+    const [token] = this.tokens;
+    const { balance, price, denorm } = this.records[token];
+    return (this.totalWeight / denorm) * balance * price;
+  }
+
+  addToken(tokenObj) {
+    const { totalSupply, address, price } = tokenObj;
+    this.tokens.push(address);
+    this.records[address] = {
+      balance: 0,
+      marketCap: totalSupply * price,
+      totalSupply,
+      price,
+      ready: false
+    };
+    this.setDesiredWeights();
+    const totalValue = this.getTotalValue();
+    this.records[address].minimumBalance = Decimal((totalValue / 25) / price);
+  }
+
   setDesiredWeights() {
     const marketCaps = this.tokens.map(a => {
       const { totalSupply, price } = this.records[a];
-      return (this.records[a].marketCap = totalSupply.mul(price));
+      return (this.records[a].marketCap = Decimal(totalSupply).mul(price));
     });
     const marketCapSqrts = marketCaps.map(m => Math.sqrt(m));
     const sqrtSum = marketCapSqrts.reduce((a, b) => a + b, 0);
@@ -47,24 +69,28 @@ module.exports = class PoolHelper {
     for (let address of this.tokens) this.updateWeight(address)
   }
 
-  calcUpdatedWeight(address) {
+  calcWeightIncrease(address) {
     const record = this.records[address];
     let oldWeight = record.denorm;
     let desiredDenorm = record.desiredDenorm;
-    if (oldWeight == desiredDenorm) return;
-    const maxDiff = oldWeight * this.swapFee;
+    if (oldWeight >= desiredDenorm) return oldWeight;
     let denorm = desiredDenorm;
-    const realDiff = desiredDenorm - oldWeight;
-
-    if (Math.abs(realDiff) > maxDiff) {
-      if (realDiff > 0) denorm = oldWeight + maxDiff;
-      else denorm = oldWeight - maxDiff;
-    }
+    const maxDiff = oldWeight * this.swapFee / 2;
+    let diff = desiredDenorm - oldWeight;
+    if (diff > maxDiff) denorm = oldWeight + maxDiff;
     return denorm;
   }
 
-  updateWeight(address) {
-    this.records[address].denorm = this.calcUpdatedWeight(address)
+  calcWeightDecrease(address) {
+    const record = this.records[address];
+    const oldWeight = record.denorm;
+    const desiredDenorm = record.desiredDenorm;
+    if (oldWeight <= desiredDenorm) return oldWeight;
+    let denorm = desiredDenorm;
+    const maxDiff = oldWeight * this.swapFee / 2;
+    const diff = oldWeight - desiredDenorm;
+    if (diff > maxDiff) denorm = oldWeight - maxDiff;
+    return denorm;
   }
 
   setBlockTimestamp(blockTimestamp) {
@@ -78,17 +104,36 @@ module.exports = class PoolHelper {
   }
 
   calcOutGivenIn(tokenIn, tokenOut, tokenAmountIn, updateWeightAfter = false) {
-    let { denorm: dI, balance: bI } = this.records[tokenIn];
-    let { denorm: dO, balance: bO } = this.records[tokenOut];
-    const amountOut = calcOutGivenIn(bI, dI, bO, dO, tokenAmountIn, this.swapFee);
-    if (updateWeightAfter) {
-      dI = this.calcUpdatedWeight(tokenIn);
-      dO = this.calcUpdatedWeight(tokenOut);
+    let { denorm: dI, balance: bI, ready: rI, minimumBalance: mbI } = this.records[tokenIn];
+    let rbI = bI;
+    if (!rI) {
+      dI = this.totalWeight / 25;
+      bI = mbI;
     }
+    let { denorm: dO, balance: bO, ready: rO } = this.records[tokenOut];
+    if (!rO) throw new Error('Out token not ready.');
+    const amountOut = calcOutGivenIn(bI, dI, bO, dO, tokenAmountIn, this.swapFee);
+    if (tokenAmountIn > bI / 2) throw new Error('Exceeds max in ratio');
+    if (amountOut > bO / 3) throw new Error('Exceeds max out ratio');
+    if (updateWeightAfter) {
+      if (!rI) {
+        if (rbI + tokenAmountIn >= mbI) {
+          bI = Decimal(rbI).plus(Decimal(tokenAmountIn))
+          dI += dI * this.swapFee / 2;
+        }
+      } else {
+        dI = this.calcWeightIncrease(tokenIn);
+        bI = Decimal(rbI).plus(Decimal(tokenAmountIn))
+      }
+      dO = this.calcWeightDecrease(tokenOut);
+    } else {
+      bI = Decimal(rbI).plus(Decimal(tokenAmountIn));
+    }
+    bO = Decimal(bO).sub(Decimal(amountOut))
     const spotPriceAfter = calcSpotPrice(
-      Decimal(bI).plus(Decimal(tokenAmountIn)),
+      Decimal(bI),
       dI,
-      Decimal(bO).sub(Decimal(amountOut)),
+      bO,
       dO,
       this.swapFee
     );
@@ -96,17 +141,35 @@ module.exports = class PoolHelper {
   }
 
   calcInGivenOut(tokenIn, tokenOut, tokenAmountOut, updateWeightAfter = false) {
-    let { denorm: dI, balance: bI } = this.records[tokenIn];
-    let { denorm: dO, balance: bO } = this.records[tokenOut];
+    let { denorm: dI, balance: bI, ready: rI, minimumBalance: mbI } = this.records[tokenIn];
+    let rbI = bI;
+    if (!rI) {
+      dI = this.totalWeight / 25;
+      bI = mbI;
+    }
+    let { denorm: dO, balance: bO, ready: rO } = this.records[tokenOut];
+    if (!rO) throw new Error('Out token not ready.');
     const amountIn = calcInGivenOut(bI, dI, bO, dO, tokenAmountOut, this.swapFee);
     if (updateWeightAfter) {
-      dI = this.calcUpdatedWeight(tokenIn);
-      dO = this.calcUpdatedWeight(tokenOut);
+      if (!rI) {
+        if (rbI + amountIn >= mbI) {
+          bI = Decimal(rbI).plus(Decimal(amountIn));
+          dI += dI * this.swapFee / 2;
+        }
+      } else {
+        dI = this.calcWeightIncrease(tokenIn);
+        bI = Decimal(rbI).plus(Decimal(amountIn))
+      }
+      dO = this.calcWeightDecrease(tokenOut);
+    } else {
+      bI = Decimal(rbI).plus(Decimal(amountIn));
     }
+    bO = Decimal(bO).sub(Decimal(tokenAmountOut));
+    
     const spotPriceAfter = calcSpotPrice(
-      Decimal(bI).plus(Decimal(amountIn)),
+      Decimal(bI),
       dI,
-      Decimal(bO).sub(Decimal(tokenAmountOut)),
+      bO,
       dO,
       this.swapFee
     );
