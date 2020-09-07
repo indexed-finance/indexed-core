@@ -31,7 +31,7 @@ contract PoolController is BNum {
     uint256 categoryID,
     uint256 indexSize
   );
-  event LOG_BLABS(address indexed caller, address indexed blabs);
+  event LOG_MANAGER(address manager);
 
   address internal _manager;
   address internal _poolContract;
@@ -39,36 +39,25 @@ contract PoolController is BNum {
   mapping(address => PoolUpdateRecord) internal _poolUpdateRecords;
   MarketOracle public oracle;
 
-  constructor(address _oracle, address poolContract) public {
-    _manager = msg.sender;
-    oracle = MarketOracle(_oracle);
-    _poolContract = poolContract;
-  }
-
   modifier onlyManager {
     require(msg.sender == _manager, "ERR_ONLY_MANAGER");
     _;
   }
 
-  function isBPool(address b) external view returns (bool) {
-    return _isBPool[b];
+  constructor(address _oracle, address poolContract) public {
+    _manager = msg.sender;
+    oracle = MarketOracle(_oracle);
+    _poolContract = poolContract;
+    emit LOG_MANAGER(msg.sender);
   }
 
-  // function shouldPoolReweigh(address pool) public view returns (bool) {
-  //   return now - lastPoolReweighs[pool] >= POOL_REWEIGH_DELAY;
-  // }
-
-  function computePoolAddress(uint256 categoryID, uint256 indexSize)
-    public
-    view
-    returns (address)
-  {
-    bytes32 salt = keccak256(abi.encodePacked(categoryID, indexSize));
-    return ProxyLib.computeProxyAddress(
-      _poolContract,
-      salt
-    );
+  function setManager(address newManager) external onlyManager {
+    require(newManager != address(0), "ERR_NULL_ADDRESS");
+    _manager = newManager;
+    emit LOG_MANAGER(newManager);
   }
+
+/* ---  Pool Actions  --- */
 
   /**
    * @dev Deploy a new indexed pool with the category ID and index size.
@@ -117,36 +106,6 @@ contract PoolController is BNum {
       balances,
       denormalizedWeights
     );
-  }
-
-  /**
-   * @dev Queries the top n tokens in a category from the market oracle,
-   * computes their relative weights by market cap square root and determines
-   * the weighted balance of each token to meet a specified total value.
-   */
-  function getInitialTokenWeightsAndBalances(
-    uint256 categoryID,
-    uint256 indexSize,
-    uint256 stablecoinValue
-  )
-    public
-    view
-    returns (
-      address[] memory tokens,
-      uint96[] memory denormalizedWeights,
-      uint256[] memory balances
-    )
-  {
-    tokens = oracle.getTopCategoryTokens(categoryID, indexSize);
-    FixedPoint.uq112x112[] memory prices = oracle.computeAveragePrices(tokens);
-    FixedPoint.uq112x112[] memory weights = Index.computeTokenWeights(tokens, prices);
-    balances = new uint256[](indexSize);
-    denormalizedWeights = new uint96[](indexSize);
-    for (uint256 i = 0; i < indexSize; i++) {
-      uint144 weightedValue = weights[i].mul(stablecoinValue).decode144();
-      balances[i] = uint256(prices[i].reciprocal().mul(weightedValue).decode144());
-      denormalizedWeights[i] = denormalizeFractionalWeight(weights[i]);
-    }
   }
 
   /**
@@ -210,6 +169,65 @@ contract PoolController is BNum {
     BPool(poolAddress).reweighTokens(tokens, denormalizedWeights);
     record.timestamp = uint128(now);
     _poolUpdateRecords[poolAddress] = record;
+  }
+
+/* ---  Queries  --- */
+  function getManager() external view returns (address) {
+    return _manager;
+  }
+
+  function isBPool(address b) external view returns (bool) {
+    return _isBPool[b];
+  }
+
+  function computePoolAddress(uint256 categoryID, uint256 indexSize)
+    public
+    view
+    returns (address)
+  {
+    bytes32 salt = keccak256(abi.encodePacked(categoryID, indexSize));
+    return ProxyLib.computeProxyAddress(
+      _poolContract,
+      salt
+    );
+  }
+
+  function getPoolUpdateRecord(address poolAddress)
+    external
+    view
+    returns (PoolUpdateRecord memory)
+  {
+    return _poolUpdateRecords[poolAddress];
+  }
+
+  /**
+   * @dev Queries the top n tokens in a category from the market oracle,
+   * computes their relative weights by market cap square root and determines
+   * the weighted balance of each token to meet a specified total value.
+   */
+  function getInitialTokenWeightsAndBalances(
+    uint256 categoryID,
+    uint256 indexSize,
+    uint256 stablecoinValue
+  )
+    public
+    view
+    returns (
+      address[] memory tokens,
+      uint96[] memory denormalizedWeights,
+      uint256[] memory balances
+    )
+  {
+    tokens = oracle.getTopCategoryTokens(categoryID, indexSize);
+    FixedPoint.uq112x112[] memory prices = oracle.computeAveragePrices(tokens);
+    FixedPoint.uq112x112[] memory weights = Index.computeTokenWeights(tokens, prices);
+    balances = new uint256[](indexSize);
+    denormalizedWeights = new uint96[](indexSize);
+    for (uint256 i = 0; i < indexSize; i++) {
+      uint144 weightedValue = weights[i].mul(stablecoinValue).decode144();
+      balances[i] = uint256(prices[i].reciprocal().mul(weightedValue).decode144());
+      denormalizedWeights[i] = denormalizeFractionalWeight(weights[i]);
+    }
   }
 
   /**
