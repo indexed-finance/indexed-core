@@ -155,8 +155,24 @@ contract MarketOracle is UniSwapV2PriceOracle {
     for (uint256 i = 1; i < marketCaps.length; i++) {
       address token = orderedTokens[i];
       require(_tokenCategories[token] == categoryID, "Token not in category.");
-      require(token != orderedTokens[i-1], "Duplicate token address.");
-      require(marketCaps[i] <= marketCaps[i-1], "Tokens out of order");
+      // This check could technically be bypassed if three tokens had the exact
+      // same market cap, but it is incredibly unlikely.
+      require(marketCaps[i] <= marketCaps[i-1], "ERR_ORDER_INCORRECT");
+      require(token != orderedTokens[i-1], "ERR_DUPLICATE_ADDRESS");
+      // Duplicates can bypass the previous assertion if there are 2 tokens
+      // with the exact same market cap, even though it is incredibly unlikely.
+      // If two tokens in the list have the same market cap, the loop will work
+      // backwards through the tokens with the same market cap to make sure
+      // there are no duplicates.
+      if (marketCaps[i] == marketCaps[i-1]) {
+        for (
+          uint256 dI = i - 1;
+          dI > 0 && marketCaps[dI] == marketCaps[dI - 1];
+          dI -= 1
+        ) {
+          require(token != orderedTokens[dI], "ERR_DUPLICATE_ADDRESS");
+        }
+      }
       categoryTokens[i] = token;
     }
     lastCategoryUpdate[categoryID] = now;
