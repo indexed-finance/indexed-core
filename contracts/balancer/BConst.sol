@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 pragma solidity ^0.6.0;
 
-import "./BColor.sol";
 
+contract BConst {
+  uint256 public constant VERSION_NUMBER = 0;
 
-contract BConst is BBronze {
   uint256 internal constant WEIGHT_UPDATE_DELAY = 1 hours;
 
   uint256 internal constant BONE = 10**18;
