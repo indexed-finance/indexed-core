@@ -31,6 +31,7 @@ contract PoolController is BNum {
     uint256 categoryID,
     uint256 indexSize
   );
+
   event LOG_MANAGER(address manager);
 
   address internal _manager;
@@ -159,7 +160,7 @@ contract PoolController is BNum {
       now - record.timestamp >= POOL_REWEIGH_DELAY,
       "ERR_POOL_REWEIGH_DELAY"
     );
-    address[] memory tokens = BPool(poolAddress).getCurrentTokens();
+    address[] memory tokens = BPool(poolAddress).getCurrentDesiredTokens();
     FixedPoint.uq112x112[] memory prices = oracle.computeAveragePrices(tokens);
     FixedPoint.uq112x112[] memory weights = Index.computeTokenWeights(tokens, prices);
     uint96[] memory denormalizedWeights = new uint96[](tokens.length);
