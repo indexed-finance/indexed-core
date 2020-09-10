@@ -1,0 +1,31 @@
+{
+  "name": "Decentralized Finance",
+  "symbol": "DEFI",
+  "description": "Decentralized Finance Tokens",
+  "tokens": [
+    {
+      "name": "DAI Stablecoin",
+      "symbol": "DAI",
+      "price": 0.0028,
+      "totalSupply": 10000000
+    },
+    {
+      "name": "Compound",
+      "symbol": "COMP",
+      "price": 0.5,
+      "totalSupply": 85.43
+    },
+    {
+      "name": "Chainlink",
+      "symbol": "LINK",
+      "price": 0.035,
+      "totalSupply": 67541.45
+    },
+    {
+      "name": "Maker",
+      "symbol": "MKR",
+      "price": 1.485052,
+      "totalSupply": 50441.05
+    }
+  ]
+}

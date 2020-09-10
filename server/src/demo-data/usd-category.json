@@ -1,0 +1,25 @@
+{
+  "name": "USD Stablecoins",
+  "symbol": "USD",
+  "description": "USD Stablecoin Tokens",
+  "tokens": [
+    {
+      "name": "Tether",
+      "symbol": "USDT",
+      "price": 0.0028,
+      "totalSupply": 9000000
+    },
+    {
+      "name": "USD Coin",
+      "symbol": "USDC",
+      "price": 0.0028,
+      "totalSupply": 1000000
+    },
+    {
+      "name": "Binance USD",
+      "symbol": "BUSD",
+      "price": 0.0028,
+      "totalSupply": 100000
+    }
+  ]
+}
