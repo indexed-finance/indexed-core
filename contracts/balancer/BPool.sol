@@ -5,10 +5,11 @@ pragma experimental ABIEncoderV2;
 import "./BToken.sol";
 import "./BMath.sol";
 
+
 /**
  * @title BPoolBase
  */
-contract BPool is BBronze, BToken, BMath {
+contract BPool is BToken, BMath {
   /**
    * @dev Token record data structure
    * @param bound is token bound to pool
@@ -54,15 +55,25 @@ contract BPool is BBronze, BToken, BMath {
   event LOG_TOKEN_REMOVED(address token);
   event LOG_TOKEN_ADDED(address indexed token, uint256 desiredDenorm, uint256 minimumBalance);
 
-  modifier _lock_() {
+  modifier _lock_ {
     require(!_mutex, "ERR_REENTRY");
     _mutex = true;
     _;
     _mutex = false;
   }
 
-  modifier _viewlock_() {
+  modifier _viewlock_ {
     require(!_mutex, "ERR_REENTRY");
+    _;
+  }
+
+  modifier _control_ {
+    require(msg.sender == _controller, "ERR_NOT_CONTROLLER");
+    _;
+  }
+
+  modifier _public_ {
+    require(_publicSwap, "ERR_NOT_PUBLIC");
     _;
   }
 
@@ -138,8 +149,7 @@ contract BPool is BBronze, BToken, BMath {
 
 /* ---  Configuration Actions  --- */
 
-  function setSwapFee(uint256 swapFee) external _lock_ {
-    require(msg.sender == _controller, "ERR_NOT_CONTROLLER");
+  function setSwapFee(uint256 swapFee) external _lock_ _control_ {
     require(swapFee >= MIN_FEE, "ERR_MIN_FEE");
     require(swapFee <= MAX_FEE, "ERR_MAX_FEE");
     _swapFee = swapFee;
@@ -149,8 +159,7 @@ contract BPool is BBronze, BToken, BMath {
    * @dev Public swapping is enabled as soon as tokens are bound,
    * but this function exists in case of an emergency.
    */
-  function setPublicSwap(bool public_) external _lock_ {
-    require(msg.sender == _controller, "ERR_NOT_CONTROLLER");
+  function setPublicSwap(bool public_) external _lock_ _control_ {
     _publicSwap = public_;
   }
 
@@ -182,6 +191,12 @@ contract BPool is BBronze, BToken, BMath {
   /**
    * @dev Sets the desired weights for the pool tokens, which
    * will be adjusted over time as they are swapped.
+   *
+   * Note: This does not check for duplicate tokens or that the total
+   * of the desired weights is equal to the target total weight (25).
+   * Those assumptions should be met in the controller. Further, the
+   * provided tokens should only include the tokens which are not set
+   * for removal.
    */
   function reweighTokens(
     address[] calldata tokens,
@@ -189,8 +204,8 @@ contract BPool is BBronze, BToken, BMath {
   )
     external
     _lock_
+    _control_
   {
-    require(msg.sender == _controller, "ERR_NOT_CONTROLLER");
     uint256 len = tokens.length;
     require(desiredDenorms.length == len, "ERR_ARR_LEN");
     for (uint256 i = 0; i < len; i++)
@@ -212,8 +227,8 @@ contract BPool is BBronze, BToken, BMath {
   )
     external
     _lock_
+    _control_
   {
-    require(msg.sender == _controller, "ERR_NOT_CONTROLLER");
     uint256 len = tokens.length;
     require(
       desiredDenorms.length == len && minimumBalances.length == len,
@@ -261,10 +276,8 @@ contract BPool is BBronze, BToken, BMath {
    * experiencing a sudden crash or major vulnerability. Otherwise, tokens
    * should only be removed gradually through calls to reweighTokens.
    */
-  function unbind(address token) external _lock_ {
-    require(msg.sender == _controller, "ERR_NOT_CONTROLLER");
+  function unbind(address token) external _lock_ _control_ {
     require(_records[token].bound, "ERR_NOT_BOUND");
-
     _totalWeight = bsub(_totalWeight, _records[token].denorm);
     _unbind(token);
   }
@@ -273,33 +286,19 @@ contract BPool is BBronze, BToken, BMath {
   function joinPool(uint256 poolAmountOut, uint256[] calldata maxAmountsIn)
     external
     _lock_
+    _public_
   {
-    require(_publicSwap, "ERR_JOIN_NOT_PUBLIC");
     uint256 poolTotal = totalSupply();
     uint256 ratio = bdiv(poolAmountOut, poolTotal);
     require(ratio != 0, "ERR_MATH_APPROX");
-
-    for (uint256 i = 0; i < _tokens.length; i++) {
+    require(maxAmountsIn.length == _tokens.length, "ERR_ARR_LEN");
+    for (uint256 i = 0; i < maxAmountsIn.length; i++) {
       address t = _tokens[i];
-      Record memory record = _records[t];
-      uint256 realBalance = record.balance;
-      if (!record.ready) {
-        record.balance = _minimumBalances[t];
-        record.denorm = uint96(MIN_WEIGHT);
-      }
-      // uint256 bal = _records[t].balance;
+      (Record memory record, uint256 realBalance) = _getInputToken(t);
       uint256 tokenAmountIn = bmul(ratio, record.balance);
       require(tokenAmountIn != 0, "ERR_MATH_APPROX");
       require(tokenAmountIn <= maxAmountsIn[i], "ERR_LIMIT_IN");
-      realBalance = badd(realBalance, tokenAmountIn);
-      _records[t].balance = realBalance;
-      if (!record.ready && realBalance >= record.balance) {
-        // If the minimum balance is reached, remove the minimum balance
-        // record, mark the token as ready and set it to the minimum weight.
-        _records[t].denorm = uint96(MIN_WEIGHT);
-        _records[t].ready = true;
-        _minimumBalances[t] = 0;
-      }
+      _updateBalanceIn(t, record, badd(realBalance, tokenAmountIn));
       emit LOG_JOIN(msg.sender, t, tokenAmountIn);
       _pullUnderlying(t, msg.sender, tokenAmountIn);
     }
@@ -320,8 +319,8 @@ contract BPool is BBronze, BToken, BMath {
     _pullPoolShare(msg.sender, poolAmountIn);
     _pushPoolShare(_factory, exitFee);
     _burnPoolShare(pAiAfterExitFee);
-
-    for (uint256 i = 0; i < _tokens.length; i++) {
+    require(minAmountsOut.length == _tokens.length, "ERR_ARR_LEN");
+    for (uint256 i = 0; i < minAmountsOut.length; i++) {
       address t = _tokens[i];
       Record memory record = _records[t];
       if (record.ready) {
@@ -346,20 +345,11 @@ contract BPool is BBronze, BToken, BMath {
   )
     external
     _lock_
+    _public_
     returns (uint256 poolAmountOut)
   {
-    require(_publicSwap, "ERR_JOIN_NOT_PUBLIC");
+    (Record memory inRecord, uint256 realInBalance) = _getInputToken(tokenIn);
 
-    Record memory inRecord = _records[tokenIn];
-
-    uint256 realInBalance = inRecord.balance;
-
-    if (!inRecord.ready) {
-      inRecord.balance = _minimumBalances[tokenIn];
-      inRecord.denorm = uint96(MIN_WEIGHT);
-    }
-
-    require(inRecord.bound, "ERR_NOT_BOUND");
     require(
       tokenAmountIn <= bmul(inRecord.balance, MAX_IN_RATIO),
       "ERR_MAX_IN_RATIO"
@@ -376,24 +366,7 @@ contract BPool is BBronze, BToken, BMath {
 
     require(poolAmountOut >= minPoolAmountOut, "ERR_LIMIT_OUT");
 
-    realInBalance = badd(realInBalance, tokenAmountIn);
-    // Check if the minimum balance has been reached
-    if (!inRecord.ready) {
-      if (realInBalance >= inRecord.balance) {
-        // Remove the minimum balance record
-        _minimumBalances[tokenIn] = 0;
-        // Mark the token as initialized
-        _records[tokenIn].ready = true;
-        inRecord.ready = true;
-        _increaseDenorm(inRecord, tokenIn);
-      }
-    } else {
-      _increaseDenorm(inRecord, tokenIn);
-    }
-
-    _records[tokenIn].balance = realInBalance;
-
-    inRecord.balance = badd(inRecord.balance, tokenAmountIn);
+    _updateBalanceIn(tokenIn, inRecord, badd(realInBalance, tokenAmountIn));
 
     emit LOG_JOIN(msg.sender, tokenIn, tokenAmountIn);
 
@@ -411,19 +384,10 @@ contract BPool is BBronze, BToken, BMath {
   )
     external
     _lock_
+    _public_
     returns (uint256 tokenAmountIn)
   {
-    Record memory inRecord = _records[tokenIn];
-
-    require(_publicSwap, "ERR_JOIN_NOT_PUBLIC");
-    require(inRecord.bound, "ERR_NOT_BOUND");
-
-    uint256 realInBalance = inRecord.balance;
-
-    if (!inRecord.ready) {
-      inRecord.balance = _minimumBalances[tokenIn];
-      inRecord.denorm = uint96(MIN_WEIGHT);
-    }
+    (Record memory inRecord, uint256 realInBalance) = _getInputToken(tokenIn);
 
     tokenAmountIn = calcSingleInGivenPoolOut(
       inRecord.balance,
@@ -442,22 +406,7 @@ contract BPool is BBronze, BToken, BMath {
       "ERR_MAX_IN_RATIO"
     );
 
-    realInBalance = badd(realInBalance, tokenAmountIn);
-    // Check if the minimum balance has been reached
-    if (!inRecord.ready) {
-      if (realInBalance >= inRecord.balance) {
-        // Remove the minimum balance record
-        _minimumBalances[tokenIn] = 0;
-        // Mark the token as initialized
-        _records[tokenIn].ready = true;
-        inRecord.ready = true;
-        _increaseDenorm(inRecord, tokenIn);
-      }
-    } else {
-      _increaseDenorm(inRecord, tokenIn);
-    }
-
-    _records[tokenIn].balance = realInBalance;
+    _updateBalanceIn(tokenIn, inRecord, badd(realInBalance, tokenAmountIn));
 
     emit LOG_JOIN(msg.sender, tokenIn, tokenAmountIn);
 
@@ -477,10 +426,7 @@ contract BPool is BBronze, BToken, BMath {
     _lock_
     returns (uint256 tokenAmountOut)
   {
-    Record memory outRecord = _records[tokenOut];
-
-    require(outRecord.ready, "ERR_OUT_NOT_READY");
-    require(outRecord.bound, "ERR_NOT_BOUND");
+    Record memory outRecord = _getOutputToken(tokenOut);
 
     tokenAmountOut = calcSingleOutGivenPoolIn(
       outRecord.balance,
@@ -499,7 +445,7 @@ contract BPool is BBronze, BToken, BMath {
     );
 
     _records[tokenOut].balance = bsub(outRecord.balance, tokenAmountOut);
-
+    _decreaseDenorm(outRecord, tokenOut);
     uint256 exitFee = bmul(poolAmountIn, EXIT_FEE);
 
     emit LOG_EXIT(msg.sender, tokenOut, tokenAmountOut);
@@ -521,10 +467,7 @@ contract BPool is BBronze, BToken, BMath {
     _lock_
     returns (uint256 poolAmountIn)
   {
-    Record memory outRecord = _records[tokenOut];
-
-    require(outRecord.ready, "ERR_OUT_NOT_READY");
-    require(outRecord.bound, "ERR_NOT_BOUND");
+    Record memory outRecord = _getOutputToken(tokenOut);
     require(
       tokenAmountOut <= bmul(outRecord.balance, MAX_OUT_RATIO),
       "ERR_MAX_OUT_RATIO"
@@ -572,27 +515,11 @@ contract BPool is BBronze, BToken, BMath {
   )
     external
     _lock_
+    _public_
     returns (uint256 tokenAmountOut, uint256 spotPriceAfter)
   {
-    Record memory inRecord = _records[tokenIn];
-    Record memory outRecord = _records[tokenOut];
-    // Tokens which have not reached their minimum balance can not be
-    // swapped out.
-    require(outRecord.ready, "ERR_OUT_NOT_READY");
-    require(inRecord.bound, "ERR_NOT_BOUND");
-    require(outRecord.bound, "ERR_NOT_BOUND");
-    require(_publicSwap, "ERR_SWAP_NOT_PUBLIC");
-
-    // Get the actual balance of the input token.
-    // This is used to calculate the new balance to store.
-    uint256 realInBalance = inRecord.balance;
-    // If the input token is not initialized, we use the minimum
-    // initial weight and minimum initial balance instead of the
-    // real values for price and output calculations.
-    if (!inRecord.ready) {
-      inRecord.balance = _minimumBalances[tokenIn];
-      inRecord.denorm = uint96(MIN_WEIGHT);
-    }
+    (Record memory inRecord, uint256 realInBalance) = _getInputToken(tokenIn);
+    Record memory outRecord = _getOutputToken(tokenOut);
 
     require(
       tokenAmountIn <= bmul(inRecord.balance, MAX_IN_RATIO),
@@ -608,29 +535,7 @@ contract BPool is BBronze, BToken, BMath {
       _swapFee
     );
     require(tokenAmountOut >= minAmountOut, "ERR_LIMIT_OUT");
-    realInBalance = badd(realInBalance, tokenAmountIn);
-    if (!inRecord.ready) {
-      // Check if the minimum balance has been reached
-      if (realInBalance >= inRecord.balance) {
-        // Remove the minimum balance record
-        _minimumBalances[tokenIn] = 0;
-        // Mark the token as initialized
-        _records[tokenIn].ready = true;
-        inRecord.ready = true;
-        _increaseDenorm(inRecord, tokenIn);
-        inRecord.balance = realInBalance;
-      }
-      // If the token is still not ready, do not adjust the in-memory weight or balance,
-      // but do update the stored balance.
-    } else {
-      // If the token is already initialized, update the weight (if any adjustment
-      // is needed) and increase the in-memory balance.
-      _increaseDenorm(inRecord, tokenIn);
-      inRecord.balance = realInBalance;
-    }
-    // Regardless of whether the token is initialized, store the actual new balance.
-    // This may not be the same as the in-memory balance.
-    _records[tokenIn].balance = realInBalance;
+    _updateBalanceIn(tokenIn, inRecord, badd(realInBalance, tokenAmountIn));
     // If needed, update the output token's weight.
     _decreaseDenorm(outRecord, tokenOut);
     // Update the balance after the weight so that the weight adjustment (if any)
@@ -665,26 +570,11 @@ contract BPool is BBronze, BToken, BMath {
   )
     external
     _lock_
+    _public_
     returns (uint256 tokenAmountIn, uint256 spotPriceAfter)
   {
-    Record memory inRecord = _records[address(tokenIn)];
-    Record memory outRecord = _records[address(tokenOut)];
-
-    require(outRecord.ready, "ERR_OUT_NOT_READY");
-    require(inRecord.bound && outRecord.bound, "ERR_NOT_BOUND");
-    require(_publicSwap, "ERR_SWAP_NOT_PUBLIC");
-
-    // Get the actual balance of the input token.
-    // This is used to calculate the new balance to store.
-    uint256 realInBalance = inRecord.balance;
-
-    // If the input token is not initialized, we use the minimum
-    // initial weight and minimum initial balance instead of the
-    // real values for price and output calculations.
-    if (!inRecord.ready) {
-      inRecord.balance = _minimumBalances[tokenIn];
-      inRecord.denorm = uint96(MIN_WEIGHT);
-    }
+    (Record memory inRecord, uint256 realInBalance) = _getInputToken(tokenIn);
+    Record memory outRecord = _getOutputToken(tokenOut);
 
     require(
       tokenAmountOut <= bmul(outRecord.balance, MAX_OUT_RATIO),
@@ -700,29 +590,8 @@ contract BPool is BBronze, BToken, BMath {
       _swapFee
     );
     require(tokenAmountIn <= maxAmountIn, "ERR_LIMIT_IN");
-    realInBalance = badd(realInBalance, tokenAmountIn);
-    if (!inRecord.ready) {
-      // Check if the minimum balance has been reached
-      if (realInBalance >= inRecord.balance) {
-        // Remove the minimum balance record
-        _minimumBalances[tokenIn] = 0;
-        // Mark the token as initialized
-        _records[tokenIn].ready = true;
-        inRecord.ready = true;
-        _increaseDenorm(inRecord, tokenIn);
-        inRecord.balance = realInBalance;
-      }
-      // If the token is still not ready, do not adjust the in-memory weight or balance,
-      // but do update the stored balance.
-    } else {
-      // If the token is already initialized, update the weight (if any adjustment
-      // is needed) and increase the in-memory balance.
-      _increaseDenorm(inRecord, tokenIn);
-      inRecord.balance = realInBalance;
-    }
-    // Regardless of whether the token is initialized, store the actual new balance.
-    // This may not be the same as the in-memory balance.
-    _records[tokenIn].balance = realInBalance;
+    _updateBalanceIn(tokenIn, inRecord, badd(realInBalance, tokenAmountIn));
+    
     // Update the in-memory record for the spotPriceAfter calculation,
     // then update the storage record with the local balance.
     _decreaseDenorm(outRecord, tokenOut);
@@ -782,6 +651,30 @@ contract BPool is BBronze, BToken, BMath {
     returns (address[] memory tokens)
   {
     return _tokens;
+  }
+
+  /**
+   * @dev Returns the list of tokens which are not set to
+   * be phased out. Tokens with a desired weight of 0 will
+   * not be included.
+   */
+  function getCurrentDesiredTokens()
+    external
+    view
+    _viewlock_
+    returns (address[] memory tokens)
+  {
+    address[] memory tempTokens = _tokens;
+    tokens = new address[](tempTokens.length);
+    uint256 usedIndex = 0;
+    for (uint256 i = 0; i < tokens.length; i++) {
+      address token = tempTokens[i];
+      Record memory record = _records[token];
+      if (record.desiredDenorm > 0) {
+        tokens[usedIndex++] = token;
+      }
+    }
+    assembly { mstore(tokens, usedIndex) }
   }
 
   function getDenormalizedWeight(address token)
@@ -1092,5 +985,104 @@ contract BPool is BBronze, BToken, BMath {
     }
     emit LOG_DENORM_UPDATED(token, denorm);
   }
-}
 
+/* ---  Token Query Internal Functions  --- */
+  /**
+   * @dev Get the record for a token which is being swapped in.
+   * The token must be bound to the pool. If the token is not
+   * initialized (meaning it does not have the minimum balance)
+   * this function will return the actual balance of the token
+   * which the pool holds, but set the record's balance and weight
+   * to the token's minimum balance and the pool's minimum weight.
+   * This allows the token swap to be priced correctly even if the
+   * pool does not own any of the tokens.
+   */
+  function _getInputToken(address token)
+    internal
+    view
+    returns (Record memory record, uint256 realBalance)
+  {
+    record = _records[token];
+    require(record.bound, "ERR_NOT_BOUND");
+
+    realBalance = record.balance;
+    // If the input token is not initialized, we use the minimum
+    // initial weight and minimum initial balance instead of the
+    // real values for price and output calculations.
+    if (!record.ready) {
+      record.balance = _minimumBalances[token];
+      record.denorm = uint96(MIN_WEIGHT);
+    }
+  }
+
+  function _getOutputToken(address token)
+    internal
+    view
+    returns (Record memory record)
+  {
+    record = _records[token];
+    require(record.bound, "ERR_NOT_BOUND");
+    // Tokens which have not reached their minimum balance can not be
+    // swapped out.
+    require(record.ready, "ERR_OUT_NOT_READY");
+  }
+
+  /**
+   * @dev Handle the balance increase for an input token.
+   *
+   * If the token is not initialized and the new balance is
+   * still below the minimum, this will only store the new
+   * balance.
+   *
+   * If the token is not initialized but the new balance will
+   * bring the token above the minimum balance, this will
+   * mark the token as initialized, remove the minimum
+   * balance and set the weight to the minimum weight plus
+   * 1.25%.
+   *
+   * If the token is already initialized, this will only store
+   * the new balance and execute a weight increase if one is ready.
+   *
+   * @param token Address of the input token
+   * @param record Token record with minimums applied to the balance
+   * and weight if the token was uninitialized.
+   */
+  function _updateBalanceIn(
+    address token,
+    Record memory record,
+    uint256 realBalance
+  )
+    internal
+  {
+    if (!record.ready) {
+      // Check if the minimum balance has been reached
+      if (realBalance >= record.balance) {
+        // Remove the minimum balance record
+        _minimumBalances[token] = 0;
+        // Mark the token as initialized
+        _records[token].ready = true;
+        record.ready = true;
+        // Since the denorm value in the uninitialized storage record is still 0,
+        // the total weight has not absorbed the in-memory weight we are using
+        // for price calculations.
+        _totalWeight = badd(_totalWeight, MIN_WEIGHT);
+        // _increaseDenorm will set the weight to the minimum plus 1.25%
+        // This _increaseDenorm call will never fail to execute because of the
+        // lastDenormUpdate, as it is set to 0 when the token is bound, and
+        // this condition is only ever met when a token is newly bound
+        _increaseDenorm(record, token);
+      }
+
+      // If the token is still not ready, do not adjust the in-memory weight or balance,
+      // but do update the stored balance.
+    } else {
+      // If the token is already initialized, update the weight (if any adjustment
+      // is needed) and increase the in-memory balance.
+      _increaseDenorm(record, token);
+      record.balance = realBalance;
+    }
+    // Regardless of whether the token is initialized, store the actual new balance.
+    // This may not be the same as the in-memory balance.
+    _records[token].balance = realBalance;
+  }
+}
