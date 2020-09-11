@@ -4,6 +4,8 @@
   "description": "",
   "main": "index.js",
   "scripts": {
+    "build:sol": "buidler compile",
+    "node": "buidler node",
     "test:pool": "buidler test ./test/test-pool",
     "test:controller": "buidler test ./test/test-controller-and-pool",
     "test:oracle": "buidler test ./test/test-oracle"
