@@ -249,7 +249,7 @@ contract PoolController is BNum {
    * by that token's average ether price from UniSwap.
    */
   function estimatePoolValue(BPool pool) internal view returns (uint144) {
-    (address token, uint256 value) = pool.getPoolValueByTokenIndex(0);
+    (address token, uint256 value) = pool.extrapolatePoolValueFromToken();
     FixedPoint.uq112x112 memory price = oracle.computeAveragePrice(token);
     return price.mul(value).decode144();
   }
