@@ -2,17 +2,15 @@ const chai = require("chai");
 const chaiAsPromised = require('chai-as-promised');
 chai.use(chaiAsPromised);
 
-const createKeccakHash = require('keccak');
 const BN = require('bn.js');
 const Decimal = require('decimal.js');
 
-const { nTokens, nTokensHex, oneToken } = require('./lib/tokens');
+const { nTokensHex } = require('./lib/tokens');
 const { wrapped_tokens: wrappedTokens } = require('./testData/categories.json');
 const { calcRelativeDiff } = require('./lib/calc_comparisons');
 const PoolHelper = require('./lib/pool-helper');
 
 const { expect } = chai;
-const keccak256 = (data) => `0x${createKeccakHash('keccak256').update(data).digest().toString('hex')}`;
 
 const toBN = (bn) => BN.isBN(bn) ? bn : bn._hex ? new BN(bn._hex.slice(2), 'hex') : new BN(bn);
 

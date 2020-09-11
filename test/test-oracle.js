@@ -1,10 +1,10 @@
 const { expect } = require("chai");
-const createKeccakHash = require('keccak');
 const BN = require('bn.js');
+const { soliditySha3 } = require('web3-utils');
 
 const { setupUniSwapV2 } = require('./lib/uniswap-setup');
 
-const keccak256 = (data) => `0x${createKeccakHash('keccak256').digest().toString('hex')}`;
+const keccak256 = (data) => soliditySha3(data);
 
 const { wrapped_tokens: wrappedTokens } = require('./testData/categories.json');
 const { nTokens, nTokensHex } = require('./lib/tokens');
