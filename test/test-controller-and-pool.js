@@ -260,9 +260,7 @@ describe("Pool Controller", () => {
 
     it('Enables public swapping', async () => {
       const isPublicSwap = await indexPool.isPublicSwap();
-      const isFinalized = await indexPool.isFinalized();
       expect(isPublicSwap).to.be.true;
-      expect(isFinalized).to.be.true;
     });
 
     it('Sets the correct token name and symbol', async () => {
