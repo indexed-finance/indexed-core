@@ -1,6 +1,4 @@
 const { expect } = require("chai");
-const createKeccakHash = require('keccak');
-const BN = require('bn.js');
 const { abi: proxyLogicABI } = require('../artifacts/MockProxyLogic.json')
 
 describe('Mock Proxy Factory', async () => {
