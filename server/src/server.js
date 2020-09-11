@@ -51,11 +51,6 @@ async function deployIndexCategory(category_file) {
     await oracle.addTokenToCategory(tokenAddress, categoryID);
     console.log(`Added ${token.name} to ${name} category`);
     await uniswap.addMarketLiquidity(tokenAddress, token.price, token.totalSupply / 2);
-    // await mockDeployer.methods.addLiquidity(
-    //   tokenAddress,
-    //   uniswap.toWei(token.totalSupply / 2),
-    //   uniswap.toWei(token.price * token.totalSupply / 2)
-    // ).send({ from, gas: 500000 });
     token.address = tokenAddress;
   }
   fs.writeFileSync(category_file, JSON.stringify(category, null, 2));
@@ -83,6 +78,7 @@ async function deployIndexFunds() {
       usdPrice,
       20
     );
+    await oracle.getIndexTokenPrice(uniswap.mockDeployer, usdIndex);
 
     await deployIndexCategory(path.join(__dirname, 'demo-data', 'defi-category.json'));
     const defiIndex = await poolController.deployPool(
@@ -99,6 +95,7 @@ async function deployIndexFunds() {
       defiPrice,
       20
     );
+    await oracle.getIndexTokenPrice(uniswap.mockDeployer, defiIndex);
   }
 }
 

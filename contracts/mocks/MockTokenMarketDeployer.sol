@@ -118,6 +118,25 @@ contract MockTokenMarketDeployer is BMath {
     );
   }
 
+  function testMintPoolTokens(
+    BPool pool,
+    uint256 poolAmountOut
+  ) external view returns (
+    uint256 a
+  ) {
+    uint256 poolTotal = pool.totalSupply();
+    uint256 ratio = bdiv(poolAmountOut, poolTotal);
+    address[] memory tokens = pool.getCurrentTokens();
+    // maxAmountsIn = new uint256[](tokens.length);
+    for (uint256 i = 0; i < tokens.length; i++) {
+      address token = tokens[i];
+      uint256 usedBalance = pool.getUsedBalance(token);
+      uint256 tokenAmountIn = bmul(ratio, usedBalance);
+      a = tokenAmountIn;
+    }
+    // return 50;
+  }
+
   function mintPoolTokens(
     BPool pool,
     uint256 poolAmountOut
