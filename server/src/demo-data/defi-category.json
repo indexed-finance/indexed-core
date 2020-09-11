@@ -7,25 +7,36 @@
       "name": "DAI Stablecoin",
       "symbol": "DAI",
       "price": 0.0028,
-      "totalSupply": 10000000
+      "totalSupply": 10000000,
+      "address": "0xA38034E5C2eF7Fc1aE19956DbAF23aF4AB012EB9"
     },
     {
       "name": "Compound",
       "symbol": "COMP",
       "price": 0.5,
-      "totalSupply": 85.43
+      "totalSupply": 60000,
+      "address": "0x52EdE4384c635731Cdd3d75fdf271EDCE1959a30"
     },
     {
       "name": "Chainlink",
       "symbol": "LINK",
       "price": 0.035,
-      "totalSupply": 67541.45
+      "totalSupply": 67541.45,
+      "address": "0x403304eE8FCdbb1e0e0181e93eE140DC1f4C2a0B"
     },
     {
       "name": "Maker",
       "symbol": "MKR",
       "price": 1.485052,
-      "totalSupply": 50441.05
+      "totalSupply": 50441.05,
+      "address": "0x1d5f122425122aF592269b216832667e28929848"
+    },
+    {
+      "name": "Yearn",
+      "symbol": "YFI",
+      "price": 79.57,
+      "totalSupply": 300,
+      "address": "0x79AA9Bd8586076C8F9c1d4083f9f4BE034734fe3"
     }
   ]
 }
