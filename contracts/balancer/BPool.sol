@@ -54,6 +54,7 @@ contract BPool is BToken, BMath {
   event LOG_DESIRED_DENORM_SET(address indexed token, uint256 desiredDenorm);
   event LOG_TOKEN_REMOVED(address token);
   event LOG_TOKEN_ADDED(address indexed token, uint256 desiredDenorm, uint256 minimumBalance);
+  event LOG_TOKEN_READY(address indexed token);
 
   modifier _lock_ {
     require(!_mutex, "ERR_REENTRY");
@@ -733,8 +734,9 @@ contract BPool is BToken, BMath {
     // This does not return the minimum balance for uninitialized
     // tokens because the actual internal balance stored may be
     // relevant.
-    require(_records[token].bound, "ERR_NOT_BOUND");
-    return _records[token].balance;
+    Record memory record = _records[token];
+    require(record.bound, "ERR_NOT_BOUND");
+    return record.balance;
   }
 
   function getMinimumBalance(address token)
@@ -743,8 +745,22 @@ contract BPool is BToken, BMath {
     _viewlock_
     returns (uint256)
   {
-    require(!_records[token].ready, "ERR_READY");
+    Record memory record = _records[token];
+    require(record.bound, "ERR_NOT_BOUND");
+    require(!record.ready, "ERR_READY");
     return _minimumBalances[token];
+  }
+
+  function getUsedBalance(address token)
+    external
+    view
+    _viewlock_
+    returns (uint256)
+  {
+    Record memory record = _records[token];
+    require(record.bound, "ERR_NOT_BOUND");
+    if (!record.ready) return _minimumBalances[token];
+    return record.balance;
   }
 
 /* ---  Price Queries  --- */
@@ -982,8 +998,8 @@ contract BPool is BToken, BMath {
       // Update the stored denorm value
       _records[token].denorm = denorm;
       _records[token].lastDenormUpdate = uint40(now);
+      emit LOG_DENORM_UPDATED(token, denorm);
     }
-    emit LOG_DENORM_UPDATED(token, denorm);
   }
 
 /* ---  Token Query Internal Functions  --- */
@@ -1062,6 +1078,7 @@ contract BPool is BToken, BMath {
         // Mark the token as initialized
         _records[token].ready = true;
         record.ready = true;
+        emit LOG_TOKEN_READY(token);
         // Since the denorm value in the uninitialized storage record is still 0,
         // the total weight has not absorbed the in-memory weight we are using
         // for price calculations.
