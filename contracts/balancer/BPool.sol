@@ -553,21 +553,10 @@ contract BPool is BToken, BMath {
   function gulp(address token) external _lock_ {
     Record memory record = _records[token];
     uint256 balance = IERC20(token).balanceOf(address(this));
-    if (record.bound) {
-      _records[token].balance = balance;
-      // If the gulp brings the token above its minimum balance,
-      // clear the minimum and mark the token as ready.
-      if (!record.ready) {
-        uint256 minimumBalance = _minimumBalances[token];
-        if (balance >= minimumBalance) {
-          _minimumBalances[token] = 0;
-          _records[token].ready = true;
-          _records[token].denorm = uint96(MIN_WEIGHT);
-          _totalWeight = badd(_totalWeight, MIN_WEIGHT);
-        }
-      }
-    } else {
+    if (!record.bound) {
       _pushUnderlying(token, _controller, balance);
+    } else {
+      _updateBalanceIn(token, record, balance);
     }
   }
 
