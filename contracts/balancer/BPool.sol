@@ -1089,8 +1089,13 @@ contract BPool is BToken, BMath {
     address from,
     uint256 amount
   ) internal {
-    bool xfer = IERC20(erc20).transferFrom(from, address(this), amount);
-    require(xfer, "ERR_ERC20_FALSE");
+    (bool success, bytes memory data) = erc20.call(
+      abi.encodeWithSelector(TRANSFER_FROM_SELECTOR, from, address(this), amount)
+    );
+    require(
+      success && (data.length == 0 || abi.decode(data, (bool))),
+      "ERR_ERC20_FALSE"
+    );
   }
 
   function _pushUnderlying(
