@@ -547,7 +547,7 @@ contract BPool is BToken, BMath {
 /* ---  Other  --- */
 
   /**
-   * @dev Absorb any tokens that have been sent to this contract into the pool.
+   * @dev Absorb any tokens that have been sent to the pool.
    * If the token is not bound, it will be sent to the controller.
    */
   function gulp(address token) external _lock_ {
