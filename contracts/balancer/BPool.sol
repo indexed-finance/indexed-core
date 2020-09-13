@@ -4,6 +4,7 @@ pragma experimental ABIEncoderV2;
 
 import "./BToken.sol";
 import "./BMath.sol";
+import "../interfaces/IFlashLoanRecipient.sol";
 
 
 /**
@@ -30,6 +31,8 @@ contract BPool is BToken, BMath {
     uint256 balance;
   }
 
+/* ---  EVENTS  --- */
+
   event LOG_SWAP(
     address indexed caller,
     address indexed tokenIn,
@@ -51,10 +54,20 @@ contract BPool is BToken, BMath {
   );
 
   event LOG_DENORM_UPDATED(address indexed token, uint256 newDenorm);
+
   event LOG_DESIRED_DENORM_SET(address indexed token, uint256 desiredDenorm);
+
   event LOG_TOKEN_REMOVED(address token);
-  event LOG_TOKEN_ADDED(address indexed token, uint256 desiredDenorm, uint256 minimumBalance);
+
+  event LOG_TOKEN_ADDED(
+    address indexed token,
+    uint256 desiredDenorm,
+    uint256 minimumBalance
+  );
+
   event LOG_TOKEN_READY(address indexed token);
+
+/* ---  Modifiers  --- */
 
   modifier _lock_ {
     require(!_mutex, "ERR_REENTRY");
@@ -77,6 +90,8 @@ contract BPool is BToken, BMath {
     require(_publicSwap, "ERR_NOT_PUBLIC");
     _;
   }
+
+/* ---  Storage  --- */
 
   bool internal _mutex;
 
@@ -170,29 +185,6 @@ contract BPool is BToken, BMath {
    */
   function setPublicSwap(bool public_) external _lock_ _control_ {
     _publicSwap = public_;
-  }
-
-  /**
-   * @dev Absorb any tokens that have been sent to this contract into the pool.
-   * If the token is not bound, it will be sent to the controller.
-   */
-  function gulp(address token) external _lock_ {
-    Record memory record = _records[token];
-    uint256 balance = IERC20(token).balanceOf(address(this));
-    if (record.bound) {
-      _records[token].balance = balance;
-      // If the gulp brings the token above its minimum balance,
-      // clear the minimum and mark the token as ready.
-      if (!record.ready) {
-        uint256 minimumBalance = _minimumBalances[token];
-        if (balance >= minimumBalance) {
-          _minimumBalances[token] = 0;
-          _records[token].ready = true;
-        }
-      }
-    } else {
-      _pushUnderlying(token, _controller, balance);
-    }
   }
 
 /* ---  Token Management Actions  --- */
@@ -550,6 +542,79 @@ contract BPool is BToken, BMath {
     _pushUnderlying(tokenOut, msg.sender, tokenAmountOut);
 
     return poolAmountIn;
+  }
+
+/* ---  Other  --- */
+
+  /**
+   * @dev Absorb any tokens that have been sent to this contract into the pool.
+   * If the token is not bound, it will be sent to the controller.
+   */
+  function gulp(address token) external _lock_ {
+    Record memory record = _records[token];
+    uint256 balance = IERC20(token).balanceOf(address(this));
+    if (record.bound) {
+      _records[token].balance = balance;
+      // If the gulp brings the token above its minimum balance,
+      // clear the minimum and mark the token as ready.
+      if (!record.ready) {
+        uint256 minimumBalance = _minimumBalances[token];
+        if (balance >= minimumBalance) {
+          _minimumBalances[token] = 0;
+          _records[token].ready = true;
+          _records[token].denorm = uint96(MIN_WEIGHT);
+          _totalWeight = badd(_totalWeight, MIN_WEIGHT);
+        }
+      }
+    } else {
+      _pushUnderlying(token, _controller, balance);
+    }
+  }
+
+/* ---  Flash Loan  --- */
+
+  /**
+   * @dev Execute a flash loan, transferring `amount` to `recipient`.
+   *
+   * @param recipient Must implement the IFlashLoanRecipient interface
+   * @param token Token to borrow
+   * @param amount Amount to borrow
+   * @param data Data to send to the recipient in `receiveFlashLoan` call
+   */
+  function flashBorrow(
+    IFlashLoanRecipient recipient,
+    address token,
+    uint256 amount,
+    bytes calldata data
+  )
+    external
+    _lock_
+  {
+    Record memory record = _records[token];
+    require(record.bound, "ERR_NOT_BOUND");
+    uint256 balStart = IERC20(token).balanceOf(address(this));
+    require(balStart >= amount, "ERR_INSUFFICIENT_BAL");
+    _pushUnderlying(token, address(recipient), amount);
+    recipient.receiveFlashLoan(data);
+    uint256 balEnd = IERC20(token).balanceOf(address(this));
+    uint256 gained = bsub(balEnd, balStart);
+    uint256 fee = bmul(balStart, _swapFee);
+    require(
+      balEnd > balStart && fee >= gained,
+      "ERR_INSUFFICIENT_PAYMENT"
+    );
+    _records[token].balance = balEnd;
+    // If the payment brings the token above its minimum balance,
+    // clear the minimum and mark the token as ready.
+    if (!record.ready) {
+      uint256 minimumBalance = _minimumBalances[token];
+      if (balEnd >= minimumBalance) {
+        _minimumBalances[token] = 0;
+        _records[token].ready = true;
+        _records[token].denorm = uint96(MIN_WEIGHT);
+        _totalWeight = badd(_totalWeight, MIN_WEIGHT);
+      }
+    }
   }
 
 /* ---  Token Swaps  --- */
@@ -1033,8 +1098,13 @@ contract BPool is BToken, BMath {
     address to,
     uint256 amount
   ) internal {
-    bool xfer = IERC20(erc20).transfer(to, amount);
-    require(xfer, "ERR_ERC20_FALSE");
+    (bool success, bytes memory data) = erc20.call(
+      abi.encodeWithSelector(TRANSFER_SELECTOR, to, amount)
+    );
+    require(
+      success && (data.length == 0 || abi.decode(data, (bool))),
+      "ERR_ERC20_FALSE"
+    );
   }
 
 /* ---  Token Management Internal Functions  --- */
