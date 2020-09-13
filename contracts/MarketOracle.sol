@@ -24,14 +24,6 @@ contract MarketOracle is UniSwapV2PriceOracle {
   // Last time a category was sorted
   mapping(uint256 => uint256) public lastCategoryUpdate;
 
-  /**
-   * @dev Data structure for adding many new tokens to a category.
-   */
-  struct NewCategoryTokens {
-    uint256 categoryID;
-    address[] tokens;
-  }
-
   event CategoryAdded(uint256 categoryID, bytes32 metadataHash);
   event TokenAdded(address token, uint256 categoryID);
   event CategorySorted(uint256 categoryID);
@@ -92,7 +84,6 @@ contract MarketOracle is UniSwapV2PriceOracle {
    * @dev Adds a new token to a category.
    */
   function _addToken(address token, uint256 categoryID) internal {
-    require(categoryID < categoryIndex, "ERR_CATEGORY_ID");
     require(_tokenCategories[token] == 0, "ERR_TOKEN_EXISTS");
     _tokenCategories[token] = categoryID;
     _categoryTokens[categoryID].push(token);
@@ -102,8 +93,10 @@ contract MarketOracle is UniSwapV2PriceOracle {
 
   /**
    * @dev Adds a new token to a category.
+   * Note: A token can only be assigned to one category at a time.
    */
   function addToken(address token, uint256 categoryID) public onlyManager {
+    require(categoryID < categoryIndex, "ERR_CATEGORY_ID");
     _addToken(token, categoryID);
     require
       (_categoryTokens[categoryID].length <= MAX_CATEGORY_TOKENS,
@@ -116,23 +109,24 @@ contract MarketOracle is UniSwapV2PriceOracle {
 
   /**
    * @dev Add tokens to categories in a bundle.
-   * @param updates Array of `NewCategoryTokens` structs with the tokens to add
-   * for each category.
+   * @param categoryID Category identifier.
+   * @param tokens Array of tokens to add to the category.
    */
-  function addTokens(NewCategoryTokens[] memory updates) public onlyManager {
-    for (uint256 u = 0; u < updates.length; u++) {
-      NewCategoryTokens memory update = updates[u];
-      for (uint256 t = 0; t < update.tokens.length; t++) {
-        _addToken(update.tokens[t], update.categoryID);
-      }
-      require(
-        _categoryTokens[update.categoryID].length <= MAX_CATEGORY_TOKENS,
-        "ERR_MAX_CATEGORY_TOKENS"
-      );
-      // Decrement the timestamp for the last category sort to ensure
-      // the new token is sorted before the top n tokens can be queried.
-      lastCategoryUpdate[update.categoryID] -= MAX_SORT_DELAY;
+  function addTokens(
+    uint256 categoryID,
+    address[] calldata tokens
+  ) external onlyManager {
+    require(categoryID < categoryIndex, "ERR_CATEGORY_ID");
+    for (uint256 i = 0; i < tokens.length; i++) {
+      _addToken(tokens[i], categoryID);
     }
+    require(
+      _categoryTokens[categoryID].length <= MAX_CATEGORY_TOKENS,
+      "ERR_MAX_CATEGORY_TOKENS"
+    );
+    // Decrement the timestamp for the last category sort to ensure
+    // the new token is sorted before the top n tokens can be queried.
+    lastCategoryUpdate[categoryID] -= MAX_SORT_DELAY;
   }
 
   /* <-- TOKEN SORTING --> */
