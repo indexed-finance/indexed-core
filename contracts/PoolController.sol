@@ -14,16 +14,22 @@ contract PoolController is BNum {
   using FixedPoint for FixedPoint.uq112x112;
   using FixedPoint for FixedPoint.uq144x112;
 
+/* ---  Constants  --- */
+
   uint256 internal constant WEIGHT_MULTIPLIER = BONE * 25;
   // Seconds between reweigh/reindex calls.
   uint256 internal constant POOL_REWEIGH_DELAY = 14 days;
   // The number of reweighs which occur before a pool is re-indexed.
   uint256 internal constant REWEIGHS_BEFORE_REINDEX = 3;
 
+/* ---  Structs  --- */
+
   struct PoolUpdateRecord {
     uint128 index;
     uint128 timestamp;
   }
+
+/* ---  Events  --- */
 
   event LOG_NEW_POOL(
     address indexed caller,
@@ -34,11 +40,15 @@ contract PoolController is BNum {
 
   event LOG_MANAGER(address manager);
 
+/* ---  Storage  --- */
+
   address internal _manager;
   address internal _poolContract;
   mapping(address => bool) internal _isBPool;
   mapping(address => PoolUpdateRecord) internal _poolUpdateRecords;
   MarketOracle public oracle;
+
+/* ---  Modifiers  --- */
 
   modifier onlyManager {
     require(msg.sender == _manager, "ERR_ONLY_MANAGER");
