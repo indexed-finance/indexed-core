@@ -95,7 +95,6 @@ contract BPool is BToken, BMath {
 
   bool internal _mutex;
 
-  address internal _factory; // BFactory address to push token exitFee to
   address internal _controller; // has CONTROL role
 
   // `setPublicSwap` requires CONTROL
@@ -130,7 +129,6 @@ contract BPool is BToken, BMath {
       "ERR_INITIALIZED"
     );
     _controller = controller;
-    _factory = msg.sender;
     // default fee is 2.5%
     _swapFee = BONE / 40;
     _initializeToken(name, symbol);
@@ -426,7 +424,7 @@ contract BPool is BToken, BMath {
     require(ratio != 0, "ERR_MATH_APPROX");
 
     _pullPoolShare(msg.sender, poolAmountIn);
-    _pushPoolShare(_factory, exitFee);
+    _pushPoolShare(_controller, exitFee);
     _burnPoolShare(pAiAfterExitFee);
     require(minAmountsOut.length == _tokens.length, "ERR_ARR_LEN");
     for (uint256 i = 0; i < minAmountsOut.length; i++) {
@@ -489,7 +487,7 @@ contract BPool is BToken, BMath {
 
     _pullPoolShare(msg.sender, poolAmountIn);
     _burnPoolShare(bsub(poolAmountIn, exitFee));
-    _pushPoolShare(_factory, exitFee);
+    _pushPoolShare(_controller, exitFee);
     _pushUnderlying(tokenOut, msg.sender, tokenAmountOut);
 
     return tokenAmountOut;
@@ -538,7 +536,7 @@ contract BPool is BToken, BMath {
 
     _pullPoolShare(msg.sender, poolAmountIn);
     _burnPoolShare(bsub(poolAmountIn, exitFee));
-    _pushPoolShare(_factory, exitFee);
+    _pushPoolShare(_controller, exitFee);
     _pushUnderlying(tokenOut, msg.sender, tokenAmountOut);
 
     return poolAmountIn;
