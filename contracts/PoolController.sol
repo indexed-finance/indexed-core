@@ -80,14 +80,14 @@ contract PoolController is BNum {
    * @param indexSize Number of tokens to hold in the index fund
    * @param name Name of the index token - should indicate the category and size
    * @param symbol Symbol for the index token
-   * @param initialStablecoinValue Total initial value of the pool
+   * @param initialWethValue Total initial value of the pool
    */
   function deployIndexPool(
     uint256 categoryID,
     uint256 indexSize,
     string calldata name,
     string calldata symbol,
-    uint256 initialStablecoinValue
+    uint256 initialWethValue
   ) external onlyManager {
     require(indexSize >= MIN_BOUND_TOKENS, "Less than minimum index size.");
     require(indexSize <= MAX_BOUND_TOKENS, "Exceeds maximum index size");
@@ -104,7 +104,7 @@ contract PoolController is BNum {
     ) = getInitialTokenWeightsAndBalances(
       categoryID,
       indexSize,
-      initialStablecoinValue
+      initialWethValue
     );
     for (uint256 i = 0; i < indexSize; i++) {
       IERC20(tokens[i]).approve(bpoolAddress, balances[i]);
@@ -219,7 +219,7 @@ contract PoolController is BNum {
   function getInitialTokenWeightsAndBalances(
     uint256 categoryID,
     uint256 indexSize,
-    uint256 stablecoinValue
+    uint256 wethValue
   )
     public
     view
@@ -235,11 +235,13 @@ contract PoolController is BNum {
     balances = new uint256[](indexSize);
     denormalizedWeights = new uint96[](indexSize);
     for (uint256 i = 0; i < indexSize; i++) {
-      uint144 weightedValue = weights[i].mul(stablecoinValue).decode144();
+      uint144 weightedValue = weights[i].mul(wethValue).decode144();
       balances[i] = uint256(prices[i].reciprocal().mul(weightedValue).decode144());
       denormalizedWeights[i] = denormalizeFractionalWeight(weights[i]);
     }
   }
+
+/* ---  Internal Utility Functions  --- */
 
   /**
    * @dev Converts a fixed point fraction to a denormalized weight.
