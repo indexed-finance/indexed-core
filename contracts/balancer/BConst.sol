@@ -5,6 +5,10 @@ pragma solidity ^0.6.0;
 contract BConst {
   uint256 public constant VERSION_NUMBER = 0;
 
+  bytes4 internal constant TRANSFER_SELECTOR = bytes4(
+    keccak256(bytes("transfer(address,uint256)"))
+  );
+
   uint256 internal constant WEIGHT_UPDATE_DELAY = 1 hours;
 
   uint256 internal constant BONE = 10**18;
