@@ -574,7 +574,8 @@ contract BPool is BToken, BMath {
 /* ---  Flash Loan  --- */
 
   /**
-   * @dev Execute a flash loan, transferring `amount` to `recipient`.
+   * @dev Execute a flash loan, transferring `amount` of `token` to `recipient`.
+   * `amount` must be repaid with `swapFee` interest by the end of the transaction.
    *
    * @param recipient Must implement the IFlashLoanRecipient interface
    * @param token Token to borrow
