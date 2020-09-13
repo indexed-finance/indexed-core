@@ -8,7 +8,7 @@ library Babylonian {
   function sqrt(uint y) internal pure returns (uint z) {
     if (y > 3) {
       z = y;
-      uint x = y / 2 + 1;
+      uint x = (y + 1) / 2;
       while (x < z) {
         z = x;
         x = (y / x + x) / 2;
