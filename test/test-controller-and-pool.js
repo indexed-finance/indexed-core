@@ -27,7 +27,7 @@ describe("Pool Controller", () => {
   let timestampAddition = 0;
 
   const getTimestamp = () => Math.floor(new Date().getTime() / 1000) + timestampAddition;
-  const increaseTimeByDays = (days = 1) => {
+  const increaseTimeByDays = (days = 3.5) => {
     timestampAddition += days * 24 * 60 * 60;
     const timestamp = getTimestamp();
     return web3.currentProvider._sendJsonRpcRequest({
@@ -663,7 +663,7 @@ describe("Pool Controller", () => {
       poolHelper.addToken(t);
       ({ tokens, balances, normalizedWeights } = await getPoolData());
       console.log(wrappedTokens[3].totalSupply)
-      await increaseTimeByDays();
+      await increaseTimeByDays(3.5);
       await updateTokenPrices()
     });
 
@@ -689,17 +689,21 @@ describe("Pool Controller", () => {
     }
 
     it('Re-indexes the pool', async () => {
-      await increaseTimeByDays(14);
+      await increaseTimeByDays(11);
       await updateTokenPrices();
+      await increaseTimeByDays(3);
       await poolController.reweighPool(indexPool.address);
-      await increaseTimeByDays(14);
+      await increaseTimeByDays(11);
       await updateTokenPrices();
+      await increaseTimeByDays(3);
       await poolController.reweighPool(indexPool.address);
-      await increaseTimeByDays(14);
+      await increaseTimeByDays(11);
       await updateTokenPrices();
+      await increaseTimeByDays(3);
       await poolController.reweighPool(indexPool.address);
-      await increaseTimeByDays(14);
+      await increaseTimeByDays(11);
       await updateTokenPrices();
+      await increaseTimeByDays(3);
       await addLiquidityToAll();
       await sortCategory();
       await poolController.reindexPool(1, 3);

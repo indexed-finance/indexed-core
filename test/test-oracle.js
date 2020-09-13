@@ -1,14 +1,16 @@
-const { expect } = require("chai");
-const BN = require('bn.js');
+const chai = require("chai");
+const chaiAsPromised = require('chai-as-promised');
 const { soliditySha3 } = require('web3-utils');
+const BN = require('bn.js');
 
 const { setupUniSwapV2 } = require('./lib/uniswap-setup');
-
-const keccak256 = (data) => soliditySha3(data);
-
 const { wrapped_tokens: wrappedTokens } = require('./testData/categories.json');
 const { nTokens, nTokensHex } = require('./lib/tokens');
 
+chai.use(chaiAsPromised);
+const { expect } = chai;
+
+const keccak256 = (data) => soliditySha3(data);
 const toBN = (bn) => new BN(bn._hex.slice(2), 'hex');
 
 describe("Market Oracle", () => {
@@ -20,8 +22,8 @@ describe("Market Oracle", () => {
   let timestampAddition = 0;
 
   const getTimestamp = () => Math.floor(new Date().getTime() / 1000) + timestampAddition;
-  const increaseTimeByOneDay = () => {
-    timestampAddition += 24 * 60 * 60;
+  const increaseTimeByOnePeriod = () => {
+    timestampAddition += 3.5 * 24 * 60 * 60;
     const timestamp = getTimestamp();
     return web3.currentProvider._sendJsonRpcRequest({
       method: "evm_setNextBlockTimestamp",
@@ -143,8 +145,15 @@ describe("Market Oracle", () => {
       expect(tokens).to.deep.equal(wrappedTokens.map(t => t.address));
     });
 
+    it('Should fail to return a price if the latest price is not old enough', async () => {
+      const [token] = await marketOracle.getCategoryTokens(1);
+      expect(
+        marketOracle.computeAveragePrice(token)
+      ).to.be.rejectedWith(/ERR_USABLE_PRICE_NOT_FOUND/g)
+    });
+
     it('Should update the block timestamp', async () => {
-      await increaseTimeByOneDay();
+      await increaseTimeByOnePeriod();
     });
 
     it('Should return the correct market caps', async () => {
