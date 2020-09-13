@@ -135,11 +135,7 @@ describe("Market Oracle", () => {
     });
 
     it('Should add tokens to the wrapped tokens category', async () => {
-      const opts = {
-        categoryID: 1,
-        tokens: wrappedTokens.map(t => t.address)
-      };
-      await marketOracle.addTokens([opts]).then(r => r.wait());
+      await marketOracle.addTokens(1, wrappedTokens.map(t => t.address)).then(r => r.wait());
     });
 
     it('Should query the category tokens', async () => {

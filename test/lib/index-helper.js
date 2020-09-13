@@ -77,11 +77,7 @@ class IndexHelper {
     const metadataHash = keccak256(JSON.stringify(metadata));
     const receipt = await this.marketOracle
       .createCategory(metadataHash).then(r => r.wait && r.wait());
-    const opts = {
-      categoryID: 1,
-      tokens: tokenObjects.map(t => t.address)
-    };
-    await this.marketOracle.addTokens([opts]).then(r => r.wait && r.wait());
+    await this.marketOracle.addTokens(1, tokenObjects.map(t => t.address)).then(r => r.wait && r.wait());
     return receipt;
   }
 
