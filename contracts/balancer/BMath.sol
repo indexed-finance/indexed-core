@@ -20,7 +20,7 @@ contract BMath is BConst, BNum {
     uint256 tokenBalanceOut,
     uint256 tokenWeightOut,
     uint256 swapFee
-  ) public pure returns (uint256 spotPrice) {
+  ) internal pure returns (uint256 spotPrice) {
     uint256 numer = bdiv(tokenBalanceIn, tokenWeightIn);
     uint256 denom = bdiv(tokenBalanceOut, tokenWeightOut);
     uint256 ratio = bdiv(numer, denom);
@@ -45,7 +45,7 @@ contract BMath is BConst, BNum {
     uint256 tokenWeightOut,
     uint256 tokenAmountIn,
     uint256 swapFee
-  ) public pure returns (uint256 tokenAmountOut) {
+  ) internal pure returns (uint256 tokenAmountOut) {
     uint256 weightRatio = bdiv(tokenWeightIn, tokenWeightOut);
     uint256 adjustedIn = bsub(BONE, swapFee);
     adjustedIn = bmul(tokenAmountIn, adjustedIn);
@@ -73,7 +73,7 @@ contract BMath is BConst, BNum {
     uint256 tokenWeightOut,
     uint256 tokenAmountOut,
     uint256 swapFee
-  ) public pure returns (uint256 tokenAmountIn) {
+  ) internal pure returns (uint256 tokenAmountIn) {
     uint256 weightRatio = bdiv(tokenWeightOut, tokenWeightIn);
     uint256 diff = bsub(tokenBalanceOut, tokenAmountOut);
     uint256 y = bdiv(tokenBalanceOut, diff);
@@ -101,7 +101,7 @@ contract BMath is BConst, BNum {
     uint256 totalWeight,
     uint256 tokenAmountIn,
     uint256 swapFee
-  ) public pure returns (uint256 poolAmountOut) {
+  ) internal pure returns (uint256 poolAmountOut) {
     // Charge the trading fee for the proportion of tokenAi
     ///  which is implicitly traded to the other pool tokens.
     // That proportion is (1- weightTokenIn)
@@ -137,7 +137,7 @@ contract BMath is BConst, BNum {
     uint256 totalWeight,
     uint256 poolAmountOut,
     uint256 swapFee
-  ) public pure returns (uint256 tokenAmountIn) {
+  ) internal pure returns (uint256 tokenAmountIn) {
     uint256 normalizedWeight = bdiv(tokenWeightIn, totalWeight);
     uint256 newPoolSupply = badd(poolSupply, poolAmountOut);
     uint256 poolRatio = bdiv(newPoolSupply, poolSupply);
@@ -173,7 +173,7 @@ contract BMath is BConst, BNum {
     uint256 totalWeight,
     uint256 poolAmountIn,
     uint256 swapFee
-  ) public pure returns (uint256 tokenAmountOut) {
+  ) internal pure returns (uint256 tokenAmountOut) {
     uint256 normalizedWeight = bdiv(tokenWeightOut, totalWeight);
     // charge exit fee on the pool token side
     // pAiAfterExitFee = pAi*(1-exitFee)
@@ -215,7 +215,7 @@ contract BMath is BConst, BNum {
     uint256 totalWeight,
     uint256 tokenAmountOut,
     uint256 swapFee
-  ) public pure returns (uint256 poolAmountIn) {
+  ) internal pure returns (uint256 poolAmountIn) {
     // charge swap fee on the output token side
     uint256 normalizedWeight = bdiv(tokenWeightOut, totalWeight);
     //uint tAoBeforeSwapFee = tAo / (1 - (1-weightTo) * swapFee) ;
