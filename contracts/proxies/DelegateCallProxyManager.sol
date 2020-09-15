@@ -15,10 +15,6 @@ import {
  */
 contract DelegateCallProxyManager {
 /* ---  Structs  --- */
-  struct ManyToOneImplementation {
-    address implementationHolder;
-    uint96 proxyIndex;
-  }
 
 /* ---  Events  --- */
   event ManyToOne_ImplementationCreated(
@@ -33,7 +29,6 @@ contract DelegateCallProxyManager {
 
   event ManyToOne_ProxyDeployed(
     bytes32 implementationID,
-    uint96 proxyIndex,
     address proxyAddress
   );
 
@@ -52,7 +47,7 @@ contract DelegateCallProxyManager {
 
   // Maps the implementation holder addresses for one-to-many proxies
   // by ID, which is an arbitrary value selected by the controller.
-  mapping(bytes32 => ManyToOneImplementation) internal _implementationHolders;
+  mapping(bytes32 => address) internal _implementationHolders;
 
   // These are temporary values used in proxy constructors.
   address internal _implementationAddress;
@@ -108,9 +103,8 @@ contract DelegateCallProxyManager {
     _owner_
     setsTempImplementation(implementationAddress)
   {
-    ManyToOneImplementation storage impl = _implementationHolders[implementationID];
     require(
-      impl.implementationHolder == address(0),
+      _implementationHolders[implementationID] == address(0),
       "ERR_ID_IN_USE"
     );
     address implementationHolder = Create2.deploy(
@@ -118,13 +112,12 @@ contract DelegateCallProxyManager {
       implementationID,
       type(ManyToOneImplementationHolder).creationCode
     );
-    impl.implementationHolder = implementationHolder;
+    _implementationHolders[implementationID] = implementationHolder;
     emit ManyToOne_ImplementationCreated(
       implementationID,
       implementationAddress
     );
   }
-
   /**
    * @dev Updates the implementation address for a many-to-one
    * proxy relationship.
@@ -137,8 +130,7 @@ contract DelegateCallProxyManager {
     bytes32 implementationID,
     address implementationAddress
   ) external _owner_ {
-    ManyToOneImplementation storage impl = _implementationHolders[implementationID];
-    address implementationHolder = impl.implementationHolder;
+    address implementationHolder = _implementationHolders[implementationID];
     require(
       implementationHolder != address(0),
       "ERR_IMPLEMENTATION_ID"
@@ -159,22 +151,18 @@ contract DelegateCallProxyManager {
    * the address to use in calls.
    *
    * @param implementationID Identifier for the proxy's implementation.
+   * @param salt Create2 salt to deploy the pool with.
    */
-  function deployProxyManyToOne(bytes32 implementationID)
+  function deployProxyManyToOne(bytes32 implementationID, bytes32 salt)
     external
     _owner_
     returns(address proxyAddress)
   {
-    ManyToOneImplementation storage impl = _implementationHolders[implementationID];
-    address implementationHolder = impl.implementationHolder;
+    address implementationHolder = _implementationHolders[implementationID];
     require(
       implementationHolder != address(0),
       "ERR_IMPLEMENTATION_ID"
     );
-
-    // The create2 salt is derived from the implementation ID and the proxy index.
-    uint96 proxyIndex = impl.proxyIndex++;
-    bytes32 salt = keccak256(abi.encodePacked(implementationID, proxyIndex));
 
     // Set the implementation holder so the proxy constructor can query it.
     _implementationHolder = implementationHolder;
@@ -183,12 +171,11 @@ contract DelegateCallProxyManager {
       salt,
       type(DelegateCallProxyManyToOne).creationCode
     );
-    // Remove the address from storage.
+    // Remove the address from temporary storage.
     _implementationHolder = address(0);
 
     emit ManyToOne_ProxyDeployed(
       implementationID,
-      proxyIndex,
       proxyAddress
     );
   }
