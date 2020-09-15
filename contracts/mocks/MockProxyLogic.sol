@@ -1,5 +1,6 @@
 pragma solidity ^0.6.0;
 
+
 contract MockProxyLogic {
   uint256 internal _value = 0;
 
