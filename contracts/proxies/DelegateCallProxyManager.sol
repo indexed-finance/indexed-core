@@ -55,9 +55,11 @@ contract DelegateCallProxyManager {
   // Maps the implementation holder addresses for one-to-many proxies
   // by ID, which is an arbitrary value selected by the controller.
   mapping(bytes32 => address) internal _implementationHolders;
+
+  // Addresses allowed to deploy many-to-one proxies.
   mapping(address => bool) internal _approvedDeployers;
 
-  // These are temporary values used in proxy constructors.
+  // Temporary values used for create2 constructors.
   address internal _implementationAddress;
   address internal _implementationHolder;
 
@@ -75,6 +77,10 @@ contract DelegateCallProxyManager {
     _;
   }
 
+  /**
+   * @dev Sets the storage value for implementation address
+   * so that a proxy constructor can query it.
+   */
   modifier setsTempImplementation(address implementationAddress) {
     require(
       implementationAddress != address(0),
