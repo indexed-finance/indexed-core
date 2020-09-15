@@ -7,9 +7,6 @@ import "./BMath.sol";
 import "../interfaces/IFlashLoanRecipient.sol";
 
 
-/**
- * @title BPoolBase
- */
 contract BPool is BToken, BMath {
   /**
    * @dev Token record data structure
@@ -552,18 +549,7 @@ contract BPool is BToken, BMath {
     Record memory record = _records[token];
     uint256 balance = IERC20(token).balanceOf(address(this));
     if (record.bound) {
-      _records[token].balance = balance;
-      // If the gulp brings the token above its minimum balance,
-      // clear the minimum and mark the token as ready.
-      if (!record.ready) {
-        uint256 minimumBalance = _minimumBalances[token];
-        if (balance >= minimumBalance) {
-          _minimumBalances[token] = 0;
-          _records[token].ready = true;
-          _records[token].denorm = uint96(MIN_WEIGHT);
-          _totalWeight = badd(_totalWeight, MIN_WEIGHT);
-        }
-      }
+      _updateBalanceIn(token, record, balance);
     } else {
       _pushUnderlying(token, _controller, balance);
     }
@@ -779,14 +765,18 @@ contract BPool is BToken, BMath {
     isPublic = _publicSwap;
   }
 
-  function getSwapFee() external view _viewlock_ returns (uint256 swapFee) {
+  function getSwapFee() external view returns (uint256 swapFee) {
     swapFee = _swapFee;
   }
 
   /**
    * @dev Returns the controller address.
    */
-  function getController() external view _viewlock_ returns (address controller) {
+  function getController()
+    external
+    view
+    returns (address controller)
+  {
     controller = _controller;
   }
 
@@ -794,14 +784,22 @@ contract BPool is BToken, BMath {
   /**
    * @dev Check if a token is bound to the pool.
    */
-  function isBound(address t) external view returns (bool) {
+  function isBound(address t)
+    external
+    view
+    returns (bool)
+  {
     return _records[t].bound;
   }
 
   /**
    * @dev Get the number of tokens bound to the pool.
    */
-  function getNumTokens() external view returns (uint256 num) {
+  function getNumTokens() external
+    view
+    _viewlock_
+    returns (uint256 num)
+  {
     num = _tokens.length;
   }
 
@@ -870,13 +868,14 @@ contract BPool is BToken, BMath {
    * @dev Finds the first token which is initialized and
    * returns the address of that token and the extrapolated
    * value of the pool in that token.
-   * 
+   *
    * The value is extrapolated by multiplying the token's
    * balance by the reciprocal of its normalized weight.
    */
   function extrapolatePoolValueFromToken()
     external
     view
+    _viewlock_
     returns (address token, uint256 extrapolatedValue)
   {
     uint256 len = _tokens.length;
@@ -973,27 +972,6 @@ contract BPool is BToken, BMath {
         outRecord.balance,
         outRecord.denorm,
         _swapFee
-      );
-  }
-
-  /**
-   * @dev Get the spot price for `tokenOut` in terms of `tokenIn` ignoring swap fees.
-   */
-  function getSpotPriceSansFee(address tokenIn, address tokenOut)
-    external
-    view
-    _viewlock_
-    returns (uint256 spotPrice)
-  {
-    (Record memory inRecord,) = _getInputToken(tokenIn);
-    Record memory outRecord = _getOutputToken(tokenOut);
-    return
-      calcSpotPrice(
-        inRecord.balance,
-        inRecord.denorm,
-        outRecord.balance,
-        outRecord.denorm,
-        0
       );
   }
 
