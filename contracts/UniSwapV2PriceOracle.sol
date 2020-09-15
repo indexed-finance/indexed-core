@@ -34,10 +34,10 @@ contract UniSwapV2PriceOracle {
   /* ---  Storage  --- */
 
   // Uniswap factory address
-  address internal _uniswapFactory;
+  address internal immutable _uniswapFactory;
 
   // Wrapped ether token address
-  address internal _weth;
+  address internal immutable _weth;
 
   // Price observations for tokens indexed by time period.
   mapping(
@@ -200,6 +200,9 @@ contract UniSwapV2PriceOracle {
 
   /**
    * @dev Returns the UQ112x112 struct representing the average price.
+   *
+   * Note: Requires that the token has a price observation between 0.5
+   * and 2 periods old.
    */
   function computeAveragePrice(address token)
     public
