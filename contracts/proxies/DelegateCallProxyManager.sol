@@ -9,12 +9,19 @@ import {
   DelegateCallProxyOneToOne
 } from "./DelegateCallProxyOneToOne.sol";
 
+
 /**
  * @dev Contract that manages deployments and upgrades of delegatecall proxies.
- * 
  */
 contract DelegateCallProxyManager {
-/* ---  Structs  --- */
+/* ---  Constants  --- */
+  bytes32 internal constant ONE_TO_ONE_CODEHASH = keccak256(
+    type(DelegateCallProxyOneToOne).creationCode
+  );
+
+  bytes32 internal constant MANY_TO_ONE_CODEHASH = keccak256(
+    type(DelegateCallProxyManyToOne).creationCode
+  );
 
 /* ---  Events  --- */
   event ManyToOne_ImplementationCreated(
@@ -48,6 +55,7 @@ contract DelegateCallProxyManager {
   // Maps the implementation holder addresses for one-to-many proxies
   // by ID, which is an arbitrary value selected by the controller.
   mapping(bytes32 => address) internal _implementationHolders;
+  mapping(address => bool) internal _approvedDeployers;
 
   // These are temporary values used in proxy constructors.
   address internal _implementationAddress;
@@ -56,6 +64,14 @@ contract DelegateCallProxyManager {
 /* ---  Modifiers  --- */
   modifier _owner_ {
     require(msg.sender == _owner, "ERR_NOT_OWNER");
+    _;
+  }
+
+  modifier _admin_ {
+    require(
+      msg.sender == _owner || _approvedDeployers[msg.sender],
+      "ERR_NOT_APPROVED"
+    );
     _;
   }
 
@@ -69,6 +85,7 @@ contract DelegateCallProxyManager {
     _implementationAddress = address(0);
   }
 
+/* ---  Constructor  --- */
   constructor() public {
     _owner = msg.sender;
   }
@@ -80,6 +97,22 @@ contract DelegateCallProxyManager {
   function setOwner(address owner) external _owner_ {
     _owner = owner;
   }
+
+  /**
+   * @dev Allows `deployer` to deploy many-to-one proxies.
+   */
+  function approveDeployer(address deployer) external _owner_ {
+    _approvedDeployers[deployer] = true;
+  }
+
+  /**
+   * @dev Prevents `deployer` from deploying many-to-one proxies.
+   */
+  function disapproveDeployer(address deployer) external _owner_ {
+    _approvedDeployers[deployer] = false;
+  }
+
+/* ---  Implementation Management  --- */
 
   /**
    * @dev Creates a many-to-one proxy relationship.
@@ -118,6 +151,7 @@ contract DelegateCallProxyManager {
       implementationAddress
     );
   }
+
   /**
    * @dev Updates the implementation address for a many-to-one
    * proxy relationship.
@@ -145,40 +179,30 @@ contract DelegateCallProxyManager {
   }
 
   /**
-   * @dev Deploy a proxy with a many-to-one relationship with its implemenation.
+   * @dev Updates the implementation address for a one-to-one proxy.
    *
-   * The proxy will call the implementation holder for every transaction to determine
-   * the address to use in calls.
+   * Note: This could work for many-to-one as well if the caller
+   * provides the implementation holder address in place of the
+   * proxy address.
    *
-   * @param implementationID Identifier for the proxy's implementation.
-   * @param salt Create2 salt to deploy the pool with.
+   * @param proxyAddress Address of the deployed proxy
+   * @param implementationAddress Address with the runtime code for
+   * the proxy to use.
    */
-  function deployProxyManyToOne(bytes32 implementationID, bytes32 salt)
-    external
-    _owner_
-    returns(address proxyAddress)
-  {
-    address implementationHolder = _implementationHolders[implementationID];
-    require(
-      implementationHolder != address(0),
-      "ERR_IMPLEMENTATION_ID"
+  function setImplementationAddressOneToOne(
+    address payable proxyAddress,
+    address implementationAddress
+  ) external _owner_ {
+    DelegateCallProxyOneToOne(proxyAddress).setImplementationAddress(
+      implementationAddress
     );
-
-    // Set the implementation holder so the proxy constructor can query it.
-    _implementationHolder = implementationHolder;
-    proxyAddress = Create2.deploy(
-      0,
-      salt,
-      type(DelegateCallProxyManyToOne).creationCode
-    );
-    // Remove the address from temporary storage.
-    _implementationHolder = address(0);
-
-    emit ManyToOne_ProxyDeployed(
-      implementationID,
-      proxyAddress
+    emit OneToOne_ImplementationUpdated(
+      proxyAddress,
+      implementationAddress
     );
   }
+
+/* Proxy Deployment */
 
   /**
    * @dev Deploy a proxy contract with a one-to-one relationship
@@ -211,35 +235,81 @@ contract DelegateCallProxyManager {
   }
 
   /**
-   * @dev Updates the implementation address for a one-to-one proxy.
+   * @dev Deploy a proxy with a many-to-one relationship with its implemenation.
    *
-   * Note: This could work for many-to-one as well if the caller
-   * provides the implementation holder address in place of the
-   * proxy address.
+   * The proxy will call the implementation holder for every transaction to determine
+   * the address to use in calls.
    *
-   * @param proxyAddress Address of the deployed proxy
-   * @param implementationAddress Address with the runtime code for
-   * the proxy to use.
+   * @param implementationID Identifier for the proxy's implementation.
+   * @param salt Create2 salt to deploy the pool with.
    */
-  function setImplementationAddressOneToOne(
-    address payable proxyAddress,
-    address implementationAddress
-  ) external _owner_ {
-    DelegateCallProxyOneToOne(proxyAddress).setImplementationAddress(
-      implementationAddress
+  function deployProxyManyToOne(bytes32 implementationID, bytes32 salt)
+    external
+    _admin_
+    returns(address proxyAddress)
+  {
+    address implementationHolder = _implementationHolders[implementationID];
+    require(
+      implementationHolder != address(0),
+      "ERR_IMPLEMENTATION_ID"
     );
-    emit OneToOne_ImplementationUpdated(
-      proxyAddress,
-      implementationAddress
+
+    // Set the implementation holder so the proxy constructor can query it.
+    _implementationHolder = implementationHolder;
+    proxyAddress = Create2.deploy(
+      0,
+      salt,
+      type(DelegateCallProxyManyToOne).creationCode
+    );
+    // Remove the address from temporary storage.
+    _implementationHolder = address(0);
+
+    emit ManyToOne_ProxyDeployed(
+      implementationID,
+      proxyAddress
     );
   }
 
 /* ---  Queries  --- */
-  function getImplementationAddress() external view returns (address) {
+  function getImplementationAddress()
+    external
+    view
+    returns (address)
+  {
     return _implementationAddress;
   }
 
-  function getImplementationHolder() external view returns (address) {
+  function getImplementationHolder()
+    external
+    view
+    returns (address)
+  {
     return _implementationHolder;
+  }
+
+  function getImplementationHolder(
+    bytes32 implementationID
+  )
+    external
+    view
+    returns (address)
+  {
+    return _implementationHolders[implementationID];
+  }
+
+  function computeProxyAddressOneToOne(bytes32 salt)
+    external
+    view
+    returns (address)
+  {
+    return Create2.computeAddress(salt, ONE_TO_ONE_CODEHASH);
+  }
+
+  function computeProxyAddressManyToOne(bytes32 salt)
+    external
+    view
+    returns (address)
+  {
+    return Create2.computeAddress(salt, MANY_TO_ONE_CODEHASH);
   }
 }
