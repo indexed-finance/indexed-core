@@ -59,8 +59,7 @@ contract DelegateCallProxyManager {
   // Addresses allowed to deploy many-to-one proxies.
   mapping(address => bool) internal _approvedDeployers;
 
-  // Temporary values used for create2 constructors.
-  address internal _implementationAddress;
+  // Temporary value used for create2 constructor.
   address internal _implementationHolder;
 
 /* ---  Modifiers  --- */
@@ -75,20 +74,6 @@ contract DelegateCallProxyManager {
       "ERR_NOT_APPROVED"
     );
     _;
-  }
-
-  /**
-   * @dev Sets the storage value for implementation address
-   * so that a proxy constructor can query it.
-   */
-  modifier setsTempImplementation(address implementationAddress) {
-    require(
-      implementationAddress != address(0),
-      "ERR_NULL_ADDRESS"
-    );
-    _implementationAddress = implementationAddress;
-    _;
-    _implementationAddress = address(0);
   }
 
 /* ---  Constructor  --- */
@@ -140,7 +125,6 @@ contract DelegateCallProxyManager {
   )
     external
     _owner_
-    setsTempImplementation(implementationAddress)
   {
     require(
       _implementationHolders[implementationID] == address(0),
@@ -150,6 +134,9 @@ contract DelegateCallProxyManager {
       0,
       implementationID,
       type(ManyToOneImplementationHolder).creationCode
+    );
+    ManyToOneImplementationHolder(implementationHolder).setImplementationAddress(
+      implementationAddress
     );
     _implementationHolders[implementationID] = implementationHolder;
     emit ManyToOne_ImplementationCreated(
@@ -227,12 +214,14 @@ contract DelegateCallProxyManager {
   )
     external
     _owner_
-    setsTempImplementation(implementationAddress)
   {
     address proxyAddress = Create2.deploy(
       0,
       salt,
       type(DelegateCallProxyOneToOne).creationCode
+    );
+    DelegateCallProxyOneToOne(payable(proxyAddress)).setImplementationAddress(
+      implementationAddress
     );
     emit OneToOne_ProxyDeployed(
       proxyAddress,
@@ -277,14 +266,6 @@ contract DelegateCallProxyManager {
   }
 
 /* ---  Queries  --- */
-  function getImplementationAddress()
-    external
-    view
-    returns (address)
-  {
-    return _implementationAddress;
-  }
-
   function getImplementationHolder()
     external
     view
