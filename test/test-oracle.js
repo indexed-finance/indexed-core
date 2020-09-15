@@ -2,6 +2,7 @@ const chai = require("chai");
 const chaiAsPromised = require('chai-as-promised');
 const { soliditySha3 } = require('web3-utils');
 const BN = require('bn.js');
+const bre = require("@nomiclabs/buidler");
 
 const { setupUniSwapV2 } = require('./lib/uniswap-setup');
 const { wrapped_tokens: wrappedTokens } = require('./testData/categories.json');
@@ -15,10 +16,8 @@ const toBN = (bn) => new BN(bn._hex.slice(2), 'hex');
 
 describe("Market Oracle", () => {
   let uniswapFactory, uniswapRouter, weth;
-  let from;
-  // let stablecoin;
+  let from, marketOracle;
   let erc20Factory;
-  let marketOracle;
   let timestampAddition = 0;
 
   const getTimestamp = () => Math.floor(new Date().getTime() / 1000) + timestampAddition;
@@ -35,6 +34,13 @@ describe("Market Oracle", () => {
 
   before(async () => {
     erc20Factory = await ethers.getContractFactory("MockERC20");
+    ({
+      from,
+      uniswapFactory,
+      uniswapRouter,
+      weth,
+      marketOracle
+    } = await bre.run('deploy_contracts'));
     [from] = await web3.eth.getAccounts();
     ({ weth, uniswapFactory, uniswapRouter } = await setupUniSwapV2(web3, from));
   });
