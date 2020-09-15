@@ -5,7 +5,7 @@ import {
   UniswapV2OracleLibrary as UniV2Oracle
 } from "./lib/UniswapV2OracleLibrary.sol";
 import "./lib/FixedPoint.sol";
-import "./lib/SafeMath.sol";
+import "./openzeppelin/SafeMath.sol";
 import "./interfaces/IERC20.sol";
 import { UniswapV2Library as UniV2 } from "./lib/UniswapV2Library.sol";
 import { IUniswapV2Pair as Pair } from "./interfaces/IUniswapV2Pair.sol";
