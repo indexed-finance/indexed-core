@@ -30,15 +30,10 @@ contract DelegateCallProxyOneToOne {
 
 /* ---  Constructor  --- */
   constructor() public {
-    // Calls the sender rather than receiving the address in the constructor
-    // arguments so that the address is computable using create2.
-    address implementationAddress = ProxyDeployer(msg.sender).getImplementationAddress();
     address owner = msg.sender;
-    bytes32 slot1 = IMPLEMENTATION_ADDRESS_SLOT;
-    bytes32 slot2 = OWNER_SLOT;
+    bytes32 slot = OWNER_SLOT;
     assembly {
-      sstore(slot1, implementationAddress)
-      sstore(slot2, owner)
+      sstore(slot, owner)
     }
   }
 
