@@ -9,6 +9,12 @@ interface IERC20 {
   event Approval(address indexed src, address indexed dst, uint256 amt);
   event Transfer(address indexed src, address indexed dst, uint256 amt);
 
+  function name() external view returns (string memory);
+
+  function symbol() external view returns (string memory);
+
+  function decimals() external view returns (uint8);
+
   function totalSupply() external view returns (uint256);
 
   function balanceOf(address whom) external view returns (uint256);
@@ -85,15 +91,30 @@ contract BToken is BTokenBase, IERC20 {
     _symbol = symbol;
   }
 
-  function name() public view returns (string memory) {
+  function name()
+    external
+    override
+    view
+    returns (string memory)
+  {
     return _name;
   }
 
-  function symbol() public view returns (string memory) {
+  function symbol()
+    external
+    override
+    view
+    returns (string memory)
+  {
     return _symbol;
   }
 
-  function decimals() public view returns (uint8) {
+  function decimals()
+    external
+    override
+    view
+    returns (uint8)
+  {
     return _decimals;
   }
 
