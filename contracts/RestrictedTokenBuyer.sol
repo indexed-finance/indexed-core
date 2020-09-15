@@ -86,19 +86,13 @@ contract RestrictedTokenBuyer {
     address controller,
     address uniswapFactory,
     UniV2Router uniswapRouter,
-    address weth,
-    uint8 premiumPercent
+    address weth
   ) public {
     require(controller != address(0), "ERR_NULL_ADDRESS");
     _controller = controller;
     _uniswapFactory = uniswapFactory;
     _uniswapRouter = uniswapRouter;
     _weth = weth;
-    require(
-      premiumPercent > 0 && premiumPercent < 20,
-      "ERR_PREMIUM"
-    );
-    _premiumPercent = premiumPercent;
   }
 
 /* ---  Controls  --- */
