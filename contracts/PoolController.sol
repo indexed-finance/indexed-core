@@ -39,8 +39,8 @@ contract PoolController is BNum {
 
   address internal immutable _owner;
   address internal immutable _weth;
-  MarketOracle public immutable _oracle;
-  RestrictedTokenBuyer public immutable _tokenBuyer;
+  MarketOracle internal immutable _oracle;
+  RestrictedTokenBuyer internal immutable _tokenBuyer;
   DelegateCallProxyManager internal immutable _proxyManager;
 
 /* ---  Structs  --- */
@@ -161,9 +161,6 @@ contract PoolController is BNum {
    * @dev Deploy an index pool which has already been prepared with `prepareIndexPool`.
    * Withdraws the requisite balances from the token buyer contract and calculates
    * the weights based on the actual values of each token balance.
-   *
-   * TODO: Currently this just assumes that the pool controller already owns the tokens.
-   * This should probably be updated to gradually purchase tokens from UniSwap.
    *
    * @param categoryID Identifier for the indexed category
    * @param indexSize Number of tokens to hold in the index fund
@@ -294,8 +291,8 @@ contract PoolController is BNum {
       // the minimum weight of the pool. The minimum weight
       // is 1/25, so we divide the total value by 25.
       minimumBalances[i] = prices[i].reciprocal().mul(
-        totalValue / 25
-      ).decode144();
+        totalValue
+      ).decode144() / 25;
       denormalizedWeights[i] = _denormalizeFractionalWeight(weights[i]);
     }
     BPool(poolAddress).reindexTokens(tokens, denormalizedWeights, minimumBalances);
