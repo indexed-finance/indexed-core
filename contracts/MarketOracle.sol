@@ -32,7 +32,7 @@ contract MarketOracle is UniSwapV2PriceOracle {
   mapping(uint256 => uint256) public lastCategoryUpdate;
 
   // Number of categories in the oracle.
-  uint256 public categoryIndex = 1;
+  uint256 public categoryIndex;
 
   constructor(
     address _uniswapFactory,
@@ -55,7 +55,7 @@ contract MarketOracle is UniSwapV2PriceOracle {
    * @dev Returns a boolean stating whether a category exists.
    */
   function hasCategory(uint256 categoryID) external view returns (bool) {
-    return categoryID < categoryIndex && categoryID > 0;
+    return categoryID <= categoryIndex && categoryID > 0;
   }
 
   /**
@@ -67,7 +67,7 @@ contract MarketOracle is UniSwapV2PriceOracle {
     returns (address[] memory tokens)
   {
     require(
-      categoryID < categoryIndex && categoryID > 0,
+      categoryID <= categoryIndex && categoryID > 0,
       "ERR_CATEGORY_ID"
     );
     address[] storage _tokens = _categoryTokens[categoryID];
@@ -98,7 +98,7 @@ contract MarketOracle is UniSwapV2PriceOracle {
     returns (address[] memory tokens)
   {
     require(
-      categoryID < categoryIndex && categoryID > 0,
+      categoryID <= categoryIndex && categoryID > 0,
       "ERR_CATEGORY_ID"
     );
     address[] storage categoryTokens = _categoryTokens[categoryID];
@@ -122,7 +122,7 @@ contract MarketOracle is UniSwapV2PriceOracle {
    * which can be distributed on IPFS.
    */
   function createCategory(bytes32 metadataHash) external _owner_ {
-    uint256 categoryID = categoryIndex++;
+    uint256 categoryID = ++categoryIndex;
     categoryMetadata[categoryID] = metadataHash;
     emit CategoryAdded(categoryID, metadataHash);
   }
@@ -132,7 +132,10 @@ contract MarketOracle is UniSwapV2PriceOracle {
    * Note: A token can only be assigned to one category at a time.
    */
   function addToken(address token, uint256 categoryID) public _owner_ {
-    require(categoryID < categoryIndex, "ERR_CATEGORY_ID");
+    require(
+      categoryID <= categoryIndex && categoryID > 0,
+      "ERR_CATEGORY_ID"
+    );
     require(
       _categoryTokens[categoryID].length < MAX_CATEGORY_TOKENS,
       "ERR_MAX_CATEGORY_TOKENS"
@@ -153,7 +156,7 @@ contract MarketOracle is UniSwapV2PriceOracle {
     address[] calldata tokens
   ) external _owner_ {
     require(
-      categoryID < categoryIndex && categoryID > 0,
+      categoryID <= categoryIndex && categoryID > 0,
       "ERR_CATEGORY_ID"
     );
     require(
@@ -180,13 +183,16 @@ contract MarketOracle is UniSwapV2PriceOracle {
     address[] storage categoryTokens = _categoryTokens[categoryID];
     require(
       orderedTokens.length == categoryTokens.length,
-      "Incorrect number of tokens."
+      "ERR_ARR_LEN"
     );
     uint144[] memory marketCaps = computeAverageMarketCaps(orderedTokens);
     categoryTokens[0] = orderedTokens[0];
     for (uint256 i = 1; i < marketCaps.length; i++) {
       address token = orderedTokens[i];
-      require(_tokenCategories[token] == categoryID, "Token not in category.");
+      require(
+        _tokenCategories[token] == categoryID,
+        "ERR_NOT_IN_CATEGORY"
+      );
       // This check could technically be bypassed if three tokens had the exact
       // same market cap, but it is incredibly unlikely.
       require(marketCaps[i] <= marketCaps[i-1], "ERR_ORDER_INCORRECT");
