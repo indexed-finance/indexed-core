@@ -2,8 +2,10 @@ const chai = require("chai");
 const chaiAsPromised = require('chai-as-promised');
 chai.use(chaiAsPromised);
 
-const UniswapHelper = require('./lib/uniswap-helper');
 const { soliditySha3 } = require('web3-utils');
+const bre = require("@nomiclabs/buidler");
+
+const UniswapHelper = require('./lib/uniswap-helper');
 const BN = require('bn.js');
 const Decimal = require('decimal.js');
 
@@ -23,7 +25,9 @@ const errorDelta = 10 ** -8;
 
 
 describe("Pool Controller", () => {
-  let uniswapHelper, from, marketOracle, weth, poolController, indexPool, erc20Factory;
+  let from, proxyManager, poolController, marketOracle;
+  let uniswapHelper, uniswapFactory, uniswapRouter, weth;
+  let indexPool, erc20Factory;
   let timestampAddition = 0;
 
   const getTimestamp = () => Math.floor(new Date().getTime() / 1000) + timestampAddition;
@@ -41,26 +45,28 @@ describe("Pool Controller", () => {
   const toWei = (_bn) => web3.utils.toWei(toBN(_bn).toString(10));
 
   before(async () => {
+    ({
+      marketOracle,
+      poolController,
+      proxyManager,
+      weth,
+      uniswapFactory,
+      uniswapRouter,
+      from
+    } = await bre.run('deploy_contracts'));
     [from] = await web3.eth.getAccounts();
     erc20Factory = await ethers.getContractFactory("MockERC20");
-    uniswapHelper = new UniswapHelper(web3, from, erc20Factory, getTimestamp);
-    await uniswapHelper.init();
-    weth = uniswapHelper.weth;
-    const oracleFactory = await ethers.getContractFactory("MarketOracle");
-    marketOracle = await oracleFactory.deploy(
-      uniswapHelper.uniswapFactory.options.address,
-      weth.options.address,
-      from
+    uniswapHelper = new UniswapHelper(
+      web3,
+      from,
+      erc20Factory,
+      {
+        uniswapFactory,
+        uniswapRouter,
+        weth
+      },
+      getTimestamp
     );
-  });
-
-  it('Should deploy the Pool Controller', async () => {
-    const poolFactory = await ethers.getContractFactory("BPool");
-    console.log('poolfactory', !!poolFactory);
-    const pool = await poolFactory.deploy();
-    console.log('pool', !!pool.address);
-    const controllerFactory = await ethers.getContractFactory("PoolController");
-    poolController = await controllerFactory.deploy(marketOracle.address, pool.address);
   });
 
   describe('Initialize Markets', async () => {
@@ -223,7 +229,7 @@ describe("Pool Controller", () => {
           "BADC2",
           nTokensHex(100000)
         ).then(r => r.wait())
-      ).to.be.rejectedWith(/Category does not exist/g);
+      ).to.be.rejectedWith(/ERR_CATEGORY_ID/g);
     });
 
     it('Deploys the category index pool', async () => {
