@@ -11,6 +11,8 @@ contract MarketOracle is UniSwapV2PriceOracle {
   uint256 internal constant MAX_SORT_DELAY = 1 days;
   // Maximum number of tokens in a category.
   uint256 internal constant MAX_CATEGORY_TOKENS = 15;
+  // Address that can update the categories.
+  address internal immutable _owner;
 
 /* ---  Events  --- */
 
@@ -28,23 +30,22 @@ contract MarketOracle is UniSwapV2PriceOracle {
   mapping(uint256 => bytes32) public categoryMetadata;
   // Last time a category was sorted
   mapping(uint256 => uint256) public lastCategoryUpdate;
-  // Address that can update the categories.
-  address public manager;
+
   // Number of categories in the oracle.
   uint256 public categoryIndex = 1;
 
   constructor(
     address _uniswapFactory,
     address _weth,
-    address _manager
+    address owner
   ) public UniSwapV2PriceOracle(_uniswapFactory, _weth) {
-    manager = _manager;
+    _owner = owner;
   }
 
 /* ---  Modifiers  --- */
 
-  modifier onlyManager {
-    require(msg.sender == manager, "Only the manager can call this.");
+  modifier _owner_ {
+    require(msg.sender == _owner, "ERR_NOT_OWNER");
     _;
   }
 
@@ -120,7 +121,7 @@ contract MarketOracle is UniSwapV2PriceOracle {
    * @param metadataHash Hash of metadata about the token category,
    * which can be distributed on IPFS.
    */
-  function createCategory(bytes32 metadataHash) external onlyManager {
+  function createCategory(bytes32 metadataHash) external _owner_ {
     uint256 categoryID = categoryIndex++;
     categoryMetadata[categoryID] = metadataHash;
     emit CategoryAdded(categoryID, metadataHash);
@@ -130,7 +131,7 @@ contract MarketOracle is UniSwapV2PriceOracle {
    * @dev Adds a new token to a category.
    * Note: A token can only be assigned to one category at a time.
    */
-  function addToken(address token, uint256 categoryID) public onlyManager {
+  function addToken(address token, uint256 categoryID) public _owner_ {
     require(categoryID < categoryIndex, "ERR_CATEGORY_ID");
     require(
       _categoryTokens[categoryID].length < MAX_CATEGORY_TOKENS,
@@ -150,7 +151,7 @@ contract MarketOracle is UniSwapV2PriceOracle {
   function addTokens(
     uint256 categoryID,
     address[] calldata tokens
-  ) external onlyManager {
+  ) external _owner_ {
     require(
       categoryID < categoryIndex && categoryID > 0,
       "ERR_CATEGORY_ID"
