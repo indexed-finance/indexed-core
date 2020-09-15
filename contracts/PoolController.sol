@@ -17,6 +17,7 @@ import {
   DelegateCallProxyManyToOne
 } from "./proxies/DelegateCallProxyManyToOne.sol";
 
+
 contract PoolController is BNum {
   using FixedPoint for FixedPoint.uq112x112;
   using FixedPoint for FixedPoint.uq144x112;
@@ -27,7 +28,7 @@ contract PoolController is BNum {
     type(DelegateCallProxyManyToOne).creationCode
   );
   bytes32 internal constant POOL_IMPLEMENTATION_ID = keccak256(
-    "INDEX_POOL"
+    "BPool.sol"
   );
   uint256 internal constant WEIGHT_MULTIPLIER = BONE * 25;
   // Seconds between reweigh/reindex calls.
@@ -73,7 +74,12 @@ contract PoolController is BNum {
 /* ---  Events  --- */
 
   event LOG_NEW_POOL(
-    address indexed caller,
+    address indexed pool,
+    uint256 categoryID,
+    uint256 indexSize
+  );
+
+  event LOG_POOL_PREPARATION(
     address indexed pool,
     uint256 categoryID,
     uint256 indexSize
@@ -107,7 +113,7 @@ contract PoolController is BNum {
     _tokenBuyer = tokenBuyer;
   }
 
-/* ---  Pool Actions  --- */
+/* ---  Pool Deployment Actions  --- */
 
   /**
    * @dev Prepare an index pool for deployment.
@@ -120,9 +126,8 @@ contract PoolController is BNum {
     uint256 indexSize,
     uint256 initialWethValue
   ) external _owner_ {
-    require(indexSize >= MIN_BOUND_TOKENS, "Less than minimum index size.");
-    require(indexSize <= MAX_BOUND_TOKENS, "Exceeds maximum index size");
-    require(_oracle.hasCategory(categoryID), "ERR_CATEGORY_ID");
+    require(indexSize >= MIN_BOUND_TOKENS, "ERR_MIN_BOUND_TOKENS");
+    require(indexSize <= MAX_BOUND_TOKENS, "ERR_MAX_BOUND_TOKENS");
     address poolAddress = computePoolAddress(categoryID, indexSize);
     require(!_isBPool[poolAddress], "ERR_POOL_EXISTS");
     (
@@ -145,6 +150,11 @@ contract PoolController is BNum {
       smolBalances[i] = uint128(bal);
     }
     _pendingPools[poolAddress] = PendingPool(tokens, smolBalances);
+    emit LOG_POOL_PREPARATION(
+      poolAddress,
+      categoryID,
+      indexSize
+    );
   }
 
   /**
@@ -193,7 +203,7 @@ contract PoolController is BNum {
     }
     _deployPool(categoryID, indexSize);
     _isBPool[poolAddress] = true;
-    emit LOG_NEW_POOL(msg.sender, poolAddress, categoryID, indexSize);
+    emit LOG_NEW_POOL(poolAddress, categoryID, indexSize);
     BPool(poolAddress).initialize(
       address(this),
       name,
@@ -227,12 +237,11 @@ contract PoolController is BNum {
     string calldata symbol,
     uint256 initialWethValue
   ) external _owner_ {
-    require(indexSize >= MIN_BOUND_TOKENS, "Less than minimum index size.");
-    require(indexSize <= MAX_BOUND_TOKENS, "Exceeds maximum index size");
-    require(_oracle.hasCategory(categoryID), "Category does not exist");
+    require(indexSize >= MIN_BOUND_TOKENS, "ERR_MIN_BOUND_TOKENS");
+    require(indexSize <= MAX_BOUND_TOKENS, "ERR_MAX_BOUND_TOKENS");
     address bpoolAddress = _deployPool(categoryID, indexSize);
     _isBPool[bpoolAddress] = true;
-    emit LOG_NEW_POOL(msg.sender, bpoolAddress, categoryID, indexSize);
+    emit LOG_NEW_POOL(bpoolAddress, categoryID, indexSize);
     BPool bpool = BPool(bpoolAddress);
     (
       address[] memory tokens,
@@ -255,6 +264,8 @@ contract PoolController is BNum {
       denormalizedWeights
     );
   }
+
+/* ---  Pool Rebalance Actions  --- */
 
   /**
    * @dev Re-indexes a pool by setting the underlying assets to the top
@@ -317,6 +328,12 @@ contract PoolController is BNum {
     BPool(poolAddress).reweighTokens(tokens, denormalizedWeights);
     record.timestamp = uint128(now);
     _poolUpdateRecords[poolAddress] = record;
+  }
+
+/* ---  Token Buyer Controls  --- */
+
+  function setPremiumRate(uint8 premiumPercent) external _owner_ {
+    _tokenBuyer.setPremiumRate(premiumPercent);
   }
 
 /* ---  Queries  --- */
