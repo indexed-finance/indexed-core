@@ -1,27 +1,22 @@
-const { setupUniSwapV2 } = require('./uniswap-setup');
-const { nTokens, nTokensHex } = require('./tokens');
+const { nTokensHex } = require('./tokens');
 
 const defaultGetTimestamp = () => new Date().getTime() / 1000;
 
 class UniswapHelper {
-  constructor(web3, from, erc20Factory, getTimestamp = defaultGetTimestamp) {
+  constructor(
+    web3,
+    from,
+    erc20Factory,
+    contracts,
+    getTimestamp = defaultGetTimestamp
+  ) {
     this.web3 = web3;
     this.from = from;
     this.tokens = [];
-    this.tokenIndices = {}
+    this.tokenIndices = {};
     this.erc20Factory = erc20Factory;
     this.getTimestamp = getTimestamp;
-  }
-
-  async init() {
-    /* {
-      uniswapFactory,
-      uniswapRouter,
-      weth
-    } */
-    const contracts = await setupUniSwapV2(this.web3, this.from);
     Object.assign(this, contracts);
-    // this.stablecoin = await this.erc20Factory.deploy("DAI Stablecoin", "DAI");
   }
 
   getToken(symbol) {
@@ -36,13 +31,18 @@ class UniswapHelper {
   }
 
   async getFreeWeth(to, amount) {
-    await this.weth.methods.deposit().send({
-      from: this.from,
-      value: amount
-    });
-    if (to && to != this.from) {
-      await this.weth.methods.transfer(to, amount).send({ from: this.from });
+    if (this.weth.methods.deposit) {
+      await this.weth.methods.deposit().send({
+        from: this.from,
+        value: amount
+      });
+      if (to && to != this.from) {
+        await this.weth.methods.transfer(to, amount).send({ from: this.from });
+      }
     }
+    await this.weth.methods.getFreeTokens(to || this.from, amount).send({
+      from: this.from,
+    });
   }
 
   /**
