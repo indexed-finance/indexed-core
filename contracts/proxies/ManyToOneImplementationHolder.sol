@@ -23,9 +23,6 @@ contract ManyToOneImplementationHolder {
 
 /* ---  Constructor  --- */
   constructor() public {
-    // Calls the sender rather than receiving the address in the constructor
-    // arguments so that the address is computable using create2.
-    _implementationAddress = ProxyDeployer(msg.sender).getImplementationAddress();
     _owner = msg.sender;
   }
 
