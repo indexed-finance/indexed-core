@@ -5,17 +5,26 @@ interface ProxyDeployer {
   function getImplementationAddress() external view returns (address);
 }
 
+
 /**
  * @dev Upgradeable delegatecall proxy for a single contract.
  */
 contract DelegateCallProxyOneToOne {
-/* ---  Storage  --- */
-  address internal _implementationAddress;
-  address internal _owner;
+/* ---  Constants  --- */
+  bytes32 internal constant IMPLEMENTATION_ADDRESS_SLOT = keccak256(
+    "IMPLEMENTATION_ADDRESS"
+  );
+
+  bytes32 internal constant OWNER_SLOT = keccak256(
+    "OWNER"
+  );
 
 /* ---  Modifiers  --- */
   modifier _owner_ {
-    require(msg.sender == _owner, "ERR_NOT_OWNER");
+    address owner;
+    bytes32 slot = OWNER_SLOT;
+    assembly { owner := sload(slot) }
+    require(msg.sender == owner, "ERR_NOT_OWNER");
     _;
   }
 
@@ -23,20 +32,27 @@ contract DelegateCallProxyOneToOne {
   constructor() public {
     // Calls the sender rather than receiving the address in the constructor
     // arguments so that the address is computable using create2.
-    _implementationAddress = ProxyDeployer(msg.sender).getImplementationAddress();
-    _owner = msg.sender;
+    address implementationAddress = ProxyDeployer(msg.sender).getImplementationAddress();
+    address owner = msg.sender;
+    bytes32 slot1 = IMPLEMENTATION_ADDRESS_SLOT;
+    bytes32 slot2 = OWNER_SLOT;
+    assembly {
+      sstore(slot1, implementationAddress)
+      sstore(slot2, owner)
+    }
   }
 
 /* ---  Fallbacks  --- */
-  receive() external payable {
-    return;
-  }
-
   fallback() external payable {
+    bytes32 slot = IMPLEMENTATION_ADDRESS_SLOT;
+    address implementationAddress;
+    assembly {
+      implementationAddress := sload(slot)
+    }
     (
       bool success,
       bytes memory data
-    ) = _implementationAddress.delegatecall(msg.data);
+    ) = implementationAddress.delegatecall(msg.data);
     if (success) {
       assembly { return(add(data, 32), mload(data)) }
     } else {
@@ -58,7 +74,8 @@ contract DelegateCallProxyOneToOne {
       implementationAddress != address(0),
       "ERR_NULL_ADDRESS"
     );
-    _implementationAddress = implementationAddress;
+    bytes32 slot = IMPLEMENTATION_ADDRESS_SLOT;
+    assembly { sstore(slot, implementationAddress) }
   }
 
   /**
@@ -66,6 +83,9 @@ contract DelegateCallProxyOneToOne {
    */
   function setOwnerAddress(address owner) external _owner_ {
     require(owner != address(0), "ERR_NULL_ADDRESS");
-    _owner = owner;
+    
+    bytes32 slot = OWNER_SLOT;
+
+    assembly { sstore(slot, owner) }
   }
 }
