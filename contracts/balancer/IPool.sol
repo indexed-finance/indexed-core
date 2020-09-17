@@ -7,7 +7,7 @@ import "./BMath.sol";
 import "../interfaces/IFlashLoanRecipient.sol";
 
 
-contract BPool is BToken, BMath {
+contract IPool is BToken, BMath {
   /**
    * @dev Token record data structure
    * @param bound is token bound to pool
@@ -30,6 +30,7 @@ contract BPool is BToken, BMath {
 
 /* ---  EVENTS  --- */
 
+  /** @dev Emitted when tokens are swapped. */
   event LOG_SWAP(
     address indexed caller,
     address indexed tokenIn,
@@ -38,31 +39,41 @@ contract BPool is BToken, BMath {
     uint256 tokenAmountOut
   );
 
+  /** @dev Emitted when underlying tokens are deposited for pool tokens. */
   event LOG_JOIN(
     address indexed caller,
     address indexed tokenIn,
     uint256 tokenAmountIn
   );
 
+  /** @dev Emitted when pool tokens are burned for underlying. */
   event LOG_EXIT(
     address indexed caller,
     address indexed tokenOut,
     uint256 tokenAmountOut
   );
 
+  /** @dev Emitted when a token's weight updates. */
   event LOG_DENORM_UPDATED(address indexed token, uint256 newDenorm);
 
+  /** @dev Emitted when a token's desired weight is set. */
   event LOG_DESIRED_DENORM_SET(address indexed token, uint256 desiredDenorm);
 
+  /** @dev Emitted when a token is unbound from the pool. */
   event LOG_TOKEN_REMOVED(address token);
 
+  /** @dev Emitted when a token is unbound from the pool. */
   event LOG_TOKEN_ADDED(
     address indexed token,
     uint256 desiredDenorm,
     uint256 minimumBalance
   );
 
+  /** @dev Emitted when a token reaches its minimum balance. */
   event LOG_TOKEN_READY(address indexed token);
+
+  /** @dev Emitted when public trades are enabled or disabled. */
+  event LOG_PUBLIC_SWAP_TOGGLED(bool publicSwap);
 
 /* ---  Modifiers  --- */
 
@@ -110,25 +121,47 @@ contract BPool is BToken, BMath {
   mapping(address => uint256) internal _minimumBalances;
 
   /**
-   * @dev Sets up the initial assets for the pool, assigns the controller
-   * address and sets the name and symbol for the pool token.
+   * @dev Sets the controller address and the token name & symbol.
+   *
+   * Note: This saves on storage costs for multi-step pool deployment.
+   *
+   * @param controller Controller of the pool
+   * @param name Name of the pool token
+   * @param symbol Symbol of the pool token
    */
-  function initialize(
+  function configure(
     address controller,
     string calldata name,
-    string calldata symbol,
-    address[] calldata tokens,
-    uint256[] calldata balances,
-    uint96[] calldata denorms
+    string calldata symbol
   ) external {
-    require(
-      _controller == address(0) && controller != address(0),
-      "ERR_INITIALIZED"
-    );
+    require(_controller == address(0), "ERR_INITIALIZED");
+    require(controller != address(0), "ERR_NULL_ADDRESS");
     _controller = controller;
     // default fee is 2.5%
     _swapFee = BONE / 40;
     _initializeToken(name, symbol);
+  }
+
+  /**
+   * @dev Sets up the initial assets for the pool.
+   *
+   * Note: `tokenProvider` must have approved the pool to transfer the
+   * corresponding `balances` of `tokens`.
+   *
+   * @param tokens Underlying tokens to initialize the pool with
+   * @param balances Initial balances to transfer
+   * @param denorms Initial denormalized weights for the tokens
+   * @param tokenProvider Address to transfer the balances from
+   */
+  function initialize(
+    address[] calldata tokens,
+    uint256[] calldata balances,
+    uint96[] calldata denorms,
+    address tokenProvider
+  )
+    external
+    _control_
+  {
     uint256 len = tokens.length;
     require(len >= MIN_BOUND_TOKENS, "ERR_MIN_TOKENS");
     require(len <= MAX_BOUND_TOKENS, "ERR_MAX_TOKENS");
@@ -153,13 +186,14 @@ contract BPool is BToken, BMath {
       });
       _tokens.push(token);
       totalWeight = badd(totalWeight, denorm);
-      _pullUnderlying(token, msg.sender, balance);
+      _pullUnderlying(token, tokenProvider, balance);
     }
     require(totalWeight <= MAX_TOTAL_WEIGHT, "ERR_MAX_TOTAL_WEIGHT");
     _totalWeight = totalWeight;
     _publicSwap = true;
+    emit LOG_PUBLIC_SWAP_TOGGLED(true);
     _mintPoolShare(INIT_POOL_SUPPLY);
-    _pushPoolShare(msg.sender, INIT_POOL_SUPPLY);
+    _pushPoolShare(tokenProvider, INIT_POOL_SUPPLY);
   }
 
 /* ---  Configuration Actions  --- */
@@ -180,6 +214,7 @@ contract BPool is BToken, BMath {
    */
   function setPublicSwap(bool public_) external _lock_ _control_ {
     _publicSwap = public_;
+    emit LOG_PUBLIC_SWAP_TOGGLED(public_);
   }
 
 /* ---  Token Management Actions  --- */
@@ -270,7 +305,7 @@ contract BPool is BToken, BMath {
    * @dev Unbinds a token from the pool and sends the remaining balance to the
    * pool controller. This should only be used as a last resort if a token is
    * experiencing a sudden crash or major vulnerability. Otherwise, tokens
-   * should only be removed gradually through calls to reweighTokens.
+   * should only be removed gradually through re-indexing.
    */
   function unbind(address token) external _lock_ _control_ {
     require(_records[token].bound, "ERR_NOT_BOUND");
@@ -1090,6 +1125,7 @@ contract BPool is BToken, BMath {
   }
 
 /* ---  Token Management Internal Functions  --- */
+
   /**
    * @dev Bind a token by address without actually depositing a balance.
    * The token will be unable to be swapped out until it reaches the minimum balance.
@@ -1238,47 +1274,6 @@ contract BPool is BToken, BMath {
     }
   }
 
-/* ---  Token Query Internal Functions  --- */
-  /**
-   * @dev Get the record for a token which is being swapped in.
-   * The token must be bound to the pool. If the token is not
-   * initialized (meaning it does not have the minimum balance)
-   * this function will return the actual balance of the token
-   * which the pool holds, but set the record's balance and weight
-   * to the token's minimum balance and the pool's minimum weight.
-   * This allows the token swap to be priced correctly even if the
-   * pool does not own any of the tokens.
-   */
-  function _getInputToken(address token)
-    internal
-    view
-    returns (Record memory record, uint256 realBalance)
-  {
-    record = _records[token];
-    require(record.bound, "ERR_NOT_BOUND");
-
-    realBalance = record.balance;
-    // If the input token is not initialized, we use the minimum
-    // initial weight and minimum initial balance instead of the
-    // real values for price and output calculations.
-    if (!record.ready) {
-      record.balance = _minimumBalances[token];
-      record.denorm = uint96(MIN_WEIGHT);
-    }
-  }
-
-  function _getOutputToken(address token)
-    internal
-    view
-    returns (Record memory record)
-  {
-    record = _records[token];
-    require(record.bound, "ERR_NOT_BOUND");
-    // Tokens which have not reached their minimum balance can not be
-    // swapped out.
-    require(record.ready, "ERR_OUT_NOT_READY");
-  }
-
   /**
    * @dev Handle the balance increase for an input token.
    *
@@ -1337,5 +1332,47 @@ contract BPool is BToken, BMath {
     // Regardless of whether the token is initialized, store the actual new balance.
     // This may not be the same as the in-memory balance.
     _records[token].balance = realBalance;
+  }
+
+/* ---  Token Query Internal Functions  --- */
+
+  /**
+   * @dev Get the record for a token which is being swapped in.
+   * The token must be bound to the pool. If the token is not
+   * initialized (meaning it does not have the minimum balance)
+   * this function will return the actual balance of the token
+   * which the pool holds, but set the record's balance and weight
+   * to the token's minimum balance and the pool's minimum weight.
+   * This allows the token swap to be priced correctly even if the
+   * pool does not own any of the tokens.
+   */
+  function _getInputToken(address token)
+    internal
+    view
+    returns (Record memory record, uint256 realBalance)
+  {
+    record = _records[token];
+    require(record.bound, "ERR_NOT_BOUND");
+
+    realBalance = record.balance;
+    // If the input token is not initialized, we use the minimum
+    // initial weight and minimum initial balance instead of the
+    // real values for price and output calculations.
+    if (!record.ready) {
+      record.balance = _minimumBalances[token];
+      record.denorm = uint96(MIN_WEIGHT);
+    }
+  }
+
+  function _getOutputToken(address token)
+    internal
+    view
+    returns (Record memory record)
+  {
+    record = _records[token];
+    require(record.bound, "ERR_NOT_BOUND");
+    // Tokens which have not reached their minimum balance can not be
+    // swapped out.
+    require(record.ready, "ERR_OUT_NOT_READY");
   }
 }
