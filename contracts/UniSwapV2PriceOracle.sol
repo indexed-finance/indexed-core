@@ -189,38 +189,6 @@ contract UniSwapV2PriceOracle {
   }
 
   /**
-   * @dev Compute the average market cap of a token over the recent period.
-   * Queries the current cumulative price and retrieves the last stored
-   * cumulative price, then calculates the average price and multiplies it
-   * by the token's total supply.
-   * Note: Price must have been updated within the last MINIMUM_OBSERVATION_DELAY
-   * seconds.
-   */
-  function computeAverageMarketCap(address token)
-    public
-    view
-    returns (uint144 marketCap)
-  {
-    uint256 totalSupply = IERC20(token).totalSupply();
-    return computeAverageAmountOut(token, totalSupply);
-  }
-
-  /**
-   * @dev Returns the average market cap for each token.
-   */
-  function computeAverageMarketCaps(address[] memory tokens)
-    public
-    view
-    returns (uint144[] memory marketCaps)
-  {
-    uint256 len = tokens.length;
-    marketCaps = new uint144[](len);
-    for (uint256 i = 0; i < len; i++) {
-      marketCaps[i] = computeAverageMarketCap(tokens[i]);
-    }
-  }
-
-  /**
    * @dev Returns the UQ112x112 struct representing the average price.
    *
    * Note: Requires that the token has a price observation between 0.5
