@@ -5,7 +5,8 @@ import "./FixedPoint.sol";
 import "../interfaces/IERC20.sol";
 import "./Babylonian.sol";
 
-library IndexLibrary {
+
+library MCapSqrtLibrary {
   using Babylonian for uint256;
   using FixedPoint for FixedPoint.uq112x112;
   using FixedPoint for FixedPoint.uq144x112;
