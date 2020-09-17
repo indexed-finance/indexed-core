@@ -167,6 +167,28 @@ contract UniSwapV2PriceOracle {
   }
 
   /**
+   * @dev Compute the average value in _weth of a given amount
+   * of a token. Queries the current cumulative price and retrieves
+   * the last stored cumulative price, then calculates the average
+   * price and multiplies it by the input amount.
+   */
+  function computeAverageAmountsOut(
+    address[] calldata tokens,
+    uint256[] calldata amountsIn
+  )
+    external
+    view
+    returns (uint144[] memory amountsOut)
+  {
+    uint256 len = tokens.length;
+    require(amountsIn.length == len, "ERR_ARR_LEN");
+    amountsOut = new uint144[](len);
+    for (uint256 i = 0; i < len; i++) {
+      amountsOut[i] = computeAverageAmountOut(tokens[i], amountsIn[i]);
+    }
+  }
+
+  /**
    * @dev Compute the average market cap of a token over the recent period.
    * Queries the current cumulative price and retrieves the last stored
    * cumulative price, then calculates the average price and multiplies it
