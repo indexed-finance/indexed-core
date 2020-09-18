@@ -9,7 +9,7 @@ import "./interfaces/IERC20.sol";
 
 
 contract UniSwapV2PriceOracle {
-  /* ---  Constants  --- */
+/* ---  Constants  --- */
 
   // Period over which prices are observed, each period should have 1 price observation.
   uint32 public constant OBSERVATION_PERIOD = 3.5 days;
@@ -20,18 +20,18 @@ contract UniSwapV2PriceOracle {
   // Maximum age an observation can have to still be usable in standard price queries.
   uint32 public constant MAXIMUM_OBSERVATION_AGE = OBSERVATION_PERIOD * 2;
 
-  /* ---  Structs  --- */
+/* ---  Structs  --- */
 
   struct PriceObservation {
     uint32 timestamp;
     uint224 priceCumulativeLast;
   }
 
-  /* ---  Events  --- */
+/* ---  Events  --- */
 
   event PriceUpdated(address token, uint224 priceCumulativeLast);
 
-  /* ---  Storage  --- */
+/* ---  Storage  --- */
 
   // Uniswap factory address
   address internal immutable _uniswapFactory;
@@ -49,7 +49,7 @@ contract UniSwapV2PriceOracle {
     _weth = weth;
   }
 
-  /* ---  Price Updates  --- */
+/* ---  Price Updates  --- */
 
   /**
    * @dev Updates the latest price observation for a token if allowable.
@@ -100,7 +100,7 @@ contract UniSwapV2PriceOracle {
     }
   }
 
-  /* ---  Queries  --- */
+/* ---  Queries  --- */
 
   /**
    * @dev Gets the price observation at `observationIndex` for `token`.
