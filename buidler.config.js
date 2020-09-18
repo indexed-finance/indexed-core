@@ -14,7 +14,7 @@ const {
 
 const { soliditySha3 } = require('web3-utils');
 
-const { deployERC20, getERC20 } = require('./lib/erc20');
+const { getERC20 } = require('./lib/erc20');
 const { deploy, contractExists } = require('./lib/util/contracts');
 
 let getDeployed = (bre, name) => {
@@ -28,16 +28,23 @@ let setDeployed = (bre, name, address) => {
   return address;
 }
 
-let debug = false;
+let debug = true  ;
 const printDebug = (str) => {
   if (!debug) return;
   console.log(str);
 }
 
+const deployERC20 = async (name, symbol) => {
+  const factory = await ethers.getContractFactory('MockERC20');
+  const token = await factory.deploy(name, symbol);
+  await token.deployed();
+  return token;
+}
+
 const poolControllerSalt = soliditySha3('PoolController.sol');
-const marketOracleSalt = soliditySha3('MarketOracle.sol');
-const tokenBuyerSalt = soliditySha3('RestrictedTokenBuyer.sol')
-const poolImplementationID = soliditySha3('BPool.sol');
+const uniswapOracleSalt = soliditySha3('UniSwapV2PriceOracle.sol');
+const poolInitializerID = soliditySha3('PoolInitializer.sol')
+const poolImplementationID = soliditySha3('IPool.sol');
 
 const getBre = () => require("@nomiclabs/buidler");
 
@@ -84,8 +91,8 @@ internalTask("deploy_uniswap", "Deploys UniSwap contracts or returns the existin
         )
       }
     }
-    const weth = await deployERC20(web3, from, 'WETH V9', 'WETH');
-    printDebug(`Deployed WETH to ${weth.options.address}`);
+    const weth = await deployERC20('WETH V9', 'WETH');
+    printDebug(`Deployed WETH to ${weth.address}`);
     const uniswapFactory = await deploy(
       web3,
       from,
@@ -99,7 +106,7 @@ internalTask("deploy_uniswap", "Deploys UniSwap contracts or returns the existin
       from,
       UniswapV2RouterABI,
       UniswapV2RouterBytecode,
-      [uniswapFactory.options.address, weth.options.address]
+      [uniswapFactory.options.address, weth.address]
     );
     printDebug(`Deployed UniSwap Router to ${uniswapRouter.options.address}`);
     return {
@@ -128,51 +135,29 @@ internalTask("deploy_proxy_manager", "Deploys the proxy manager or returns the e
     return proxyManager;
   });
 
-internalTask("deploy_market_oracle", "Deploys the market oracle or returns the existing one.")
+internalTask("deploy_uniswap_oracle", "Deploys the UniSwap oracle or returns the existing one.")
   .setAction(async () => {
     const bre = getBre();
 
-    if (getDeployed(bre, 'marketOracle')) {
-      return getDeployed(bre, 'marketOracle');
+    if (getDeployed(bre, 'uniswapOracle')) {
+      return getDeployed(bre, 'uniswapOracle');
     }
 
-    const from = await bre.run('get_from');
     const {
       uniswapFactory,
       weth
     } = await bre.run('deploy_uniswap');
-    const proxyManager = await bre.run('deploy_proxy_manager');
 
-    printDebug('-- Market Oracle --');
+    printDebug('-- UniSwapV2 Price Oracle --');
 
-    const oracleAddress = await proxyManager.computeProxyAddressOneToOne(marketOracleSalt);
-    const isDeployed = await contractExists(web3, oracleAddress);
-    if (isDeployed) {
-      printDebug(`Market Oracle proxy found at ${oracleAddress}`);
-      return setDeployed(
-        bre,
-        'marketOracle',
-        await ethers.getContractAt('MarketOracle', oracleAddress)
-      )
-    }
-    const factory = await ethers.getContractFactory('MarketOracle');
-    const marketOracleImplementation = await factory.deploy(
+    const factory = await ethers.getContractFactory('UniSwapV2PriceOracle');
+    const uniswapOracle = await factory.deploy(
       uniswapFactory.options.address,
-      weth.options.address,
-      from
+      weth.address
     );
-    await marketOracleImplementation.deployed();
-    printDebug(`Market Oracle implementation deployed to ${marketOracleImplementation.address}`);
-    await proxyManager.deployProxyOneToOne(
-      marketOracleSalt,
-      marketOracleImplementation.address
-    );
-    printDebug(`Market Oracle proxy deployed to ${oracleAddress}`);
-    return setDeployed(
-      bre,
-      'marketOracle',
-      await ethers.getContractAt('MarketOracle', oracleAddress)
-    );
+    await uniswapOracle.deployed();
+    printDebug(`UniSwapV2 Price Oracle deployed to ${uniswapOracle.address}`);
+    return setDeployed(bre, 'uniswapOracle', uniswapOracle);
   });
 
 internalTask("deploy_pool_implementation", "Deploys the pool implementation or returns the existing one.")
@@ -182,9 +167,10 @@ internalTask("deploy_pool_implementation", "Deploys the pool implementation or r
       return getDeployed(bre, 'poolImplementation');
     }
     const proxyManager = await bre.run('deploy_proxy_manager');
-    const poolImplementationHolder = await proxyManager.functions['getImplementationHolder(bytes32)'](
-      poolImplementationID
-    );
+    const poolImplementationHolder = await proxyManager
+      .functions['getImplementationHolder(bytes32)'](
+        poolImplementationID
+      );
 
     printDebug('-- Pool Implementation --');
 
@@ -199,13 +185,14 @@ internalTask("deploy_pool_implementation", "Deploys the pool implementation or r
       return setDeployed(
         bre,
         'poolImplementation',
-        await ethers.getContractAt('BPool', poolImplementation)
+        await ethers.getContractAt('IPool', poolImplementation)
       );
     }
 
-    const PoolImplementation = await ethers.getContractFactory('BPool');
+    const PoolImplementation = await ethers.getContractFactory('IPool');
     const poolImplementation = await PoolImplementation.deploy();
     await poolImplementation.deployed();
+
     printDebug(`Pool Implementation deployed to ${poolImplementation.address}`);
     await proxyManager.createManyToOneProxyRelationship(
       poolImplementationID,
@@ -214,111 +201,123 @@ internalTask("deploy_pool_implementation", "Deploys the pool implementation or r
     return setDeployed(bre, 'poolImplementation', poolImplementation);
   });
 
-internalTask("deploy_token_buyer", "Deploys the token buyer or returns the existing one.")
+internalTask(
+  "deploy_pool_initializer_implementation",
+  "Deploys the pool initializer implementation or returns the existing one."
+)
   .setAction(async () => {
     const bre = getBre();
-    if (getDeployed(bre, 'tokenBuyer')) {
-      return getDeployed(bre, 'tokenBuyer');
+    if (getDeployed(bre, 'poolInitializer')) {
+      return getDeployed(bre, 'poolInitializer');
     }
-    await bre.run('deploy_market_oracle');
+    await bre.run('deploy_uniswap_oracle');
     const proxyManager = getDeployed(bre, 'proxyManager');
-    printDebug('-- Token Buyer --');
+    printDebug('-- Pool Initializer --');
 
-    const buyerAddress = await proxyManager.computeProxyAddressOneToOne(tokenBuyerSalt);
-    const isDeployed = await contractExists(web3, buyerAddress);
-    if (isDeployed) {
-      printDebug(`Token Buyer proxy found at ${buyerAddress}`);
+    const initializerImplementationHolder = await proxyManager
+      .functions['getImplementationHolder(bytes32)'](
+        poolInitializerID
+      );
+
+    printDebug('-- Pool Implementation --');
+
+    if (initializerImplementationHolder != `0x${'00'.repeat(20)}`) {
+      printDebug(`Pool Initializer Implementation Holder found at ${
+        initializerImplementationHolder
+      }`);
+      const holder = await ethers.getContractAt(
+        'ManyToOneImplementationHolder',
+        initializerImplementationHolder
+      );
+      const initializerImplementation = await holder.getImplementationAddress();
+      printDebug(`Pool Initializer Implementation found at ${
+        initializerImplementation.address
+      }`);
       return setDeployed(
         bre,
-        'tokenBuyer',
-        await ethers.getContractAt('RestrictedTokenBuyer', buyerAddress)
-      )
-    }
-
-    const controllerAddress = await proxyManager.computeProxyAddressOneToOne(poolControllerSalt);
-    const RestrictedTokenBuyer = await ethers.getContractFactory('RestrictedTokenBuyer');
-    const tokenBuyerImplementation = await RestrictedTokenBuyer.deploy(
-      controllerAddress,
-      getDeployed(bre, 'uniswapFactory').options.address,
-      getDeployed(bre, 'uniswapRouter').options.address,
-      getDeployed(bre, 'weth').options.address
-    );
-    await tokenBuyerImplementation.deployed();
-    printDebug(`Token Buyer implementation deployed to ${tokenBuyerImplementation.address}`);
-    setDeployed(bre, 'tokenBuyerImplementation', tokenBuyerImplementation);
-    await proxyManager.deployProxyOneToOne(
-      tokenBuyerSalt,
-      tokenBuyerImplementation.address
-    );
-    printDebug(`Token Buyer proxy deployed to ${buyerAddress}`);
-    return setDeployed(
-      bre,
-      'tokenBuyer',
-      await ethers.getContractAt('RestrictedTokenBuyer', buyerAddress)
-    );
-  });
-
-internalTask("deploy_pool_controller", "Deploys the pool implementation or returns the existing one.")
-  .setAction(async () => {
-    if (debug) console.log(`Deploying pool controller...`)
-    const bre = getBre();
-    if (getDeployed(bre, 'poolController')) {
-      return getDeployed(bre, 'poolController');
-    }
-
-    await bre.run('deploy_pool_implementation');
-    const from = await bre.run('get_from');
-    const tokenBuyer = await bre.run('deploy_token_buyer');
-    printDebug(`-- Pool Controller --`);
-    const proxyManager = getDeployed(bre, 'proxyManager');
-
-    const controllerAddress = await proxyManager.computeProxyAddressOneToOne(poolControllerSalt);
-    const isDeployed = await contractExists(web3, controllerAddress);
-    if (isDeployed) {
-      printDebug(`Pool Controller proxy found at ${controllerAddress}`);
-      return setDeployed(
-        bre,
-        'poolController',
-        await ethers.getContractAt('PoolController', controllerAddress)
+        'poolInitializerImplementation',
+        await ethers.getContractAt('PoolInitializer', initializerImplementation)
       );
     }
-    const PoolController = await ethers.getContractFactory('PoolController');
-    const poolControllerImplementation = await PoolController.deploy(
-      from,
-      getDeployed(bre, 'marketOracle').address,
-      proxyManager.address,
-      getDeployed(bre, 'weth').options.address,
-      tokenBuyer.address
+    const PoolInitializer = await ethers.getContractFactory('PoolInitializer');
+    const poolInitializerImplementation = await PoolInitializer.deploy(
+      getDeployed(bre, 'uniswapFactory').options.address,
+      getDeployed(bre, 'uniswapRouter').options.address,
+      getDeployed(bre, 'weth').address
     );
-    await poolControllerImplementation.deployed();
-    printDebug(`Pool Controller implementation deployed to ${poolControllerImplementation.address}`);
-    setDeployed(
-      bre,
-      'poolControllerImplementation',
-      poolControllerImplementation
+    await poolInitializerImplementation.deployed();
+    await proxyManager.createManyToOneProxyRelationship(
+      poolInitializerID,
+      poolInitializerImplementation.address
     );
-    await proxyManager.deployProxyOneToOne(
-      poolControllerSalt,
-      poolControllerImplementation.address
-    );
-    await proxyManager.approveDeployer(controllerAddress);
-    printDebug(`Approved Pool Controller to deploy many-to-one proxies`);
-    printDebug(`Pool Controller proxy deployed to ${controllerAddress}`);
-    
-    const poolController = setDeployed(
-      bre,
-      'poolController',
-      await ethers.getContractAt('PoolController', controllerAddress)
-    );
-    await poolController.setPremiumRate(4);
-    printDebug(`Set token buyer premium rate to 4%`);
-    return poolController;
+    printDebug(`Pool Initializer implementation deployed to ${poolInitializerImplementation.address}`);
+    return setDeployed(bre, 'poolInitializerImplementation', poolInitializerImplementation);
   });
+
+internalTask("deploy_pool_factory", "Deploys the pool factory or returns the existing one.")
+  .setAction(async () => {
+    if (debug) printDebug(`Deploying pool factory...`)
+    const bre = getBre();
+    if (getDeployed(bre, 'poolFactory')) {
+      return getDeployed(bre, 'poolFactory');
+    }
+    await bre.run('deploy_pool_implementation');
+    await bre.run('deploy_pool_initializer_implementation');
+    const from = getDeployed(bre, 'from');
+    const proxyManager = getDeployed(bre, 'proxyManager');
+    const PoolFactory = await ethers.getContractFactory('PoolFactory');
+    const poolFactory = await PoolFactory.deploy(
+      from,
+      proxyManager.address
+    );
+    await poolFactory.deployed();
+    printDebug(`Pool Factory deployed to ${poolFactory.address}`);
+    return setDeployed(bre, 'poolFactory', poolFactory);
+  })
+
+internalTask(
+  "deploy_controller",
+  "Deploys the Market Cap Square Root controller."
+)
+  .setAction(async () => {
+    if (debug) printDebug(`Deploying pool controller...`)
+    const bre = getBre();
+    if (getDeployed(bre, 'controller')) {
+      return getDeployed(bre, 'controller');
+    }
+    const poolFactory = await bre.run('deploy_pool_factory');
+    const oracle = await bre.run('deploy_uniswap_oracle');
+    const proxyManager = getDeployed(bre, 'proxyManager');
+    const from = getDeployed(bre, 'from');
+    const MarketCapSqrtController = await ethers.getContractFactory('MarketCapSqrtController');
+    const controller = await MarketCapSqrtController.deploy(
+      oracle.address,
+      from,
+      poolFactory.address,
+      proxyManager.address
+    );
+    await controller.deployed();
+    return setDeployed(bre, 'controller', controller);
+  });
+
+internalTask('approve_deployers', "Approves the controller & factory to use the proxy manager")
+  .setAction(async () => {
+    const bre = getBre();
+    printDebug('-- Deployment Approval --');
+    const proxyManager = getDeployed(bre, 'proxyManager');
+    const poolFactory = await bre.run('deploy_pool_factory');
+    const controller = await bre.run('deploy_controller');
+    await proxyManager.approveDeployer(poolFactory.address);
+    printDebug(`Approved the pool factory to deploy proxies`);
+    await proxyManager.approveDeployer(controller.address);
+    printDebug(`Approved the pool controller to deploy proxies`);
+  })
 
 internalTask("deploy_contracts", "deploys all the core contracts")
   .setAction(async () => {
     const bre = getBre();
     await bre.run('deploy_pool_controller');
+    await bre.run('approve_deployers');
     return bre.config.deployed;
   })
 
