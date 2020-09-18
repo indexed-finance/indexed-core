@@ -14,10 +14,10 @@ const { expect } = chai;
 const keccak256 = (data) => soliditySha3(data);
 const toBN = (bn) => new BN(bn._hex.slice(2), 'hex');
 
-describe("Market Oracle", () => {
+describe("UniSwapV2PriceOracle.sol", () => {
   let uniswapFactory, uniswapRouter, weth;
   let from, marketOracle;
-  let erc20Factory;
+  let erc20Factory, tokens;
   let timestampAddition = 0;
 
   const getTimestamp = () => Math.floor(new Date().getTime() / 1000) + timestampAddition;
@@ -34,15 +34,15 @@ describe("Market Oracle", () => {
 
   before(async () => {
     erc20Factory = await ethers.getContractFactory("MockERC20");
+    await bre.run('deploy_uniswap_oracle');
     ({
       from,
       uniswapFactory,
       uniswapRouter,
       weth,
-      marketOracle
-    } = await bre.run('deploy_contracts'));
+      uniswapOracle: marketOracle
+    } = bre.config.deployed);
     [from] = await web3.eth.getAccounts();
-    ({ weth, uniswapFactory, uniswapRouter } = await setupUniSwapV2(web3, from));
   });
 
   async function deployToken(tokenObj) {
@@ -71,14 +71,14 @@ describe("Market Oracle", () => {
     const amountToken = nTokensHex(liquidity);
     const amountWeth = nTokensHex(liquidity * price);
     await token.getFreeTokens(from, amountToken).then(r => r.wait());
-    await getFreeWeth(from, amountWeth);
+    await weth.getFreeTokens(from, amountWeth).then(r => r.wait());;
     await token.approve(uniswapRouter.options.address, amountToken).then(r => r.wait());
     
-    await weth.methods.approve(uniswapRouter.options.address, amountWeth).send({ from })
+    await weth.approve(uniswapRouter.options.address, amountWeth).then(r => r.wait())
     const timestamp = getTimestamp() + 1000;
     await uniswapRouter.methods.addLiquidity(
       token.address,
-      weth.options.address,
+      weth.address,
       amountToken,
       amountWeth,
       amountToken,
@@ -95,7 +95,7 @@ describe("Market Oracle", () => {
    */
   async function createTokenMarket(tokenObj, liquidity) {
     const { address, initialPrice, token } = tokenObj;
-    const result = await uniswapFactory.methods.createPair(address, weth.options.address).send({ from });
+    const result = await uniswapFactory.methods.createPair(address, weth.address).send({ from });
     const { pair } = result.events.PairCreated.returnValues;
     tokenObj.pair = pair;
     await addTokenLiquidity(token, initialPrice, liquidity);
@@ -106,10 +106,9 @@ describe("Market Oracle", () => {
       for (let i = 0; i < wrappedTokens.length; i++) {
         await deployToken(wrappedTokens[i]);
       }
+      tokens = wrappedTokens.map(t => t.address);
     });
-  });
 
-  describe('Initialize Markets', async () => {
     it('Should deploy the wrapped token market pairs', async () => {
       for (let i = 0; i < wrappedTokens.length; i++) {
         await createTokenMarket(wrappedTokens[i], 100);
@@ -117,110 +116,86 @@ describe("Market Oracle", () => {
     });
   });
 
-  describe('Initialize Oracle', async () => {
-    it('Should deploy the market oracle', async () => {
-      const oracleFactory = await ethers.getContractFactory("MarketOracle");
-      marketOracle = await oracleFactory.deploy(
-        uniswapFactory.options.address,
-        weth.options.address,
-        from
-      );
-    });
+  describe('Prices', async () => {
 
-    it('Should create a wrapped tokens category', async () => {
-      const metadata = {
-        name: 'Wrapped Tokens',
-        description: 'Category for wrapped tokens.'
-      };
-      const metadataHash = keccak256(JSON.stringify(metadata));
-      const receipt = await marketOracle.createCategory(metadataHash);
-      const { events } = await receipt.wait();
-      expect(events.length).to.eql(1);
-      const [event] = events;
-      expect(event.event).to.eql('CategoryAdded');
-      expect(event.args.metadataHash).to.eql(metadataHash);
-      expect(event.args.categoryID.toNumber()).to.eql(1);
+    it('updatePrices()', async () => {
+      await marketOracle.updatePrices(tokens);
     });
-
-    it('Should add tokens to the wrapped tokens category', async () => {
-      await marketOracle.addTokens(1, wrappedTokens.map(t => t.address)).then(r => r.wait());
+  
+    it('Fails to query when the price is too new', async () => {
+      await expect(
+        marketOracle.computeAverageAmountOut(tokens[0], 500)
+      ).to.be.rejectedWith(/ERR_USABLE_PRICE_NOT_FOUND/g);
     });
-
-    it('Should query the category tokens', async () => {
-      const tokens = await marketOracle.getCategoryTokens(1);
-      expect(tokens).to.deep.equal(wrappedTokens.map(t => t.address));
-    });
-
-    it('Should fail to return a price if the latest price is not old enough', async () => {
-      const [token] = await marketOracle.getCategoryTokens(1);
-      expect(
-        marketOracle.computeAveragePrice(token)
-      ).to.be.rejectedWith(/ERR_USABLE_PRICE_NOT_FOUND/g)
-    });
-
-    it('Should update the block timestamp', async () => {
+  
+    it('computeAverageAmountOut()', async () => {
       await increaseTimeByOnePeriod();
-    });
-
-    it('Should return the correct market caps', async () => {
-      const caps = [];
       for (let i = 0; i < wrappedTokens.length; i++) {
         const { address, token, initialPrice } = wrappedTokens[i];
         // In order to update the cumulative prices on the market pairs,
         // we need to add some more liquidity (could also execute trades)
         await addTokenLiquidity(token, initialPrice, 50);
-        const expectedMarketCap = nTokens(150 * initialPrice);
-        const realMarketCap = await marketOracle.computeAverageMarketCap(address)
-          .then(toBN);
-        const pct = realMarketCap.div(expectedMarketCap);
-        expect(pct.eqn(1)).to.be.true;
-        caps.push(realMarketCap.toString('hex'));
+        await marketOracle.updatePrice(address);
+        const expected = nTokensHex(initialPrice * 100);
+        const actual = await marketOracle.computeAverageAmountOut(
+          address,
+          nTokensHex(100)
+        );
+        expect(`0x${toBN(actual).toString('hex')}`).to.eq(expected);
       }
-      const categoryCaps = await marketOracle.getCategoryMarketCaps(1);
-      expect(categoryCaps.map(toBN).map(c => c.toString('hex'))).to.deep.equal(caps);
+    });
+  
+    it('computeAverageAmountsOut()', async () => {
+      const amountsOut = await marketOracle.computeAverageAmountsOut(
+        tokens,
+        Array(tokens.length).fill(nTokensHex(100))
+      );
+      const expected = wrappedTokens.map(({ initialPrice }) => nTokensHex(initialPrice * 100));
+      const actual = amountsOut.map(a => `0x${toBN(a).toString('hex')}`);
+      expect(expected).to.deep.eq(actual);
     });
   });
 
-  describe('Sort Tokens', async () => {
-    const mapToHex = (arr) => arr.map((i) => i.toString('hex'));
-    const sortArr = (arr) => arr.sort((a, b) => {
-      if (a.marketCap.lt(b.marketCap)) return 1;
-      if (a.marketCap.gt(b.marketCap)) return -1;
-      return 0;
-    });
+  // describe('Sort Tokens', async () => {
+  //   const mapToHex = (arr) => arr.map((i) => i.toString('hex'));
+  //   const sortArr = (arr) => arr.sort((a, b) => {
+  //     if (a.marketCap.lt(b.marketCap)) return 1;
+  //     if (a.marketCap.gt(b.marketCap)) return -1;
+  //     return 0;
+  //   });
 
-    async function getCategoryData(id) {
-      const tokens = await marketOracle.getCategoryTokens(id);
-      const marketCaps = await marketOracle.getCategoryMarketCaps(id);
-      const arr = [];
-      for (let i = 0; i < tokens.length; i++) {
-        arr.push({
-          token: tokens[i],
-          marketCap: toBN(marketCaps[i])
-        });
-      }
-      return arr;
-    }
+  //   async function getCategoryData(id) {
+  //     const tokens = await marketOracle.getCategoryTokens(id);
+  //     const marketCaps = await marketOracle.getCategoryMarketCaps(id);
+  //     const arr = [];
+  //     for (let i = 0; i < tokens.length; i++) {
+  //       arr.push({
+  //         token: tokens[i],
+  //         marketCap: toBN(marketCaps[i])
+  //       });
+  //     }
+  //     return arr;
+  //   }
 
-    it('Should sort the tokens and update the category', async () => {
-      const category = await getCategoryData(1);
-      const marketCaps = [10, 1, 2].map(n => nTokens(n * 150));
-      expect(
-        mapToHex(category.map((t) => t.marketCap))
-      ).to.deep.equal(mapToHex(marketCaps));
-      const categorySorted = sortArr(category);
-      const marketCapsSorted = [10, 2, 1].map(n => nTokens(n * 150));
-      expect(
-        mapToHex(categorySorted.map((t) => t.marketCap))
-      ).to.deep.equal(mapToHex(marketCapsSorted));
-      const receipt = await marketOracle.orderCategoryTokensByMarketCap(
-        1, categorySorted.map((t) => t.token)
-      ).then((r) => r.wait());
-      const categoryAfterSort = await getCategoryData(1);
-      expect(
-        mapToHex(categoryAfterSort.map((t) => t.marketCap))
-      ).to.deep.equal(mapToHex(marketCapsSorted));
-      console.log(`Cost To Sort Tokens: ${toBN(receipt.cumulativeGasUsed).toNumber()}`)
-    });
-  });
+  //   it('Should sort the tokens and update the category', async () => {
+  //     const category = await getCategoryData(1);
+  //     const marketCaps = [10, 1, 2].map(n => nTokens(n * 150));
+  //     expect(
+  //       mapToHex(category.map((t) => t.marketCap))
+  //     ).to.deep.equal(mapToHex(marketCaps));
+  //     const categorySorted = sortArr(category);
+  //     const marketCapsSorted = [10, 2, 1].map(n => nTokens(n * 150));
+  //     expect(
+  //       mapToHex(categorySorted.map((t) => t.marketCap))
+  //     ).to.deep.equal(mapToHex(marketCapsSorted));
+  //     const receipt = await marketOracle.orderCategoryTokensByMarketCap(
+  //       1, categorySorted.map((t) => t.token)
+  //     ).then((r) => r.wait());
+  //     const categoryAfterSort = await getCategoryData(1);
+  //     expect(
+  //       mapToHex(categoryAfterSort.map((t) => t.marketCap))
+  //     ).to.deep.equal(mapToHex(marketCapsSorted));
+  //     console.log(`Cost To Sort Tokens: ${toBN(receipt.cumulativeGasUsed).toNumber()}`)
+  //   });
+  // });
 });

@@ -18,7 +18,7 @@ const exitFee = 0;
 const swapFee = 0.025;
 const errorDelta = 10 ** -8;
 
-describe('BPool', async () => {
+describe('IPool.sol', async () => {
   let poolHelper, from, indexPool, erc20Factory;
   let timestampAddition = 0;
 
@@ -77,18 +77,21 @@ describe('BPool', async () => {
       balances.push(decToWeiHex(balance));
       poolHelper.records[address].balance = balance;
     }
-    const BPoolFactory = await ethers.getContractFactory("BPool");
-    indexPool = await BPoolFactory.deploy();
+    const IPoolFactory = await ethers.getContractFactory("IPool");
+    indexPool = await IPoolFactory.deploy();
     for (let token of wrappedTokens) {
       await token.token.approve(indexPool.address, nTokensHex(100000))
     }
-    await indexPool.initialize(
+    await indexPool.configure(
       from,
       "Test Pool",
-      "TPI",
+      "TPI"
+    );
+    await indexPool.initialize(
       wrappedTokens.map(t => t.address),
       balances,
-      denormWeights
+      denormWeights,
+      from
     );
   }
 
