@@ -1,13 +1,10 @@
 pragma solidity ^0.6.0;
 
 
-interface ProxyDeployer {
-  function getImplementationAddress() external view returns (address);
-}
-
-
 /**
  * @dev Upgradeable delegatecall proxy for a single contract.
+ * This proxy stores an implementation address which can be
+ * upgraded by the proxy manager.
  */
 contract DelegateCallProxyOneToOne {
 /* ---  Constants  --- */
@@ -83,4 +80,9 @@ contract DelegateCallProxyOneToOne {
 
     assembly { sstore(slot, owner) }
   }
+}
+
+
+interface ProxyDeployer {
+  function getImplementationAddress() external view returns (address);
 }
