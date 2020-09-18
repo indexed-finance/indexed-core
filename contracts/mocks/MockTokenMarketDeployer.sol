@@ -5,9 +5,10 @@ import "./MockERC20.sol";
 import "../interfaces/IUniswapV2Factory.sol";
 import "../interfaces/IUniswapV2Pair.sol";
 import "../interfaces/IUniswapV2Router02.sol";
-import { BPool } from "../balancer/BPool.sol";
+import { IPool } from "../balancer/IPool.sol";
 import "../balancer/BMath.sol";
-import "../MarketOracle.sol";
+import "../UniSwapV2PriceOracle.sol";
+
 
 contract MockTokenMarketDeployer is BMath {
   MockERC20 public weth;
@@ -37,8 +38,8 @@ contract MockTokenMarketDeployer is BMath {
   }
 
   function computePoolValue(
-    MarketOracle oracle,
-    BPool pool
+    UniSwapV2PriceOracle oracle,
+    IPool pool
   ) external view returns (uint256) {
     address[] memory tokens = pool.getCurrentTokens();
     uint256 totalValue = 0;
@@ -85,7 +86,7 @@ contract MockTokenMarketDeployer is BMath {
   }
 
   function deployPoolMarketWithLiquidity(
-    BPool pool,
+    IPool pool,
     uint256 amountPool,
     uint256 amountWeth
   ) public {
@@ -98,7 +99,7 @@ contract MockTokenMarketDeployer is BMath {
   }
 
   function addPoolMarketLiquidity(
-    BPool pool,
+    IPool pool,
     uint256 amountPool,
     uint256 amountWeth
   ) public {
@@ -119,7 +120,7 @@ contract MockTokenMarketDeployer is BMath {
   }
 
   function testMintPoolTokens(
-    BPool pool,
+    IPool pool,
     uint256 poolAmountOut
   ) external view returns (
     uint256 a
@@ -138,7 +139,7 @@ contract MockTokenMarketDeployer is BMath {
   }
 
   function mintPoolTokens(
-    BPool pool,
+    IPool pool,
     uint256 poolAmountOut
   ) public {
     uint256 poolTotal = pool.totalSupply();
