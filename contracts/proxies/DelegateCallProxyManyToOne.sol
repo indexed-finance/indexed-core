@@ -1,18 +1,15 @@
 pragma solidity ^0.6.0;
 
 
-interface ImplementationHolder {
-  function getImplementationAddress() external view returns (address);
-}
-
-interface ProxyDeployer {
-  function getImplementationHolder() external view returns (ImplementationHolder);
-}
 
 
 /**
- * @dev Delegatecall proxy for many proxies with a single
- * upgradeable implementation address.
+ * @dev Proxy contract which uses an implementation address shared with many
+ * other proxies.
+ *
+ * An implementation holder contract stores the upgradeable logic address, and
+ * the proxy contract calls the implementation holder to execute each delegated
+ * transaction.
  */
 contract DelegateCallProxyManyToOne {
 /* ---  Constants  --- */
@@ -47,4 +44,14 @@ contract DelegateCallProxyManyToOne {
       assembly { revert(add(data, 32), mload(data)) }
     }
   }
+}
+
+
+interface ImplementationHolder {
+  function getImplementationAddress() external view returns (address);
+}
+
+
+interface ProxyDeployer {
+  function getImplementationHolder() external view returns (ImplementationHolder);
 }
