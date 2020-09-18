@@ -1,14 +1,9 @@
 pragma solidity ^0.6.0;
 
 
-interface ProxyDeployer {
-  function getImplementationAddress() external view returns (address);
-}
-
-
 /**
  * @dev Stores a single implementation address which is used by
- * many individual proxies.
+ * many proxies.
  */
 contract ManyToOneImplementationHolder {
 /* ---  Storage  --- */
@@ -57,4 +52,9 @@ contract ManyToOneImplementationHolder {
     require(owner != address(0), "ERR_NULL_ADDRESS");
     _owner = owner;
   }
+}
+
+
+interface ProxyDeployer {
+  function getImplementationAddress() external view returns (address);
 }
