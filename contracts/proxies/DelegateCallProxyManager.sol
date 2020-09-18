@@ -11,19 +11,34 @@ import {
 
 
 /**
- * @dev Contract that manages deployments and upgrades of delegatecall proxies.
+ * @dev Contract that manages deployment and upgrades of delegatecall proxies.
+ *
+ * An implementation identifier can be created on the proxy manager which is
+ * used to specify the logic address for a particular contract type, and to
+ * upgrade the implementation as needed.
+ *
+ * A one-to-one proxy is a single proxy contract with an upgradeable implementation
+ * address.
+ *
+ * A many-to-one proxy is a single upgradeable implementation address that may be
+ * used by many proxy contracts.
  */
 contract DelegateCallProxyManager {
 /* ---  Constants  --- */
-  bytes32 internal constant ONE_TO_ONE_CODEHASH = keccak256(
-    type(DelegateCallProxyOneToOne).creationCode
-  );
+  bytes32 internal constant ONE_TO_ONE_CODEHASH
+  = keccak256(type(DelegateCallProxyOneToOne).creationCode);
 
-  bytes32 internal constant MANY_TO_ONE_CODEHASH = keccak256(
-    type(DelegateCallProxyManyToOne).creationCode
-  );
+  bytes32 internal constant MANY_TO_ONE_CODEHASH
+  = keccak256(type(DelegateCallProxyManyToOne).creationCode);
+
+  bytes32 internal constant IMPLEMENTATION_HOLDER_CODEHASH
+  = keccak256(type(ManyToOneImplementationHolder).creationCode);
 
 /* ---  Events  --- */
+
+  event DeploymentApprovalGranted(address deployer);
+  event DeploymentApprovalRevoked(address deployer);
+
   event ManyToOne_ImplementationCreated(
     bytes32 implementationID,
     address implementationAddress
@@ -94,13 +109,15 @@ contract DelegateCallProxyManager {
    */
   function approveDeployer(address deployer) external _owner_ {
     _approvedDeployers[deployer] = true;
+    emit DeploymentApprovalGranted(deployer);
   }
 
   /**
    * @dev Prevents `deployer` from deploying many-to-one proxies.
    */
-  function disapproveDeployer(address deployer) external _owner_ {
+  function revokeDeployerApproval(address deployer) external _owner_ {
     _approvedDeployers[deployer] = false;
+    emit DeploymentApprovalRevoked(deployer);
   }
 
 /* ---  Implementation Management  --- */
@@ -266,6 +283,13 @@ contract DelegateCallProxyManager {
   }
 
 /* ---  Queries  --- */
+  /**
+   * @dev Queries the temporary storage value `_implementationHolder`.
+   * This is used in the constructor of the many-to-one proxy contract
+   * so that the create2 address is static (adding constructor arguments
+   * would change the codehash) and the implementation holder can be
+   * stored as a constant.
+   */
   function getImplementationHolder()
     external
     view
@@ -274,6 +298,10 @@ contract DelegateCallProxyManager {
     return _implementationHolder;
   }
 
+  /**
+   * @dev Returns the address of the implementation holder contract
+   * for `implementationID`.
+   */
   function getImplementationHolder(
     bytes32 implementationID
   )
@@ -284,6 +312,10 @@ contract DelegateCallProxyManager {
     return _implementationHolders[implementationID];
   }
 
+  /**
+   * @dev Computes the create2 address for a one-to-one proxy deployed
+   * with `salt` as the create2 address.
+   */
   function computeProxyAddressOneToOne(bytes32 salt)
     external
     view
@@ -292,11 +324,30 @@ contract DelegateCallProxyManager {
     return Create2.computeAddress(salt, ONE_TO_ONE_CODEHASH);
   }
 
+  /**
+   * @dev Computes the create2 address for a many-to-one proxy deployed
+   * with `salt` as the create2 salt.
+  */
   function computeProxyAddressManyToOne(bytes32 salt)
     external
     view
     returns (address)
   {
     return Create2.computeAddress(salt, MANY_TO_ONE_CODEHASH);
+  }
+
+  /**
+   * @dev Computes the create2 address of the implementation holder
+   * for `implementationID`.
+  */
+  function computeHolderAddressManyToOne(bytes32 implementationID)
+    external
+    view
+    returns (address)
+  {
+    return Create2.computeAddress(
+      implementationID,
+      IMPLEMENTATION_HOLDER_CODEHASH
+    );
   }
 }
