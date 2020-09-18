@@ -230,7 +230,7 @@ contract UniSwapV2PriceOracle {
     }
   }
 
-  /* ---  Internal Observation Functions  --- */
+/* ---  Internal Observation Functions  --- */
 
   /**
    * @dev Query the current cumulative price for a token.

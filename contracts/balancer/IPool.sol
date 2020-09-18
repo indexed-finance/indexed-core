@@ -313,6 +313,25 @@ contract IPool is BToken, BMath {
     _unbind(token);
   }
 
+  /**
+   * @dev Updates the minimum balance for an uninitialized token.
+   * This becomes useful if a token's external price significantly
+   * rises after being bound, since the pool can not send a token
+   * out until it reaches the minimum balance.
+   */
+  function setMinimumBalance(
+    address token,
+    uint256 minimumBalance
+  )
+    external
+    _control_
+  {
+    Record memory record = _records[token];
+    require(record.bound, "ERR_NOT_BOUND");
+    require(!record.ready, "ERR_READY");
+    _minimumBalances[token] = minimumBalance;
+  }
+
 /* ---  Liquidity Provider Actions  --- */
   /**
    * @dev Mint new pool tokens by providing the proportional amount of each
