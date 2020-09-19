@@ -296,8 +296,7 @@ contract IPool is BToken, BMath {
       // If an input weight is less than the minimum weight, use that instead.
       uint96 denorm = desiredDenorms[i];
       if (denorm < MIN_WEIGHT) denorm = uint96(MIN_WEIGHT);
-      Record memory record = records[i];
-      if (!record.bound) {
+      if (!records[i].bound) {
         // If the token is not bound, bind it.
         _bind(token, minimumBalances[i], denorm);
       } else {
