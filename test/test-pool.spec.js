@@ -644,7 +644,7 @@ describe('IPool.sol', async () => {
         const maxAmountIn = maxPrice;
         for (let tokenOut of poolHelper.tokens) {
           if (tokenOut == newTokenAddress) continue;
-          const tokenAmountOut = poolHelper.records[tokenOut].balance / 50;
+          const tokenAmountOut = poolHelper.records[tokenOut].balance / 150;
           const computed = poolHelper.calcInGivenOut(tokenIn, tokenOut, tokenAmountOut, true);
           // increase the approved tokens by 1% because the math on the decimal -> bn
           // has minor rounding errors
@@ -656,12 +656,10 @@ describe('IPool.sol', async () => {
             decToWeiHex(tokenAmountOut),
             maxPrice,
           );
-          // Check the token input amount
           let expected = computed[0];
           let actual = Decimal(fromWei(output[0]));
           let relDiff = calcRelativeDiff(expected, actual);
           expect(relDiff.toNumber()).to.be.lte(errorDelta);
-          // Check the resulting spot price
           expected = computed[1];
           actual = fromWei(output[1]);
           relDiff = calcRelativeDiff(expected, actual);
