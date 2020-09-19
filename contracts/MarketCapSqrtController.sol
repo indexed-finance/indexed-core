@@ -342,7 +342,7 @@ contract MarketCapSqrtController is BNum {
     FixedPoint.uq112x112 memory price = _oracle.computeAveragePrice(tokenAddress);
     pool.setMinimumBalance(
       tokenAddress,
-      price.reciprocal().mul(poolValue).decode144() / 25
+      price.reciprocal().mul(poolValue).decode144() / 100
     );
   }
 
@@ -477,10 +477,10 @@ contract MarketCapSqrtController is BNum {
     for (uint256 i = 0; i < size; i++) {
       // The minimum balance is the number of tokens worth
       // the minimum weight of the pool. The minimum weight
-      // is 1/25, so we divide the total value by 25.
+      // is 1/100, so we divide the total value by 100.
       minimumBalances[i] = prices[i].reciprocal().mul(
         totalValue
-      ).decode144() / 25;
+      ).decode144() / 100;
       denormalizedWeights[i] = _denormalizeFractionalWeight(weights[i]);
     }
     IPool(poolAddress).reindexTokens(
