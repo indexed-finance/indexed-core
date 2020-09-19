@@ -207,7 +207,7 @@ contract IPool is BToken, BMath {
    * @dev Set the swap fee.
    * Note: Swap fee must be between 0.0001% and 10%
    */
-  function setSwapFee(uint256 swapFee) external _lock_ _control_ {
+  function setSwapFee(uint256 swapFee) external _control_ {
     require(swapFee >= MIN_FEE, "ERR_MIN_FEE");
     require(swapFee <= MAX_FEE, "ERR_MAX_FEE");
     _swapFee = swapFee;
@@ -217,7 +217,7 @@ contract IPool is BToken, BMath {
    * @dev Public swapping is enabled as soon as tokens are bound,
    * but this function exists in case of an emergency.
    */
-  function setPublicSwap(bool public_) external _lock_ _control_ {
+  function setPublicSwap(bool public_) external _control_ {
     _publicSwap = public_;
     emit LOG_PUBLIC_SWAP_TOGGLED(public_);
   }
@@ -1344,12 +1344,16 @@ contract IPool is BToken, BMath {
         uint256 additionalBalance = bsub(realBalance, record.balance);
         uint256 balRatio = bdiv(additionalBalance, record.balance);
         record.denorm = uint96(badd(MIN_WEIGHT, bmul(MIN_WEIGHT, balRatio)));
-        if (record.desiredDenorm < record.denorm) {
-          record.denorm = record.desiredDenorm;
-        }
         _records[token].denorm = record.denorm;
         _records[token].lastDenormUpdate = uint40(now);
         _totalWeight = badd(_totalWeight, record.denorm);
+      } else {
+        uint256 realToMinRatio = bdiv(
+          bsub(record.balance, realBalance),
+          record.balance
+        );
+        uint256 weightPremium = bmul(MIN_WEIGHT / 10, realToMinRatio);
+        record.denorm = uint96(badd(MIN_WEIGHT, weightPremium));
       }
       // If the token is still not ready, do not adjust the weight.
     } else {
@@ -1387,7 +1391,12 @@ contract IPool is BToken, BMath {
     // real values for price and output calculations.
     if (!record.ready) {
       record.balance = _minimumBalances[token];
-      record.denorm = uint96(MIN_WEIGHT);
+      uint256 realToMinRatio = bdiv(
+        bsub(record.balance, realBalance),
+        record.balance
+      );
+      uint256 weightPremium = bmul(MIN_WEIGHT / 10, realToMinRatio);
+      record.denorm = uint96(badd(MIN_WEIGHT, weightPremium));
     }
   }
 
