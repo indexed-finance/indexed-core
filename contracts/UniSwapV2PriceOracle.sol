@@ -12,13 +12,13 @@ contract UniSwapV2PriceOracle {
 /* ---  Constants  --- */
 
   // Period over which prices are observed, each period should have 1 price observation.
-  uint32 public constant OBSERVATION_PERIOD = 3.5 days;
+  uint32 public immutable OBSERVATION_PERIOD;
 
   // Minimum time elapsed between price observations
-  uint32 public constant MINIMUM_OBSERVATION_DELAY = OBSERVATION_PERIOD / 2;
+  uint32 public immutable MINIMUM_OBSERVATION_DELAY;
 
   // Maximum age an observation can have to still be usable in standard price queries.
-  uint32 public constant MAXIMUM_OBSERVATION_AGE = OBSERVATION_PERIOD * 2;
+  uint32 public immutable MAXIMUM_OBSERVATION_AGE;
 
 /* ---  Structs  --- */
 
@@ -44,9 +44,16 @@ contract UniSwapV2PriceOracle {
     address => mapping(uint256 => PriceObservation)
   ) internal _priceObservations;
 
-  constructor(address uniswapFactory, address weth) public {
+  constructor(
+    address uniswapFactory,
+    address weth,
+    uint32 observationPeriod
+  ) public {
     _uniswapFactory = uniswapFactory;
     _weth = weth;
+    OBSERVATION_PERIOD = observationPeriod;
+    MINIMUM_OBSERVATION_DELAY = observationPeriod / 2;
+    MAXIMUM_OBSERVATION_AGE = observationPeriod * 2;
   }
 
 /* ---  Price Updates  --- */
@@ -119,7 +126,7 @@ contract UniSwapV2PriceOracle {
   /**
    * @dev Gets the observation index for `timestamp`
    */
-  function observationIndexOf(uint256 timestamp) public pure returns (uint256) {
+  function observationIndexOf(uint256 timestamp) public view returns (uint256) {
     return timestamp / OBSERVATION_PERIOD;
   }
 
