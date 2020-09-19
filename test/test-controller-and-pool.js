@@ -252,7 +252,7 @@ describe("Pool Controller", () => {
       expect(pool).to.equal(expectedAddress);
       expect(categoryID).to.equal(categoryID);
       expect(indexSize).to.equal(indexSize);
-      indexPool = await ethers.getContractAt('BPool', expectedAddress);
+      indexPool = await ethers.getContractAt('IPool', expectedAddress);
     });
 
     it('Sets the controller address on deployment', async () => {
