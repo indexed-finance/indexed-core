@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 pragma solidity ^0.6.0;
 pragma experimental ABIEncoderV2;
 
@@ -19,6 +20,7 @@ import {
 } from "./proxies/DelegateCallProxyManyToOne.sol";
 import { PoolInitializer } from "./PoolInitializer.sol";
 import { UnboundTokenSeller } from "./UnboundTokenSeller.sol";
+
 
 /**
  * @dev This contract implements the market cap square root index management strategy.
