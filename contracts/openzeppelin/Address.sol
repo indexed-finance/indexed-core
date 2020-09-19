@@ -1,6 +1,10 @@
 // SPDX-License-Identifier: MIT
-
 pragma solidity ^0.6.2;
+
+
+// From https://github.com/OpenZeppelin/openzeppelin-contracts/blob/master/contracts/utils/Address.sol
+// Subject to the MIT license.
+
 
 /**
  * @dev Collection of functions related to the address type

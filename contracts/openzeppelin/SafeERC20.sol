@@ -1,10 +1,14 @@
 // SPDX-License-Identifier: MIT
-
 pragma solidity ^0.6.0;
 
 import "../interfaces/IERC20.sol";
 import "./SafeMath.sol";
 import "./Address.sol";
+
+
+// Originally from https://github.com/OpenZeppelin/openzeppelin-contracts/blob/master/contracts/token/ERC20/SafeERC20.sol
+// This source code has been modified from the original.
+// Subject to the MIT license.
 
 
 /**
