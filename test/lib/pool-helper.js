@@ -48,7 +48,7 @@ module.exports = class PoolHelper {
     };
     this.setDesiredWeights();
     const totalValue = this.getTotalValue();
-    this.records[address].minimumBalance = Decimal((totalValue / 25) / price);
+    this.records[address].minimumBalance = Decimal((totalValue / 100) / price);
   }
 
   setDesiredWeights() {
@@ -103,77 +103,128 @@ module.exports = class PoolHelper {
     return calcSpotPrice(bI, dI, bO, dO, this.swapFee);
   }
 
-  calcOutGivenIn(tokenIn, tokenOut, tokenAmountIn, updateWeightAfter = false) {
-    let { denorm: dI, balance: bI, ready: rI, minimumBalance: mbI } = this.records[tokenIn];
-    let rbI = bI;
-    if (!rI) {
-      dI = this.totalWeight / 25;
-      bI = mbI;
-    }
+  calcOutGivenIn(tokenIn, tokenOut, amountIn, updateWeightAfter = false) {
+    let { denorm: dI, balance: bI, ready: rI, realBalance: rbI } = this.getInputToken(tokenIn);
     let { denorm: dO, balance: bO, ready: rO } = this.records[tokenOut];
     if (!rO) throw new Error('Out token not ready.');
-    const amountOut = calcOutGivenIn(bI, dI, bO, dO, tokenAmountIn, this.swapFee);
-    if (tokenAmountIn > bI / 2) throw new Error('Exceeds max in ratio');
-    if (amountOut > bO / 3) throw new Error('Exceeds max out ratio');
+    let tokenAmountOut = calcOutGivenIn(bI, dI, bO, dO, amountIn, this.swapFee);
+    tokenAmountOut = tokenAmountOut.toNumber();
+    if (amountIn > bI / 2) throw new Error('Exceeds max in ratio');
+    if (tokenAmountOut > bO / 3) throw new Error('Exceeds max out ratio');
+    rbI = rbI + (+amountIn);
+    
     if (updateWeightAfter) {
-      if (!rI) {
-        if (rbI + tokenAmountIn >= mbI) {
-          bI = Decimal(rbI).plus(Decimal(tokenAmountIn))
-          dI += dI * this.swapFee / 2;
-        }
+      const { ready, denorm, balance, realBalance } = this.updateTokenIn({
+        address: tokenIn,
+        balance: bI,
+        ready: rI,
+        denorm: dI,
+        realBalance: rbI
+      });
+      if (ready) {
+        bI = realBalance;
       } else {
-        dI = this.calcWeightIncrease(tokenIn);
-        bI = Decimal(rbI).plus(Decimal(tokenAmountIn))
+        bI = balance;
       }
+      dI = denorm;
+      rI = ready;
       dO = this.calcWeightDecrease(tokenOut);
     } else {
-      bI = Decimal(rbI).plus(Decimal(tokenAmountIn));
+      bI = rbI;
     }
-    bO = Decimal(bO).sub(Decimal(amountOut))
+    bO = bO - tokenAmountOut;
     const spotPriceAfter = calcSpotPrice(
-      Decimal(bI),
+      bI,
       dI,
       bO,
       dO,
       this.swapFee
     );
-    return [amountOut, spotPriceAfter];
+    return [tokenAmountOut, spotPriceAfter];
+  }
+
+  getInputToken(token) {
+    const minWeight = 0.25;
+    let { denorm: dI, balance: bI, ready: rI, minimumBalance: mbI } = this.records[token];
+    let rbI = +bI;
+    let balance = rbI;
+    let denorm = +dI;
+    mbI = +mbI;
+
+    if (!rI) {
+      const realToMinRatio = ((mbI) - (rbI)) / (mbI);
+      const premium = (realToMinRatio) * (minWeight / 10);
+      denorm = minWeight + premium;
+      balance = mbI;
+    }
+    return { balance, denorm, realBalance: rbI, ready: rI };
+  }
+
+  updateTokenIn({ address, balance, ready, denorm, realBalance }) {
+    const minWeight = 0.25;
+    if (!ready) {
+      if (realBalance >= balance) {
+        ready = true;
+        const additionalBalance = realBalance - balance;
+        const balRatio = additionalBalance / balance;
+        denorm = minWeight + (minWeight * balRatio);
+        return { ready, denorm, balance, realBalance };
+      } else {
+        const realToMinRatio = (balance - realBalance) / balance;
+        // (Decimal(balance).minus(Decimal(realBalance))).div(Decimal(balance));
+        const weightPremium = (minWeight / 10) * realToMinRatio;
+        denorm = minWeight + weightPremium;
+        return { ready, denorm, balance, realBalance }
+      }
+    } else {
+      return {
+        balance,
+        ready,
+        denorm: this.calcWeightIncrease(address),
+        realBalance
+      }
+    }
   }
 
   calcInGivenOut(tokenIn, tokenOut, tokenAmountOut, updateWeightAfter = false) {
-    let { denorm: dI, balance: bI, ready: rI, minimumBalance: mbI } = this.records[tokenIn];
-    let rbI = bI;
-    if (!rI) {
-      dI = this.totalWeight / 25;
-      bI = mbI;
-    }
+    let { denorm: dI, balance: bI, ready: rI, realBalance: rbI } = this.getInputToken(tokenIn);
     let { denorm: dO, balance: bO, ready: rO } = this.records[tokenOut];
     if (!rO) throw new Error('Out token not ready.');
-    const amountIn = calcInGivenOut(bI, dI, bO, dO, tokenAmountOut, this.swapFee);
+    let amountIn = calcInGivenOut(bI, dI, bO, dO, tokenAmountOut, this.swapFee);
+    amountIn = (+amountIn);
+    if (amountIn > bI / 2) throw new Error('Exceeds max in ratio');
+    if (tokenAmountOut > bO / 3) throw new Error('Exceeds max out ratio');
+    rbI = rbI + amountIn;
+    
     if (updateWeightAfter) {
-      if (!rI) {
-        if (rbI + amountIn >= mbI) {
-          bI = Decimal(rbI).plus(Decimal(amountIn));
-          dI += dI * this.swapFee / 2;
-        }
+      const { ready, denorm, balance, realBalance } = this.updateTokenIn({
+        address: tokenIn,
+        balance: bI,
+        ready: rI,
+        denorm: dI,
+        realBalance: rbI
+      });
+      if (ready) {
+        bI = realBalance;
       } else {
-        dI = this.calcWeightIncrease(tokenIn);
-        bI = Decimal(rbI).plus(Decimal(amountIn))
+        bI = balance;
       }
+      dI = denorm;
+      rI = ready;
       dO = this.calcWeightDecrease(tokenOut);
     } else {
-      bI = Decimal(rbI).plus(Decimal(amountIn));
+      bI = rbI;
     }
-    bO = Decimal(bO).sub(Decimal(tokenAmountOut));
+    bO = bO - tokenAmountOut;
     
     const spotPriceAfter = calcSpotPrice(
-      Decimal(bI),
+      bI,
       dI,
       bO,
       dO,
       this.swapFee
     );
-    return [amountIn, spotPriceAfter];
+    return [Decimal(amountIn), spotPriceAfter];
   }
   
   calcPoolOutGivenSingleIn(tokenIn, tokenAmountIn) {
