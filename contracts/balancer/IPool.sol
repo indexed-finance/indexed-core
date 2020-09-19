@@ -359,7 +359,7 @@ contract IPool is BToken, BMath {
       uint256 tokenAmountIn = bmul(ratio, record.balance);
       require(tokenAmountIn != 0, "ERR_MATH_APPROX");
       require(tokenAmountIn <= maxAmountsIn[i], "ERR_LIMIT_IN");
-      _updateBalanceIn(t, record, badd(realBalance, tokenAmountIn));
+      _updateInputToken(t, record, badd(realBalance, tokenAmountIn));
       emit LOG_JOIN(msg.sender, t, tokenAmountIn);
       _pullUnderlying(t, msg.sender, tokenAmountIn);
     }
@@ -404,7 +404,7 @@ contract IPool is BToken, BMath {
 
     require(poolAmountOut >= minPoolAmountOut, "ERR_LIMIT_OUT");
 
-    _updateBalanceIn(tokenIn, inRecord, badd(realInBalance, tokenAmountIn));
+    _updateInputToken(tokenIn, inRecord, badd(realInBalance, tokenAmountIn));
 
     emit LOG_JOIN(msg.sender, tokenIn, tokenAmountIn);
 
@@ -450,7 +450,7 @@ contract IPool is BToken, BMath {
       "ERR_MAX_IN_RATIO"
     );
 
-    _updateBalanceIn(tokenIn, inRecord, badd(realInBalance, tokenAmountIn));
+    _updateInputToken(tokenIn, inRecord, badd(realInBalance, tokenAmountIn));
 
     emit LOG_JOIN(msg.sender, tokenIn, tokenAmountIn);
 
@@ -607,7 +607,10 @@ contract IPool is BToken, BMath {
     Record memory record = _records[token];
     uint256 balance = IERC20(token).balanceOf(address(this));
     if (record.bound) {
-      _updateBalanceIn(token, record, balance);
+      if (!record.ready) {
+        record.denorm = uint96(MIN_WEIGHT);
+        _updateInputToken(token, record, balance);
+      }
     } else {
       _pushUnderlying(token, _controller, balance);
     }
@@ -706,8 +709,11 @@ contract IPool is BToken, BMath {
     );
 
     require(tokenAmountOut >= minAmountOut, "ERR_LIMIT_OUT");
-
-    _updateBalanceIn(tokenIn, inRecord, badd(realInBalance, tokenAmountIn));
+    realInBalance = badd(realInBalance, tokenAmountIn);
+    _updateInputToken(tokenIn, inRecord, realInBalance);
+    if (inRecord.ready) {
+      inRecord.balance = realInBalance;
+    }
     // If needed, update the output token's weight.
     _decreaseDenorm(outRecord, tokenOut);
     // Update the in-memory record for the spotPriceAfter calculation,
@@ -784,7 +790,11 @@ contract IPool is BToken, BMath {
 
     require(tokenAmountIn <= maxAmountIn, "ERR_LIMIT_IN");
     // Update the balance and (if necessary) weight of the input token.
-    _updateBalanceIn(tokenIn, inRecord, badd(realInBalance, tokenAmountIn));
+    realInBalance = badd(realInBalance, tokenAmountIn);
+    _updateInputToken(tokenIn, inRecord, realInBalance);
+    if (inRecord.ready) {
+      inRecord.balance = realInBalance;
+    }
     // If needed, update the output token's weight.
     _decreaseDenorm(outRecord, tokenOut);
     // Update the in-memory record for the spotPriceAfter calculation,
@@ -1294,11 +1304,11 @@ contract IPool is BToken, BMath {
   }
 
   /**
-   * @dev Handle the balance increase for an input token.
+   * @dev Handles weight changes and initialization of an
+   * input token.
    *
    * If the token is not initialized and the new balance is
-   * still below the minimum, this will only store the new
-   * balance.
+   * still below the minimum, this will not do anything.
    *
    * If the token is not initialized but the new balance will
    * bring the token above the minimum balance, this will
@@ -1306,14 +1316,12 @@ contract IPool is BToken, BMath {
    * balance and set the weight to the minimum weight plus
    * 1.25%.
    *
-   * If the token is already initialized, this will only store
-   * the new balance and execute a weight increase if one is ready.
    *
    * @param token Address of the input token
    * @param record Token record with minimums applied to the balance
    * and weight if the token was uninitialized.
    */
-  function _updateBalanceIn(
+  function _updateInputToken(
     address token,
     Record memory record,
     uint256 realBalance
@@ -1340,16 +1348,13 @@ contract IPool is BToken, BMath {
         _increaseDenorm(record, token);
       }
 
-      // If the token is still not ready, do not adjust the in-memory weight or balance,
-      // but do update the stored balance.
+      // If the token is still not ready, do not adjust the weight.
     } else {
       // If the token is already initialized, update the weight (if any adjustment
-      // is needed) and increase the in-memory balance.
+      // is needed).
       _increaseDenorm(record, token);
-      record.balance = realBalance;
     }
     // Regardless of whether the token is initialized, store the actual new balance.
-    // This may not be the same as the in-memory balance.
     _records[token].balance = realBalance;
   }
 
