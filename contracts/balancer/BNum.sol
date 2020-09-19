@@ -4,6 +4,16 @@ pragma solidity ^0.6.0;
 import "./BConst.sol";
 
 
+/************************************************************************************************
+Originally from https://github.com/balancer-labs/balancer-core/blob/master/contracts/BNum.sol
+
+This source code has been modified from the original, which was copied from the github repository
+at commit hash f4ed5d65362a8d6cec21662fb6eae233b0babc1f.
+
+Subject to the GPL-3.0 license
+*************************************************************************************************/
+
+
 contract BNum is BConst {
   function btoi(uint256 a) internal pure returns (uint256) {
     return a / BONE;

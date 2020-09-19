@@ -3,8 +3,18 @@ pragma solidity ^0.6.0;
 
 import "./BNum.sol";
 
-// Highly opinionated token implementation
 
+/************************************************************************************************
+Originally from https://github.com/balancer-labs/balancer-core/blob/master/contracts/BToken.sol
+
+This source code has been modified from the original, which was copied from the github repository
+at commit hash f4ed5d65362a8d6cec21662fb6eae233b0babc1f.
+
+Subject to the GPL-3.0 license
+*************************************************************************************************/
+
+
+// Highly opinionated token implementation
 interface IERC20 {
   event Approval(address indexed src, address indexed dst, uint256 amt);
   event Transfer(address indexed src, address indexed dst, uint256 amt);
