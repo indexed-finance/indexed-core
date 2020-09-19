@@ -274,7 +274,7 @@ contract IPool is BToken, BMath {
     // to temporarily exceed the index size while tokens are being phased in
     // or out.
     uint256 tLen = _tokens.length;
-    uint256[] memory receivedIndices = new uint256[](tLen);
+    bool[] memory receivedIndices = new bool[](tLen);
     // We need to read token records in two separate loops, so
     // write them to memory to avoid duplicate storage reads.
     Record[] memory records = new Record[](len);
@@ -282,12 +282,12 @@ contract IPool is BToken, BMath {
     // were represented in the reindex call.
     for (uint256 i = 0; i < len; i++) {
       Record memory record = _records[tokens[i]];
-      if (record.bound) receivedIndices[record.index] = 1;
+      if (record.bound) receivedIndices[record.index] = true;
       records[i] = record;
     }
     // If any bound tokens were not sent in this call, set their desired weights to 0.
     for (uint256 i = 0; i < tLen; i++) {
-      if (receivedIndices[i] == 0) {
+      if (!receivedIndices[i]) {
         _setDesiredDenorm(_tokens[i], 0);
       }
     }
