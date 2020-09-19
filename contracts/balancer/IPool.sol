@@ -1337,17 +1337,20 @@ contract IPool is BToken, BMath {
         _records[token].ready = true;
         record.ready = true;
         emit LOG_TOKEN_READY(token);
-        // Since the denorm value in the uninitialized storage record is still 0,
-        // the total weight has not absorbed the in-memory weight we are using
-        // for price calculations.
-        _totalWeight = badd(_totalWeight, MIN_WEIGHT);
-        // _increaseDenorm will set the weight to the minimum plus 1.25%
-        // This _increaseDenorm call will never fail to execute because of the
-        // lastDenormUpdate, as it is set to 0 when the token is bound, and
-        // this condition is only ever met when a token is newly bound
-        _increaseDenorm(record, token);
+        // Set the initial denorm value to the minimum weight times one plus
+        // the ratio of the increase in balance over the minimum to the minimum
+        // balance.
+        // weight = (1 + ((bal - min_bal) / min_bal)) * min_weight
+        uint256 additionalBalance = bsub(realBalance, record.balance);
+        uint256 balRatio = bdiv(additionalBalance, record.balance);
+        record.denorm = uint96(badd(MIN_WEIGHT, bmul(MIN_WEIGHT, balRatio)));
+        if (record.desiredDenorm < record.denorm) {
+          record.denorm = record.desiredDenorm;
+        }
+        _records[token].denorm = record.denorm;
+        _records[token].lastDenormUpdate = uint40(now);
+        _totalWeight = badd(_totalWeight, record.denorm);
       }
-
       // If the token is still not ready, do not adjust the weight.
     } else {
       // If the token is already initialized, update the weight (if any adjustment
