@@ -10,35 +10,31 @@ import { UniswapV2Library as UniV2 } from "./lib/UniswapV2Library.sol";
 import { IUniswapV2Router02 as UniV2Router } from "./interfaces/IUniswapV2Router02.sol";
 import { SafeERC20 } from "./openzeppelin/SafeERC20.sol";
 import { IPool } from "./balancer/IPool.sol";
+import { UniSwapV2PriceOracle } from "./UniSwapV2PriceOracle.sol";
 
 
+/**
+ * @dev Contract that acquires the initial balances for an index pool.
+ *
+ * This uses a short-term UniSwap price oracle to determine the ether
+ * value of tokens sent to the contract. When users contribute tokens,
+ * they are credited for the moving average ether value of said tokens.
+ * When all the tokens needed are acquired, the index pool will be
+ * initialized and this contract will receive the initial token supply (100).
+ *
+ * Once the contract receives the index pool tokens, users can claim their
+ * share of the tokens proportional to their credited contribution value.
+ */
 contract PoolInitializer {
   using SafeMath for uint256;
   using SafeERC20 for IERC20;
 
 /* ---  Constants  --- */
 
-  // Delay between price updates
-  uint256 internal constant UPDATE_DELAY = 1 hours;
-  uint256 internal constant MINIMUM_PRICE_AGE = UPDATE_DELAY / 2;
-
-  UniV2Router internal immutable _uniswapRouter;
-  address internal immutable _uniswapFactory;
-  address internal immutable _weth;
-
-/* ---  Structs  --- */
-
-  struct PriceObservation {
-    uint32 timestamp;
-    uint224 priceCumulativeLast;
-  }
+  address internal immutable _controller;
+  UniSwapV2PriceOracle internal immutable _oracle;
 
 /* ---  Events  --- */
-
-  event PriceUpdated(
-    address token,
-    uint224 priceCumulativeLast
-  );
 
   event TokensContributed(
     address from,
@@ -48,9 +44,6 @@ contract PoolInitializer {
   );
 
 /* ---  Storage  --- */
-
-  // Price observations per token
-  mapping(address => PriceObservation) internal _lastPriceObservation;
   // Token amounts to purchase
   mapping(address => uint256) internal _remainingDesiredAmounts;
   // Value contributed in ether
@@ -61,8 +54,6 @@ contract PoolInitializer {
   uint256 public totalCredit;
   // Whether all the desired tokens have been received.
   bool public finished;
-  // Address that can withdraw tokens and set desired purchases.
-  address internal _controller;
   address internal _poolAddress;
   bool internal _mutex;
   uint256 internal constant TOKENS_MINTED = 100e18;
@@ -94,13 +85,11 @@ contract PoolInitializer {
 /* ---  Constructor  --- */
 
   constructor(
-    address uniswapFactory,
-    UniV2Router uniswapRouter,
-    address weth
+    UniSwapV2PriceOracle oracle,
+    address controller
   ) public {
-    _uniswapFactory = uniswapFactory;
-    _uniswapRouter = uniswapRouter;
-    _weth = weth;
+    _oracle = oracle;
+    _controller = controller;
   }
 
 /* ---  Start & Finish Functions  --- */
@@ -108,22 +97,19 @@ contract PoolInitializer {
   /**
    * @dev Sets up the pre-deployment pool.
    *
-   * @param controller Pool controller
    * @param poolAddress Address of the pool this pre-deployment pool is for
    * @param tokens Array of desired tokens
    * @param amounts Desired amounts of the corresponding `tokens`
    */
   function initialize(
-    address controller,
     address poolAddress,
     address[] calldata tokens,
     uint256[] calldata amounts
   )
     external
+    _control_
   {
-    require(_controller == address(0), "ERR_INITIALIZED");
-    require(controller != address(0), "ERR_NULL_ADDRESS");
-    _controller = controller;
+    require(_poolAddress == address(0), "ERR_INITIALIZED");
     _poolAddress = poolAddress;
     uint256 len = tokens.length;
     require(amounts.length == len, "ERR_ARR_LEN");
@@ -132,6 +118,7 @@ contract PoolInitializer {
       _remainingDesiredAmounts[tokens[i]] = amounts[i];
     }
   }
+
   /**
    * @dev Finishes the pre-deployment pool and triggers pool initialization.
    *
@@ -164,6 +151,8 @@ contract PoolInitializer {
     );
     finished = true;
   }
+
+/* ---  Pool Token Claims  --- */
 
   /**
    * @dev Claims the tokens owed to `account` based on their proportion
@@ -218,7 +207,7 @@ contract PoolInitializer {
     if (amountIn > desiredAmount) {
       amountIn = desiredAmount;
     }
-    credit = _calcCredit(token, amountIn);
+    credit = _oracle.computeAverageAmountOut(token, amountIn);
     require(credit > 0 && amountIn > 0, "ERR_ZERO_AMOUNT");
     require(credit >= minimumCredit, "ERR_MIN_CREDIT");
     IERC20(token).safeTransferFrom(msg.sender, address(this), amountIn);
@@ -261,7 +250,7 @@ contract PoolInitializer {
       if (amountIn > desiredAmount) {
         amountIn = desiredAmount;
       }
-      uint256 creditOut = _calcCredit(token, amountIn);
+      uint256 creditOut = _oracle.computeAverageAmountOut(token, amountIn);
       require(creditOut > 0 && amountIn > 0, "ERR_ZERO_AMOUNT");
       IERC20(token).safeTransferFrom(msg.sender, address(this), amountIn);
       _remainingDesiredAmounts[token] = desiredAmount.sub(amountIn);
@@ -276,48 +265,10 @@ contract PoolInitializer {
 /* ---  Price Actions  --- */
 
   /**
-   * @dev Updates the latest price observation for a token if allowable.
-   *
-   * Note: Price updates must be at least UPDATE_DELAY seconds apart.
-   *
-   * @param token Token to update the price of
-   * @return didUpdate Whether the token price was updated.
-   */
-  function updatePrice(address token) public returns (bool didUpdate) {
-    PriceObservation memory current = _lastPriceObservation[token];
-    uint256 timeElapsed = now - current.timestamp;
-    if (timeElapsed < UPDATE_DELAY) return false;
-    PriceObservation memory _new = _observePrice(token);
-    _lastPriceObservation[token] = _new;
-    emit PriceUpdated(token, _new.priceCumulativeLast);
-    return true;
-  }
-
-  /**
-   * @dev Updates the prices of multiple tokens.
-   *
-   * @param tokens Array of tokens to update the prices of
-   * @return updates Array of boolean values indicating which tokens
-   * successfully updated their prices.
-   */
-  function updatePrices(address[] calldata tokens)
-    external
-    returns (bool[] memory updates)
-  {
-    updates = new bool[](tokens.length);
-    for (uint256 i = 0; i < tokens.length; i++) {
-      updates[i] = updatePrice(tokens[i]);
-    }
-  }
-
-  /**
    * @dev Updates the prices of all tokens.
    */
   function updatePrices() external {
-    uint256 len = _tokens.length;
-    for (uint256 i = 0; i < len; i++) {
-      updatePrice(_tokens[i]);
-    }
+    _oracle.updatePrices(_tokens);
   }
 
 /* ---  Token Queries  --- */
@@ -339,29 +290,6 @@ contract PoolInitializer {
   }
 
 /* ---  External Price Queries --- */
-
-  function getLastPriceObservation(address token)
-    external
-    view
-    returns (PriceObservation memory)
-  {
-    return _lastPriceObservation[token];
-  }
-
-  /**
-   * @dev Returns the timestamp of the next time that the
-   * price of `token` can be updated.
-   */
-  function getNextPriceObservationTimestamp(address token)
-    external
-    view
-    returns (uint256 timestampNext)
-  {
-    PriceObservation memory last = _lastPriceObservation[token];
-    if (last.timestamp == 0) return now;
-    return last.timestamp + UPDATE_DELAY;
-  }
-
   /**
    * @dev Get the amount of WETH the contract will credit a user
    * for providing `amountIn` of `token`.
@@ -380,7 +308,7 @@ contract PoolInitializer {
     if (amountIn > desiredAmount) {
       amountIn = desiredAmount;
     }
-    uint144 averageWethValue = _calcCredit(token, amountIn);
+    uint144 averageWethValue = _oracle.computeAverageAmountOut(token, amountIn);
     amountOut = averageWethValue;
   }
 
@@ -398,46 +326,6 @@ contract PoolInitializer {
     uint256 amountOut = (TOKENS_MINTED.mul(credit)).div(totalCredit);
     _credits[account] = 0;
     IERC20(_poolAddress).safeTransfer(account, amountOut);
-  }
-
-/* ---  Internal Price Queries  --- */
-
-  /**
-   * @dev Returns the acceptable payment in weth for `amountIn` of `token`
-   * and the fee that the caller should receive.
-   */
-  function _calcCredit(
-    address token,
-    uint256 amountIn
-  )
-    internal
-    view
-    returns (uint144 averageWethValue)
-  {
-    PriceObservation memory previous = _lastPriceObservation[token];
-    uint256 timeElapsed = now - previous.timestamp;
-    require(timeElapsed >= MINIMUM_PRICE_AGE, "ERR_MINIMUM_PRICE_AGE");
-    PriceObservation memory current = _observePrice(token);
-
-    averageWethValue = UniV2Oracle.computeAverageAmountOut(
-      previous.priceCumulativeLast,
-      current.priceCumulativeLast,
-      uint32(current.timestamp - previous.timestamp),
-      amountIn
-    );
-  }
-
-  /**
-   * @dev Query the current cumulative price for weth relative to `token`.
-   */
-  function _observePrice(address token)
-    internal
-    view
-    returns (PriceObservation memory)
-  {
-    (uint256 priceCumulative, uint32 blockTimestamp) = UniV2Oracle
-      .getCurrentCumulativePrice(_uniswapFactory, token, _weth);
-    return PriceObservation(blockTimestamp, uint224(priceCumulative));
   }
 }
 
