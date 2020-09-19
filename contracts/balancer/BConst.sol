@@ -34,7 +34,7 @@ contract BConst {
   uint256 internal constant MAX_FEE = BONE / 10;
   uint256 internal constant EXIT_FEE = 0;
 
-  uint256 internal constant MIN_WEIGHT = BONE;
+  uint256 internal constant MIN_WEIGHT = BONE / 4;
   uint256 internal constant MAX_WEIGHT = BONE * 50;
   uint256 internal constant MAX_TOTAL_WEIGHT = BONE * 50;
   uint256 internal constant MIN_BALANCE = BONE / 10**12;
