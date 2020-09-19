@@ -1131,7 +1131,12 @@ contract IPool is BToken, BMath {
     uint256 amount
   ) internal {
     (bool success, bytes memory data) = erc20.call(
-      abi.encodeWithSelector(TRANSFER_FROM_SELECTOR, from, address(this), amount)
+      abi.encodeWithSelector(
+        IERC20.transferFrom.selector,
+        from,
+        address(this),
+        amount
+      )
     );
     require(
       success && (data.length == 0 || abi.decode(data, (bool))),
@@ -1145,7 +1150,11 @@ contract IPool is BToken, BMath {
     uint256 amount
   ) internal {
     (bool success, bytes memory data) = erc20.call(
-      abi.encodeWithSelector(TRANSFER_SELECTOR, to, amount)
+      abi.encodeWithSelector(
+        IERC20.transfer.selector,
+        to,
+        amount
+      )
     );
     require(
       success && (data.length == 0 || abi.decode(data, (bool))),
