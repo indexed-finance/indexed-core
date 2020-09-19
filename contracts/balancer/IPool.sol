@@ -109,6 +109,7 @@ contract IPool is BToken, BMath {
   bool internal _mutex;
 
   address internal _controller; // has CONTROL role
+  TokenUnbindHandler internal _unbindHandler;
 
   // `setPublicSwap` requires CONTROL
   // `bindInitial` sets _publicSwap to true
@@ -139,7 +140,7 @@ contract IPool is BToken, BMath {
     string calldata name,
     string calldata symbol
   ) external {
-    require(_controller == address(0), "ERR_INITIALIZED");
+    require(_controller == address(0), "ERR_CONFIGURED");
     require(controller != address(0), "ERR_NULL_ADDRESS");
     _controller = controller;
     // default fee is 2.5%
@@ -162,11 +163,13 @@ contract IPool is BToken, BMath {
     address[] calldata tokens,
     uint256[] calldata balances,
     uint96[] calldata denorms,
-    address tokenProvider
+    address tokenProvider,
+    address unbindHandler
   )
     external
     _control_
   {
+    require(_tokens.length == 0, "ERR_INITIALIZED");
     uint256 len = tokens.length;
     require(len >= MIN_BOUND_TOKENS, "ERR_MIN_TOKENS");
     require(len <= MAX_BOUND_TOKENS, "ERR_MAX_TOKENS");
@@ -199,6 +202,7 @@ contract IPool is BToken, BMath {
     emit LOG_PUBLIC_SWAP_TOGGLED(true);
     _mintPoolShare(INIT_POOL_SUPPLY);
     _pushPoolShare(tokenProvider, INIT_POOL_SUPPLY);
+    _unbindHandler = TokenUnbindHandler(unbindHandler);
   }
 
 /* ---  Configuration Actions  --- */
@@ -1224,7 +1228,8 @@ contract IPool is BToken, BMath {
       balance: 0
     });
     // transfer any remaining tokens out
-    _pushUnderlying(token, _controller, tokenBalance);
+    _pushUnderlying(token, address(_unbindHandler), tokenBalance);
+    _unbindHandler.handleUnbindToken(token, tokenBalance);
     emit LOG_TOKEN_REMOVED(token);
   }
 
@@ -1411,4 +1416,12 @@ contract IPool is BToken, BMath {
     // swapped out.
     require(record.ready, "ERR_OUT_NOT_READY");
   }
+}
+
+
+interface TokenUnbindHandler {
+  /**
+   * @dev Receive `amount` of `token` from the pool.
+   */
+  function handleUnbindToken(address token, uint256 amount) external;
 }
