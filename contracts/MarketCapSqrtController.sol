@@ -18,6 +18,7 @@ import {
   DelegateCallProxyManyToOne
 } from "./proxies/DelegateCallProxyManyToOne.sol";
 import { PoolInitializer } from "./PoolInitializer.sol";
+import { UnboundTokenSeller } from "./UnboundTokenSeller.sol";
 
 /**
  * @dev This contract implements the market cap square root index management strategy.
@@ -52,6 +53,10 @@ contract MarketCapSqrtController is BNum {
   // Identifier for the pool initializer implementation on the proxy manager.
   bytes32 internal constant INITIALIZER_IMPLEMENTATION_ID
     = keccak256("PoolInitializer.sol");
+
+  // Identifier for the unbound token seller implementation on the proxy manager.
+  bytes32 internal constant SELLER_IMPLEMENTATION_ID
+    = keccak256("UnboundTokenSeller.sol");
 
   // Identifier for the index pool implementation on the proxy manager.
   bytes32 internal constant POOL_IMPLEMENTATION_ID
@@ -105,6 +110,12 @@ contract MarketCapSqrtController is BNum {
     uint256 indexSize
   );
 
+  /** @dev Emitted when a pool's unbound token seller is deployed. */
+  event LOG_NEW_POOL_UNBOUND_TOKEN_SELLER(
+    address poolAddress,
+    address sellerAddress
+  );
+
 /* ---  Structs  --- */
 
   struct IndexPoolMeta {
@@ -141,6 +152,8 @@ contract MarketCapSqrtController is BNum {
   address internal _ndx;
   // Number of categories in the oracle.
   uint256 public categoryIndex;
+  // Default slippage rate for token seller contracts.
+  uint8 public defaultSellerPremium = 2;
   // Array of tokens for each category.
   mapping(uint256 => address[]) internal _categoryTokens;
   // Category ID for each token.
@@ -180,14 +193,22 @@ contract MarketCapSqrtController is BNum {
     _proxyManager = proxyManager;
   }
 
+/* ---  Controls  --- */
+
   /**
-   * @dev Set the address of the ndx contract.
-   * After deployment this will likely never change, but it is useful
-   * to have some small window during which things can be initialized
-   * before governance is fully in place.
+   * @dev Sets the address of the ndx contract.
    */
   function setOwner(address owner) external _ndx_ {
     _ndx = owner;
+  }
+
+  /**
+   * @dev Sets the default premium rate for token seller contracts.
+   */
+  function setDefaultSellerPremium(
+    uint8 _defaultSellerPremium
+  ) external _ndx_ {
+    defaultSellerPremium = _defaultSellerPremium;
   }
 
 /* ---  Pool Deployment  --- */
@@ -217,7 +238,7 @@ contract MarketCapSqrtController is BNum {
       name,
       symbol
     );
-    // computePoolAddress(categoryID, indexSize);
+
     _poolMeta[poolAddress] = IndexPoolMeta({
       categoryID: uint8(categoryID),
       indexSize: uint8(indexSize),
@@ -234,7 +255,6 @@ contract MarketCapSqrtController is BNum {
         categoryID, indexSize, initialWethValue
       );
     initializer.initialize(
-      address(this),
       poolAddress,
       tokens,
       balances
@@ -278,11 +298,16 @@ contract MarketCapSqrtController is BNum {
         FixedPoint.fraction(uint112(ethValues[i]), uint112(valueSum))
       );
     }
+    address sellerAddress = _proxyManager.deployProxyManyToOne(
+      SELLER_IMPLEMENTATION_ID,
+      _sellerSalt(poolAddress)
+    );
     IPool(poolAddress).initialize(
       tokens,
       balances,
       denormalizedWeights,
-      msg.sender
+      msg.sender,
+      sellerAddress
     );
     _poolMeta[poolAddress].initialized = true;
     emit LOG_POOL_INITIALIZED(
@@ -290,9 +315,41 @@ contract MarketCapSqrtController is BNum {
       meta.categoryID,
       meta.indexSize
     );
+    UnboundTokenSeller(sellerAddress).initialize(
+      IPool(poolAddress),
+      defaultSellerPremium
+    );
+    emit LOG_NEW_POOL_UNBOUND_TOKEN_SELLER(
+      poolAddress,
+      sellerAddress
+    );
   }
 
 /* ---  Pool Management  --- */
+
+  /**
+   * @dev Update the premium rate on `sellerAddress` with the current
+   * default rate.
+   */
+  function updateSellerPremiumToDefault(
+    address sellerAddress
+  ) external _ndx_ {
+    UnboundTokenSeller(sellerAddress).setPremiumRate(defaultSellerPremium);
+  }
+
+  /**
+   * @dev Update the premium rate on each unbound token seller in
+   * `sellerAddresses` with the current default rate.
+   */
+  function updateSellerPremiumToDefault(
+    address[] calldata sellerAddresses
+  ) external _ndx_ {
+    for (uint256 i = 0; i < sellerAddresses.length; i++) {
+      UnboundTokenSeller(
+        sellerAddresses[i]
+      ).setPremiumRate(defaultSellerPremium);
+    }
+  }
 
   /**
    * @dev Sets the swap fee on an index pool.
@@ -334,7 +391,7 @@ contract MarketCapSqrtController is BNum {
    * useful when the token's price on the pool is too low relative to
    * external prices for people to trade it in.
    */
-  function setMinimumBalance(IPool pool, address tokenAddress) external {
+  function updateMinimumBalance(IPool pool, address tokenAddress) external {
     require(_havePool(address(pool)), "ERR_POOL_NOT_FOUND");
     IPool.Record memory record = pool.getTokenRecord(tokenAddress);
     require(!record.ready, "ERR_TOKEN_READY");
@@ -531,6 +588,23 @@ contract MarketCapSqrtController is BNum {
   {
     bytes32 salt = _initializerSalt(poolAddress);
     initializerAddress = Create2.computeAddress(
+      salt, PROXY_CODEHASH, address(_proxyManager)
+    );
+  }
+
+  /**
+   * @dev Compute the create2 address for a pool's unbound token seller.
+   */
+  function computeSellerAddress(address poolAddress)
+    public
+    view
+    returns (address sellerAddress)
+  {
+    bytes32 suppliedSalt = _sellerSalt(poolAddress);
+    bytes32 salt = keccak256(abi.encodePacked(
+      address(this), suppliedSalt
+    ));
+    sellerAddress = Create2.computeAddress(
       salt, PROXY_CODEHASH, address(_proxyManager)
     );
   }
@@ -755,9 +829,21 @@ contract MarketCapSqrtController is BNum {
     ));
   }
 
-  function _poolSalt(uint256 categoryID, uint256 indexSize)
+  function _sellerSalt(address poolAddress)
     internal
     view
+    returns (bytes32 salt)
+  {
+    return keccak256(abi.encodePacked(
+      address(this),
+      SELLER_IMPLEMENTATION_ID,
+      poolAddress
+    ));
+  }
+
+  function _poolSalt(uint256 categoryID, uint256 indexSize)
+    internal
+    pure
     returns (bytes32 salt)
   {
     return keccak256(abi.encodePacked(
