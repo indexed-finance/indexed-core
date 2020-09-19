@@ -1,7 +1,18 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 pragma solidity >=0.6.0;
 
 import "../interfaces/IUniswapV2Pair.sol";
 import "../openzeppelin/SafeMath.sol";
+
+
+/************************************************************************************************
+Originally from https://github.com/Uniswap/uniswap-v2-periphery/blob/master/contracts/libraries/UniswapV2Library.sol
+
+This source code has been modified from the original, which was copied from the github repository
+at commit hash 87edfdcaf49ccc52591502993db4c8c08ea9eec0.
+
+Subject to the GPL-3.0 license
+*************************************************************************************************/
 
 
 library UniswapV2Library {

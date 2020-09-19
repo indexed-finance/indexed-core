@@ -1,8 +1,20 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 pragma solidity ^0.6.0;
 
 import "../interfaces/IUniswapV2Pair.sol";
 import "./UniswapV2Library.sol";
 import "./FixedPoint.sol";
+
+
+/************************************************************************************************
+Originally from https://github.com/Uniswap/uniswap-v2-periphery/blob/master/contracts/libraries/UniswapV2OracleLibrary.sol
+
+This source code has been modified from the original, which was copied from the github repository
+at commit hash 6d03bede0a97c72323fa1c379ed3fdf7231d0b26.
+
+Subject to the GPL-3.0 license
+*************************************************************************************************/
+
 
 // library with helper methods for oracles that are concerned with computing average prices
 library UniswapV2OracleLibrary {

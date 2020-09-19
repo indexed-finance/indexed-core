@@ -1,4 +1,10 @@
+// SPDX-License-Identifier: MIT
 pragma solidity ^0.6.0;
+
+
+// From https://github.com/OpenZeppelin/openzeppelin-contracts/blob/master/contracts/utils/Create2.sol
+// Subject to the MIT license.
+
 
 /**
  * @dev Helper to make usage of the `CREATE2` EVM opcode easier and safer.

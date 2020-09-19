@@ -1,8 +1,17 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-
 pragma solidity >=0.4.0;
 
 import "./Babylonian.sol";
+
+
+/************************************************************************************************
+From https://github.com/Uniswap/uniswap-lib/blob/master/contracts/libraries/FixedPoint.sol
+
+Copied from the github repository at commit hash 9642a0705fdaf36b477354a4167a8cd765250860.
+
+Subject to the GPL-3.0 license
+*************************************************************************************************/
+
 
 // a library for handling binary fixed point numbers (https://en.wikipedia.org/wiki/Q_(number_format))
 library FixedPoint {
