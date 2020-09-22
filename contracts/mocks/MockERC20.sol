@@ -1,12 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.6.0;
 
-import "../openzeppelin/BaseERC20.sol";
-
-
-// Originally from https://github.com/OpenZeppelin/openzeppelin-contracts/blob/master/contracts/token/ERC20/ERC20.sol
-// This source code has been modified from the original.
-// Subject to the MIT license.
+import "./BaseERC20.sol";
 
 
 contract MockERC20 is BaseERC20 {
