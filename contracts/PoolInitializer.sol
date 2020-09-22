@@ -14,6 +14,8 @@ import { UniSwapV2PriceOracle } from "./UniSwapV2PriceOracle.sol";
 
 
 /**
+ * @title PoolInitializer
+ * @author d1ll0n
  * @dev Contract that acquires the initial balances for an index pool.
  *
  * This uses a short-term UniSwap price oracle to determine the ether
@@ -51,9 +53,9 @@ contract PoolInitializer {
   address[] internal _tokens;
   // Total value in ether contributed to the pool, computed at the time
   // of receipt.
-  uint256 public totalCredit;
+  uint256 internal _totalCredit;
   // Whether all the desired tokens have been received.
-  bool public finished;
+  bool internal _finished;
   address internal _poolAddress;
   bool internal _mutex;
   uint256 internal constant TOKENS_MINTED = 100e18;
@@ -73,12 +75,12 @@ contract PoolInitializer {
   }
 
   modifier _finished_ {
-    require(finished, "ERR_NOT_FINISHED");
+    require(_finished, "ERR_NOT_FINISHED");
     _;
   }
 
   modifier _not_finished_ {
-    require(!finished, "ERR_FINISHED");
+    require(!_finished, "ERR_FINISHED");
     _;
   }
 
@@ -149,13 +151,13 @@ contract PoolInitializer {
       tokens,
       balances
     );
-    finished = true;
+    _finished = true;
   }
 
 /* ---  Pool Token Claims  --- */
 
   /**
-   * @dev Claims the tokens owed to `account` based on their proportion
+   * @dev Claims the tokens owed to `msg.sender` based on their proportion
    * of the total credits.
   */
   function claimTokens() external _lock_ _finished_ {
@@ -213,7 +215,7 @@ contract PoolInitializer {
     IERC20(token).safeTransferFrom(msg.sender, address(this), amountIn);
     _remainingDesiredAmounts[token] = desiredAmount.sub(amountIn);
     _credits[msg.sender] = _credits[msg.sender].add(credit);
-    totalCredit = totalCredit.add(credit);
+    _totalCredit = _totalCredit.add(credit);
     emit TokensContributed(msg.sender, token, amountIn, credit);
   }
 
@@ -259,7 +261,7 @@ contract PoolInitializer {
     }
     require(credit >= minimumCredit, "ERR_MIN_CREDIT");
     _credits[msg.sender] = _credits[msg.sender].add(credit);
-    totalCredit = totalCredit.add(credit);
+    _totalCredit = _totalCredit.add(credit);
   }
 
 /* ---  Price Actions  --- */
@@ -269,6 +271,35 @@ contract PoolInitializer {
    */
   function updatePrices() external {
     _oracle.updatePrices(_tokens);
+  }
+
+/* ---  Status Queries  --- */
+
+  /**
+   * @dev Returns whether the pool has been initialized.
+   */
+  function isFinished() external view returns (bool) {
+    return _finished;
+  }
+
+/* ---  Status Queries  --- */
+
+  /**
+   * @dev Returns the total value credited for token contributions.
+   */
+  function getTotalCredit() external view returns (uint256) {
+    return _totalCredit;
+  }
+
+  /**
+   * @dev Returns the amount of credit owed to `account`.
+   */
+  function getCreditOf(address account)
+    external
+    view
+    returns (uint256)
+  {
+    return _credits[account];
   }
 
 /* ---  Token Queries  --- */
@@ -323,7 +354,7 @@ contract PoolInitializer {
   function _claimTokens(address account) internal {
     uint256 credit = _credits[account];
     require(credit > 0, "ERR_NULL_CREDIT");
-    uint256 amountOut = (TOKENS_MINTED.mul(credit)).div(totalCredit);
+    uint256 amountOut = (TOKENS_MINTED.mul(credit)).div(_totalCredit);
     _credits[account] = 0;
     IERC20(_poolAddress).safeTransfer(account, amountOut);
   }
