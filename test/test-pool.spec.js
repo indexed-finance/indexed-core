@@ -19,7 +19,7 @@ const swapFee = 0.025;
 const errorDelta = 10 ** -8;
 
 describe('IPool.sol', async () => {
-  let poolHelper, from, indexPool, erc20Factory, unboundTokenSeller;
+  let poolHelper, from, indexPool, erc20Factory, unbindTokenHandler;
   let timestampAddition = 0;
 
   const getTimestamp = () => Math.floor(new Date().getTime() / 1000) + timestampAddition;
@@ -78,9 +78,9 @@ describe('IPool.sol', async () => {
       poolHelper.records[address].balance = balance;
     }
     const IPoolFactory = await ethers.getContractFactory("IPool");
-    const UnboundTokenSeller = await ethers.getContractFactory('MockUnboundTokenSeller');
-    unboundTokenSeller = await UnboundTokenSeller.deploy();
-    await unboundTokenSeller.deployed();
+    const MockUnbindTokenHandler = await ethers.getContractFactory('MockUnbindTokenHandler');
+    unbindTokenHandler = await MockUnbindTokenHandler.deploy();
+    await unbindTokenHandler.deployed();
     indexPool = await IPoolFactory.deploy();
     for (let token of wrappedTokens) {
       await token.token.approve(indexPool.address, nTokensHex(100000))
@@ -95,7 +95,7 @@ describe('IPool.sol', async () => {
       balances,
       denormWeights,
       from,
-      unboundTokenSeller.address
+      unbindTokenHandler.address
     );
   }
 
@@ -682,12 +682,12 @@ describe('IPool.sol', async () => {
     });
 
     it('Seller receives the `handleUnbindToken` call', async () => {
-      const amount = await unboundTokenSeller.getReceivedTokens(token.address);
+      const amount = await unbindTokenHandler.getReceivedTokens(token.address);
       expect(amount).to.eq(balance);
     });
 
     it('Seller received the tokens', async () => {
-      const realBalance = await token.balanceOf(unboundTokenSeller.address);
+      const realBalance = await token.balanceOf(unbindTokenHandler.address);
       expect(realBalance).to.eq(balance)
     });
   })
