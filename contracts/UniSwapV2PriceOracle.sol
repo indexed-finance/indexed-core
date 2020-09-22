@@ -5,7 +5,7 @@ import {
   UniswapV2OracleLibrary as UniV2Oracle
 } from "./lib/UniswapV2OracleLibrary.sol";
 import "./lib/FixedPoint.sol";
-import "./interfaces/IERC20.sol";
+import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 
 contract UniSwapV2PriceOracle {

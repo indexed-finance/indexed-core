@@ -2,15 +2,15 @@ pragma solidity ^0.6.0;
 pragma experimental ABIEncoderV2;
 
 import { IPool } from "./balancer/IPool.sol";
-import "./interfaces/IERC20.sol";
-import "./lib/Create2.sol";
 import {
   DelegateCallProxyManager
 } from "./proxies/DelegateCallProxyManager.sol";
 import {
   DelegateCallProxyManyToOne
 } from "./proxies/DelegateCallProxyManyToOne.sol";
-import { SafeERC20 } from "./openzeppelin/SafeERC20.sol";
+import { Create2 } from "@openzeppelin/contracts/utils/Create2.sol";
+import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
 
 
 /**

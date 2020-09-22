@@ -1,14 +1,14 @@
 pragma solidity ^0.6.0;
 pragma experimental ABIEncoderV2;
 
-import "./openzeppelin/SafeMath.sol";
-import "./interfaces/IERC20.sol";
 import "./lib/FixedPoint.sol";
 import { IUniswapV2Pair as Pair } from "./interfaces/IUniswapV2Pair.sol";
 import { IUniswapV2Router02 as UniV2Router } from "./interfaces/IUniswapV2Router02.sol";
-import { SafeERC20 } from "./openzeppelin/SafeERC20.sol";
 import { IPool } from "./balancer/IPool.sol";
 import { UniSwapV2PriceOracle } from "./UniSwapV2PriceOracle.sol";
+import { SafeMath } from "@openzeppelin/contracts/math/SafeMath.sol";
+import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
 
 
 /**

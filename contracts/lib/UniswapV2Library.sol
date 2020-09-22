@@ -2,7 +2,7 @@
 pragma solidity >=0.6.0;
 
 import "../interfaces/IUniswapV2Pair.sol";
-import "../openzeppelin/SafeMath.sol";
+import "@openzeppelin/contracts/math/SafeMath.sol";
 
 
 /************************************************************************************************

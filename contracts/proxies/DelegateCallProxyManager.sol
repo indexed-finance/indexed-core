@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 pragma solidity ^0.6.0;
 
-import "../lib/Create2.sol";
 import "./ManyToOneImplementationHolder.sol";
 import {
   DelegateCallProxyManyToOne
@@ -9,6 +8,7 @@ import {
 import {
   DelegateCallProxyOneToOne
 } from "./DelegateCallProxyOneToOne.sol";
+import { Create2 } from "@openzeppelin/contracts/utils/Create2.sol";
 
 
 /**

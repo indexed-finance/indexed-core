@@ -4,11 +4,8 @@ pragma experimental ABIEncoderV2;
 
 import { IPool } from "./balancer/IPool.sol";
 import "./balancer/BNum.sol";
-import "./interfaces/IERC20.sol";
 import "./lib/FixedPoint.sol";
-import "./lib/Create2.sol";
 import "./lib/Babylonian.sol";
-import "./openzeppelin/SafeMath.sol";
 import { MCapSqrtLibrary as MCapSqrt } from "./lib/MCapSqrtLibrary.sol";
 import { UniSwapV2PriceOracle } from "./UniSwapV2PriceOracle.sol";
 import { PoolFactory } from "./PoolFactory.sol";
@@ -20,6 +17,9 @@ import {
 } from "./proxies/DelegateCallProxyManyToOne.sol";
 import { PoolInitializer } from "./PoolInitializer.sol";
 import { UnboundTokenSeller } from "./UnboundTokenSeller.sol";
+import { SafeMath } from "@openzeppelin/contracts/math/SafeMath.sol";
+import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import { Create2 } from "@openzeppelin/contracts/utils/Create2.sol";
 
 
 /**
