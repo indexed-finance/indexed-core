@@ -7,7 +7,7 @@ import "../interfaces/IUniswapV2Pair.sol";
 import "../interfaces/IUniswapV2Router02.sol";
 import { IPool } from "../balancer/IPool.sol";
 import "../balancer/BMath.sol";
-import "../UniSwapV2PriceOracle.sol";
+import { UniSwapV2PriceOracle } from "../UniSwapV2PriceOracle.sol";
 
 
 contract MockTokenMarketDeployer is BMath {
