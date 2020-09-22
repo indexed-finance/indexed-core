@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.6.0;
 
-import "../interfaces/IERC20.sol";
-import "./SafeMath.sol";
+import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import { SafeMath } from "@openzeppelin/contracts/math/SafeMath.sol";
 
 
 // Originally from https://github.com/OpenZeppelin/openzeppelin-contracts/blob/master/contracts/token/ERC20/ERC20.sol
@@ -65,7 +65,7 @@ contract BaseERC20 is IERC20 {
   /**
     * @dev Returns the name of the token.
     */
-  function name() public view override returns (string memory) {
+  function name() public view returns (string memory) {
     return _name;
   }
 
@@ -73,7 +73,7 @@ contract BaseERC20 is IERC20 {
     * @dev Returns the symbol of the token, usually a shorter version of the
     * name.
     */
-  function symbol() public view override returns (string memory) {
+  function symbol() public view returns (string memory) {
     return _symbol;
   }
 
@@ -90,7 +90,7 @@ contract BaseERC20 is IERC20 {
     * no way affects any of the arithmetic of the contract, including
     * {IERC20-balanceOf} and {IERC20-transfer}.
     */
-  function decimals() public view override returns (uint8) {
+  function decimals() public view returns (uint8) {
     return _decimals;
   }
 
