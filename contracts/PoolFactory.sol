@@ -13,6 +13,10 @@ import {
 import { SafeERC20 } from "./openzeppelin/SafeERC20.sol";
 
 
+/**
+ * @title PoolFactory
+ * @author d1ll0n
+ */
 contract PoolFactory {
 /* ---  Constants  --- */
 
