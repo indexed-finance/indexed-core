@@ -23,7 +23,9 @@ import { UnboundTokenSeller } from "./UnboundTokenSeller.sol";
 
 
 /**
- * @dev This contract implements the market cap square root index management strategy.
+ * @title MarketCapSqrtController
+ * @author d1ll0n
+ * @notice This contract implements the market cap square root index management strategy.
  *
  * Categories are periodically sorted, ranking their tokens in descending order by
  * market cap.
@@ -211,6 +213,31 @@ contract MarketCapSqrtController is BNum {
     uint8 _defaultSellerPremium
   ) external _ndx_ {
     defaultSellerPremium = _defaultSellerPremium;
+  }
+
+  /**
+   * @dev Emergency function that allows the dao to force a token sale
+   * through UniSwap. This exists in case of an emergency which demands
+   * immediate removal of a token.
+   */
+  function emergencyExecuteSwapTokensForExactTokens(
+    address sellerAddress,
+    address tokenIn,
+    address tokenOut,
+    uint256 maxAmountIn,
+    uint256 amountOut,
+    address[] calldata path
+  )
+    external
+    _ndx_
+  {
+    UnboundTokenSeller(sellerAddress).emergencyExecuteSwapTokensForExactTokens(
+      tokenIn,
+      tokenOut,
+      maxAmountIn,
+      amountOut,
+      path
+    );
   }
 
 /* ---  Pool Deployment  --- */
