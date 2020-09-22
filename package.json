@@ -7,6 +7,7 @@
     "build:sol": "buidler compile",
     "node": "buidler node",
     "test:pool": "buidler test ./test/test-pool.spec.js",
+    "test:seller": "buidler test ./test/test-token-seller.spec.js",
     "test:controller": "buidler test ./test/test-controller.spec.js",
     "test:oracle": "buidler test ./test/test-oracle.spec.js",
     "test:proxy": "buidler test ./test/test-proxy.spec.js"
@@ -43,6 +44,7 @@
     "web3": "^1.2.11"
   },
   "dependencies": {
+    "@openzeppelin/contracts": "^3.2.0",
     "axios": "^0.20.0",
     "cids": "^1.0.0",
     "graphql-request": "^3.0.0",
