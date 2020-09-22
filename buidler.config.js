@@ -45,6 +45,7 @@ const poolControllerSalt = soliditySha3('PoolController.sol');
 const uniswapOracleSalt = soliditySha3('UniSwapV2PriceOracle.sol');
 const poolInitializerID = soliditySha3('PoolInitializer.sol')
 const poolImplementationID = soliditySha3('IPool.sol');
+const sellerImplementationID = soliditySha3('UnboundTokenSeller.sol');
 
 const getBre = () => require("@nomiclabs/buidler");
 
@@ -153,11 +154,88 @@ internalTask("deploy_uniswap_oracle", "Deploys the UniSwap oracle or returns the
     const factory = await ethers.getContractFactory('UniSwapV2PriceOracle');
     const uniswapOracle = await factory.deploy(
       uniswapFactory.options.address,
-      weth.address
+      weth.address,
+      3.5 * 24 * 60 * 60
     );
     await uniswapOracle.deployed();
     printDebug(`UniSwapV2 Price Oracle deployed to ${uniswapOracle.address}`);
     return setDeployed(bre, 'uniswapOracle', uniswapOracle);
+  });
+
+internalTask("deploy_short_term_uniswap_oracle", "Deploys the short term UniSwap oracle or returns the existing one.")
+  .setAction(async () => {
+    const bre = getBre();
+
+    if (getDeployed(bre, 'shortUniswapOracle')) {
+      return getDeployed(bre, 'shortUniswapOracle');
+    }
+
+    const {
+      uniswapFactory,
+      weth
+    } = await bre.run('deploy_uniswap');
+
+    printDebug('-- UniSwapV2 Short Term Price Oracle --');
+
+    const factory = await ethers.getContractFactory('UniSwapV2PriceOracle');
+    const uniswapOracle = await factory.deploy(
+      uniswapFactory.options.address,
+      weth.address,
+      60 * 60
+    );
+    await uniswapOracle.deployed();
+    printDebug(`UniSwapV2 Short Term Price Oracle deployed to ${uniswapOracle.address}`);
+    return setDeployed(bre, 'shortUniswapOracle', uniswapOracle);
+  });
+
+internalTask(
+  "deploy_seller_implementation",
+  "Deploys the unbound token seller implementation or returns the existing one."
+)
+  .setAction(async () => {
+    const bre = getBre();
+    if (getDeployed(bre, 'sellerImplementation')) {
+      return getDeployed(bre, 'sellerImplementation');
+    }
+    const proxyManager = await bre.run('deploy_proxy_manager');
+    const oracle = await bre.run('deploy_short_term_uniswap_oracle');
+    const controller = await bre.run('deploy_controller')
+    const sellerImplementationHolder = await proxyManager
+      .functions['getImplementationHolder(bytes32)'](
+        sellerImplementationID
+      );
+    const from = getDeployed(bre, 'from');
+    printDebug('-- Unbound Token Seller Implementation --');
+
+    if (sellerImplementationHolder != `0x${'00'.repeat(20)}`) {
+      printDebug(`Unbound Token Seller Implementation Holder found at ${sellerImplementationHolder}`);
+      const holder = await ethers.getContractAt(
+        'ManyToOneImplementationHolder',
+        sellerImplementationHolder
+      );
+      const sellerImplementation = await holder.getImplementationAddress();
+      printDebug(`Unbound Token Seller Implementation found at ${sellerImplementation.address}`);
+      return setDeployed(
+        bre,
+        'sellerImplementation',
+        await ethers.getContractAt('UnboundTokenSeller', sellerImplementation)
+      );
+    }
+
+    const SellerImplementation = await ethers.getContractFactory('UnboundTokenSeller');
+    const sellerImplementation = await SellerImplementation.deploy(
+      getDeployed('uniswapRouter').options.address,
+      oracle.address,
+      controller.address
+    );
+    await sellerImplementation.deployed();
+
+    printDebug(`Unbound Token Seller Implementation deployed to ${sellerImplementation.address}`);
+    await proxyManager.createManyToOneProxyRelationship(
+      sellerImplementationID,
+      sellerImplementation.address
+    );
+    return setDeployed(bre, 'sellerImplementation', sellerImplementation);
   });
 
 internalTask("deploy_pool_implementation", "Deploys the pool implementation or returns the existing one.")
@@ -210,7 +288,7 @@ internalTask(
     if (getDeployed(bre, 'poolInitializer')) {
       return getDeployed(bre, 'poolInitializer');
     }
-    await bre.run('deploy_uniswap_oracle');
+    const oracle = await bre.run('deploy_short_term_uniswap_oracle');
     const proxyManager = getDeployed(bre, 'proxyManager');
     printDebug('-- Pool Initializer --');
 
@@ -241,9 +319,8 @@ internalTask(
     }
     const PoolInitializer = await ethers.getContractFactory('PoolInitializer');
     const poolInitializerImplementation = await PoolInitializer.deploy(
-      getDeployed(bre, 'uniswapFactory').options.address,
-      getDeployed(bre, 'uniswapRouter').options.address,
-      getDeployed(bre, 'weth').address
+      oracle.address,
+      from
     );
     await poolInitializerImplementation.deployed();
     await proxyManager.createManyToOneProxyRelationship(
