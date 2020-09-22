@@ -10,7 +10,10 @@ import { SafeERC20 } from "./openzeppelin/SafeERC20.sol";
 import { IPool } from "./balancer/IPool.sol";
 import { UniSwapV2PriceOracle } from "./UniSwapV2PriceOracle.sol";
 
+
 /**
+ * @title UnboundTokenSeller
+ * @author d1ll0n
  * @dev Contract for swapping undesired tokens to desired tokens for
  * an index pool.
  *
@@ -155,6 +158,11 @@ contract UnboundTokenSeller {
     _premiumPercent = premiumPercent;
   }
 
+  /**
+   * @dev Emergency function that allows the controller to force a token
+   * sale through UniSwap. This exists in case of an emergency which
+   * demands immediate removal of a token.
+   */
   function emergencyExecuteSwapTokensForExactTokens(
     address tokenIn,
     address tokenOut,
@@ -424,7 +432,7 @@ contract UnboundTokenSeller {
 /* ---  Swap Queries  --- */
 
   /**
-   * @dev Calculate the amount of `tokenIn` the pool must receive for
+   * @dev Calculate the amount of `tokenIn` the pool will accept for
    * `amountOut` of `tokenOut`.
    */
   function calcInGivenOut(
