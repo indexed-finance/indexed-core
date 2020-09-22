@@ -52,16 +52,6 @@ describe("UniSwapV2PriceOracle.sol", () => {
     tokenObj.address = token.address;
   }
 
-  async function getFreeWeth(to, amount) {
-    await weth.methods.deposit().send({
-      from,
-      value: amount
-    });
-    if (to && to != from) {
-      await weth.methods.transfer(to, amount).send({ from: this.from });
-    }
-  }
-
   /**
    * Add liquidity to uniswap market pair for a token and weth
    * @param price Amount of weth per token
@@ -99,6 +89,17 @@ describe("UniSwapV2PriceOracle.sol", () => {
     const { pair } = result.events.PairCreated.returnValues;
     tokenObj.pair = pair;
     await addTokenLiquidity(token, initialPrice, liquidity);
+  }
+
+  async function uniswapGetAmountOut(tokenObjIn, tokenObjOut, amountIn) {
+    const amounts = await uniswapRouter.methods.swapExactTokensForTokens(
+      nTokensHex(amountIn),
+      0,
+      [tokenObjIn.address, tokenObjOut.address],
+      from,
+      getTimestamp() + 1000
+    ).call();
+    return amounts[0]
   }
 
   describe('Initialize Tokens', async () => {
@@ -155,47 +156,4 @@ describe("UniSwapV2PriceOracle.sol", () => {
       expect(expected).to.deep.eq(actual);
     });
   });
-
-  // describe('Sort Tokens', async () => {
-  //   const mapToHex = (arr) => arr.map((i) => i.toString('hex'));
-  //   const sortArr = (arr) => arr.sort((a, b) => {
-  //     if (a.marketCap.lt(b.marketCap)) return 1;
-  //     if (a.marketCap.gt(b.marketCap)) return -1;
-  //     return 0;
-  //   });
-
-  //   async function getCategoryData(id) {
-  //     const tokens = await marketOracle.getCategoryTokens(id);
-  //     const marketCaps = await marketOracle.getCategoryMarketCaps(id);
-  //     const arr = [];
-  //     for (let i = 0; i < tokens.length; i++) {
-  //       arr.push({
-  //         token: tokens[i],
-  //         marketCap: toBN(marketCaps[i])
-  //       });
-  //     }
-  //     return arr;
-  //   }
-
-  //   it('Should sort the tokens and update the category', async () => {
-  //     const category = await getCategoryData(1);
-  //     const marketCaps = [10, 1, 2].map(n => nTokens(n * 150));
-  //     expect(
-  //       mapToHex(category.map((t) => t.marketCap))
-  //     ).to.deep.equal(mapToHex(marketCaps));
-  //     const categorySorted = sortArr(category);
-  //     const marketCapsSorted = [10, 2, 1].map(n => nTokens(n * 150));
-  //     expect(
-  //       mapToHex(categorySorted.map((t) => t.marketCap))
-  //     ).to.deep.equal(mapToHex(marketCapsSorted));
-  //     const receipt = await marketOracle.orderCategoryTokensByMarketCap(
-  //       1, categorySorted.map((t) => t.token)
-  //     ).then((r) => r.wait());
-  //     const categoryAfterSort = await getCategoryData(1);
-  //     expect(
-  //       mapToHex(categoryAfterSort.map((t) => t.marketCap))
-  //     ).to.deep.equal(mapToHex(marketCapsSorted));
-  //     console.log(`Cost To Sort Tokens: ${toBN(receipt.cumulativeGasUsed).toNumber()}`)
-  //   });
-  // });
 });
