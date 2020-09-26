@@ -26,8 +26,6 @@ contract PoolFactory {
   bytes32 internal constant POOL_IMPLEMENTATION_ID
     = keccak256("IPool.sol");
 
-  uint128 internal constant MAX_UINT_128 = 2**128 - 1;
-
   // Address of the NDX governance contract
   address internal immutable _ndx;
   // Address of the proxy manager contract.
