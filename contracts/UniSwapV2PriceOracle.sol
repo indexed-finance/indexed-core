@@ -8,6 +8,22 @@ import "./lib/FixedPoint.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 
+/**
+ * @dev This contract is a UniSwapV2 price oracle that tracks the
+ * time weighted moving average price of tokens in terms of WETH.
+ *
+ * The price oracle is deployed with an observation period parameter
+ * which defines the default time over which the oracle should average
+ * prices.
+ *
+ * In order to query the price of a token from the oracle, the latest
+ * price observation from UniSwap must be at least half the observation
+ * period old and at most twice the observation period old.
+ *
+ * For further reading, see:
+ * https://uniswap.org/blog/uniswap-v2/#price-oracles
+ * https://uniswap.org/whitepaper.pdf#subsection.2.2
+ */
 contract UniSwapV2PriceOracle {
 /* ---  Constants  --- */
 
