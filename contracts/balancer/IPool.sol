@@ -1039,68 +1039,6 @@ contract IPool is BToken, BMath {
       );
   }
 
-  /**
-   * @dev Calculate the amount of `tokenIn` needed to receive
-   * `tokenAmountOut` of `tokenOut`.
-   */
-  function getInGivenOut(
-    address tokenIn,
-    address tokenOut,
-    uint256 tokenAmountOut
-  )
-    external
-    view
-    returns (uint256 tokenAmountIn)
-  {
-
-    (Record memory inRecord,) = _getInputToken(tokenIn);
-    Record memory outRecord = _getOutputToken(tokenOut);
-
-    require(
-      tokenAmountOut <= bmul(outRecord.balance, MAX_OUT_RATIO),
-      "ERR_MAX_OUT_RATIO"
-    );
-    tokenAmountIn = calcInGivenOut(
-      inRecord.balance,
-      inRecord.denorm,
-      outRecord.balance,
-      outRecord.denorm,
-      tokenAmountOut,
-      _swapFee
-    );
-  }
-
-  /**
-   * @dev Calculate the amount of `tokenOut` which can be
-   * received for `tokenAmountIn` of `tokenIn`.
-   */
-  function getOutGivenIn(
-    address tokenIn,
-    address tokenOut,
-    uint256 tokenAmountIn
-  )
-    external
-    view
-    returns (uint256 tokenAmountOut)
-  {
-
-    (Record memory inRecord,) = _getInputToken(tokenIn);
-    Record memory outRecord = _getOutputToken(tokenOut);
-
-    require(
-      tokenAmountIn <= bmul(inRecord.balance, MAX_IN_RATIO),
-      "ERR_MAX_IN_RATIO"
-    );
-    tokenAmountOut = calcOutGivenIn(
-      inRecord.balance,
-      inRecord.denorm,
-      outRecord.balance,
-      outRecord.denorm,
-      tokenAmountIn,
-      _swapFee
-    );
-  }
-
 /* ---  Pool Share Internal Functions  --- */
 
   function _pullPoolShare(address from, uint256 amount) internal {
