@@ -2,25 +2,24 @@
 pragma solidity ^0.6.0;
 pragma experimental ABIEncoderV2;
 
+import "./Owned.sol";
 import { IPool } from "./balancer/IPool.sol";
-import "./balancer/BNum.sol";
+// import "./balancer/BNum.sol";
 import "./lib/FixedPoint.sol";
 import "./lib/Babylonian.sol";
 import { MCapSqrtLibrary as MCapSqrt } from "./lib/MCapSqrtLibrary.sol";
 import { UniSwapV2PriceOracle } from "./UniSwapV2PriceOracle.sol";
 import { PoolFactory } from "./PoolFactory.sol";
 import {
-  DelegateCallProxyManager
-} from "./proxies/DelegateCallProxyManager.sol";
-import {
+  DelegateCallProxyManager,
   DelegateCallProxyManyToOne
-} from "./proxies/DelegateCallProxyManyToOne.sol";
+} from "./proxies/DelegateCallProxyManager.sol";
+
 import { PoolInitializer } from "./PoolInitializer.sol";
 import { UnboundTokenSeller } from "./UnboundTokenSeller.sol";
 import { SafeMath } from "@openzeppelin/contracts/math/SafeMath.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { Create2 } from "@openzeppelin/contracts/utils/Create2.sol";
-
 
 /**
  * @title MarketCapSqrtController
@@ -42,13 +41,18 @@ import { Create2 } from "@openzeppelin/contracts/utils/Create2.sol";
  * square root of their market caps.
  * When a pool is re-weighed, only the tokens with a desired weight above 0 are included.
  */
-contract MarketCapSqrtController is BNum {
+contract MarketCapSqrtController is Owned {
   using FixedPoint for FixedPoint.uq112x112;
   using FixedPoint for FixedPoint.uq144x112;
   using Babylonian for uint144;
   using SafeMath for uint256;
 
 /* ---  Constants  --- */
+  // Minimum number of tokens in an index.
+  uint256 internal constant MIN_INDEX_SIZE = 2;
+
+  // Maximum number of tokens in an index.
+  uint256 internal constant MAX_INDEX_SIZE = 8;
 
   // Bytecode hash of the many-to-one proxy contract.
   bytes32 internal constant PROXY_CODEHASH
@@ -67,7 +71,7 @@ contract MarketCapSqrtController is BNum {
     = keccak256("IPool.sol");
 
   // Default total weight for a pool.
-  uint256 internal constant WEIGHT_MULTIPLIER = BONE * 25;
+  uint256 internal constant WEIGHT_MULTIPLIER = 25e18;
 
   // Time between reweigh/reindex calls.
   uint256 internal constant POOL_REWEIGH_DELAY = 14 days;
@@ -81,11 +85,13 @@ contract MarketCapSqrtController is BNum {
   // Maximum number of tokens in a category
   uint256 internal constant MAX_CATEGORY_TOKENS = 15;
 
-  // UniSwap price oracle
+  // Long term price oracle
   UniSwapV2PriceOracle internal immutable _oracle;
 
+  // Pool factory contract
   PoolFactory internal immutable _factory;
 
+  // Proxy manager & factory
   DelegateCallProxyManager internal immutable _proxyManager;
 
 /* ---  Events  --- */
@@ -152,16 +158,12 @@ contract MarketCapSqrtController is BNum {
 
 /* ---  Storage  --- */
 
-  // Address of the NDX governance contract
-  address internal _ndx;
   // Number of categories in the oracle.
   uint256 public categoryIndex;
   // Default slippage rate for token seller contracts.
   uint8 public defaultSellerPremium = 2;
   // Array of tokens for each category.
   mapping(uint256 => address[]) internal _categoryTokens;
-  // Category ID for each token.
-  mapping(address => uint256) internal _tokenCategories;
   mapping(
     uint256 => mapping(address => CategoryTokenRecord)
   ) internal _categoryTokenRecords;
@@ -171,13 +173,6 @@ contract MarketCapSqrtController is BNum {
   mapping(address => IndexPoolMeta) internal _poolMeta;
   // Records of pool update statuses.
   mapping(address => PoolUpdateRecord) internal _poolUpdateRecords;
-
-/* ---  Modifiers  --- */
-
-  modifier _ndx_ {
-    require(msg.sender == _ndx, "ERR_NOT_NDX");
-    _;
-  }
 
 /* ---  Constructor  --- */
 
@@ -190,28 +185,19 @@ contract MarketCapSqrtController is BNum {
     address ndx,
     PoolFactory factory,
     DelegateCallProxyManager proxyManager
-  ) public {
+  ) public Owned (ndx) {
     _oracle = oracle;
-    _ndx = ndx;
     _factory = factory;
     _proxyManager = proxyManager;
   }
 
 /* ---  Controls  --- */
-
-  /**
-   * @dev Sets the address of the ndx contract.
-   */
-  function setOwner(address owner) external _ndx_ {
-    _ndx = owner;
-  }
-
   /**
    * @dev Sets the default premium rate for token seller contracts.
    */
   function setDefaultSellerPremium(
     uint8 _defaultSellerPremium
-  ) external _ndx_ {
+  ) external _owner_ {
     defaultSellerPremium = _defaultSellerPremium;
   }
 
@@ -229,7 +215,7 @@ contract MarketCapSqrtController is BNum {
     address[] calldata path
   )
     external
-    _ndx_
+    _owner_
   {
     UnboundTokenSeller(sellerAddress).emergencyExecuteSwapTokensForExactTokens(
       tokenIn,
@@ -257,10 +243,10 @@ contract MarketCapSqrtController is BNum {
     string calldata symbol
   )
     external
-    _ndx_
+    _owner_
   {
-    require(indexSize >= MIN_BOUND_TOKENS, "ERR_MIN_BOUND_TOKENS");
-    require(indexSize <= MAX_BOUND_TOKENS, "ERR_MAX_BOUND_TOKENS");
+    require(indexSize >= MIN_INDEX_SIZE, "ERR_MIN_INDEX_SIZE");
+    require(indexSize <= MAX_INDEX_SIZE, "ERR_MAX_INDEX_SIZE");
 
     address poolAddress = _factory.deployIndexPool(
       _poolSalt(categoryID, indexSize),
@@ -362,7 +348,7 @@ contract MarketCapSqrtController is BNum {
    */
   function updateSellerPremiumToDefault(
     address sellerAddress
-  ) external _ndx_ {
+  ) external _owner_ {
     UnboundTokenSeller(sellerAddress).setPremiumRate(defaultSellerPremium);
   }
 
@@ -372,7 +358,7 @@ contract MarketCapSqrtController is BNum {
    */
   function updateSellerPremiumToDefault(
     address[] calldata sellerAddresses
-  ) external _ndx_ {
+  ) external _owner_ {
     for (uint256 i = 0; i < sellerAddresses.length; i++) {
       UnboundTokenSeller(
         sellerAddresses[i]
@@ -383,7 +369,7 @@ contract MarketCapSqrtController is BNum {
   /**
    * @dev Sets the swap fee on an index pool.
    */
-  function setSwapFee(address poolAddress, uint256 swapFee) external _ndx_ {
+  function setSwapFee(address poolAddress, uint256 swapFee) external _owner_ {
     require(_havePool(poolAddress), "ERR_POOL_NOT_FOUND");
     IPool(poolAddress).setSwapFee(swapFee);
   }
@@ -391,7 +377,7 @@ contract MarketCapSqrtController is BNum {
   /**
    * @dev Freezes public trading and liquidity providing on an index pool.
    */
-  function pausePublicTrading(address poolAddress) external _ndx_ {
+  function pausePublicTrading(address poolAddress) external _owner_ {
     require(_havePool(poolAddress), "ERR_POOL_NOT_FOUND");
     IPool(poolAddress).setPublicSwap(false);
   }
@@ -399,7 +385,7 @@ contract MarketCapSqrtController is BNum {
   /**
    * @dev Resumes public trading and liquidity providing on an index pool.
    */
-  function resumePublicTrading(address poolAddress) external _ndx_ {
+  function resumePublicTrading(address poolAddress) external _owner_ {
     require(_havePool(poolAddress), "ERR_POOL_NOT_FOUND");
     IPool(poolAddress).setPublicSwap(true);
   }
@@ -410,7 +396,7 @@ contract MarketCapSqrtController is BNum {
    * a sudden crash or major vulnerability. Otherwise, tokens should only
    * be removed gradually through re-indexing events.
    */
-  function removeTokenFromPool(address poolAddress, address tokenAddress) external _ndx_ {
+  function removeTokenFromPool(address poolAddress, address tokenAddress) external _owner_ {
     require(_havePool(poolAddress), "ERR_POOL_NOT_FOUND");
     IPool(poolAddress).unbind(tokenAddress);
   }
@@ -439,7 +425,7 @@ contract MarketCapSqrtController is BNum {
    * @param metadataHash Hash of metadata about the token category
    * which can be distributed on IPFS.
    */
-  function createCategory(bytes32 metadataHash) external _ndx_ {
+  function createCategory(bytes32 metadataHash) external _owner_ {
     uint256 categoryID = ++categoryIndex;
     emit CategoryAdded(categoryID, metadataHash);
   }
@@ -448,7 +434,7 @@ contract MarketCapSqrtController is BNum {
    * @dev Adds a new token to a category.
    * Note: A token can only be assigned to one category at a time.
    */
-  function addToken(address token, uint256 categoryID) external _ndx_ {
+  function addToken(address token, uint256 categoryID) external _owner_ {
     require(
       categoryID <= categoryIndex && categoryID > 0,
       "ERR_CATEGORY_ID"
@@ -475,7 +461,7 @@ contract MarketCapSqrtController is BNum {
     address[] calldata tokens
   )
     external
-    _ndx_
+    _owner_
   {
     require(
       categoryID <= categoryIndex && categoryID > 0,
@@ -512,12 +498,12 @@ contract MarketCapSqrtController is BNum {
     require(categoryTokens.length == len, "ERR_ARR_LEN");
 
     // Verify there are no duplicate addresses and that all tokens are bound.
-    uint256[] memory usedIndices = new uint256[](len);
+    bool[] memory usedIndices = new bool[](len);
     for (uint256 i = 0; i < len; i++) {
       CategoryTokenRecord memory record = _categoryTokenRecords[categoryID][orderedTokens[i]];
       require(record.bound, "ERR_NOT_IN_CATEGORY");
-      require(usedIndices[record.index] == 0, "ERR_DUPLICATE_ADDRESS");
-      usedIndices[record.index] = 1;
+      require(!usedIndices[record.index], "ERR_DUPLICATE_ADDRESS");
+      usedIndices[record.index] = true;
     }
 
     uint144[] memory marketCaps = computeAverageMarketCaps(orderedTokens);
@@ -820,7 +806,6 @@ contract MarketCapSqrtController is BNum {
    * @dev Adds a new token to a category.
    */
   function _addToken(address token, uint256 categoryID) internal {
-    require(_tokenCategories[token] == 0, "ERR_TOKEN_EXISTS");
     CategoryTokenRecord storage record = _categoryTokenRecords[categoryID][token];
     require(!record.bound, "ERR_TOKEN_BOUND");
     record.bound = true;
