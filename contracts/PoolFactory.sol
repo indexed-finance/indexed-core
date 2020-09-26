@@ -33,34 +33,6 @@ contract PoolFactory {
   // Address of the proxy manager contract.
   DelegateCallProxyManager internal immutable _proxyManager;
 
-/* ---  Structs  --- */
-
-  /**
-   * @dev Data structure with the number of times a pool has been
-   * either reweighed or re-indexed, as well as the timestamp of
-   * the last such action.
-   *
-   * If `++index % REWEIGHS_BEFORE_REINDEX + 1` is 0, the pool will
-   * re-index, otherwise it will reweigh.
-   *
-   * @param index Number of times the pool has either re-weighed or
-   * re-indexed.
-   * @param timestamp Timestamp of last pool re-weigh or re-index.
-   */
-  struct PoolUpdateRecord {
-    uint128 index;
-    uint128 timestamp;
-  }
-
-  /**
-   * @dev Data structure with the tokens & balances for a pool
-   * which has not yet been deployed.
-   */
-  struct PendingPool {
-    address[] tokens;
-    uint128[] balances;
-  }
-
 /* ---  Events  --- */
 
   event LOG_NEW_POOL(
