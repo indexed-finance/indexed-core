@@ -8,7 +8,9 @@ import {
 import {
   DelegateCallProxyOneToOne
 } from "./DelegateCallProxyOneToOne.sol";
+import { SaltyLib as Salty } from "./SaltyLib.sol";
 import { Create2 } from "@openzeppelin/contracts/utils/Create2.sol";
+import { Address } from "@openzeppelin/contracts/utils/Address.sol";
 
 
 /**
@@ -68,17 +70,21 @@ contract DelegateCallProxyManager {
 /* ---  Storage  --- */
   address internal _owner;
 
-  // Maps the implementation holder addresses for one-to-many proxies
-  // by ID, which is an arbitrary value selected by the controller.
-  mapping(bytes32 => address) internal _implementationHolders;
-
   // Addresses allowed to deploy many-to-one proxies.
   mapping(address => bool) internal _approvedDeployers;
 
-  // Temporary value used for create2 constructor.
+  // Maps implementation holders to their implementation IDs.
+  mapping(bytes32 => address) internal _implementationHolders;
+
+  // Temporary value used in the many-to-one proxy constructor.
+  // The many-to-one proxy contract is deployed with create2 and
+  // uses static initialization code for simple address derivation,
+  // so it calls the proxy manager in the constructor to get this
+  // address in order to save it as an immutable in the bytecode.
   address internal _implementationHolder;
 
 /* ---  Modifiers  --- */
+
   modifier _owner_ {
     require(msg.sender == _owner, "ERR_NOT_OWNER");
     _;
@@ -93,11 +99,13 @@ contract DelegateCallProxyManager {
   }
 
 /* ---  Constructor  --- */
+
   constructor() public {
     _owner = msg.sender;
   }
 
 /* ---  Controls  --- */
+
   /**
    * @dev Sets the owner address.
    */
@@ -134,32 +142,33 @@ contract DelegateCallProxyManager {
    * @param implementationID ID for the implementation, used to identify the
    * proxies that use it. Also used as the salt in the create2 call when
    * deploying the implementation holder contract.
-   * @param implementationAddress Address with the runtime code the proxies
+   * @param implementation Address with the runtime code the proxies
    * should use.
    */
   function createManyToOneProxyRelationship(
     bytes32 implementationID,
-    address implementationAddress
+    address implementation
   )
     external
     _owner_
   {
-    require(
-      _implementationHolders[implementationID] == address(0),
-      "ERR_ID_IN_USE"
-    );
+    // Deploy the implementation holder contract with the implementation
+    // ID as the create2 salt.
     address implementationHolder = Create2.deploy(
       0,
       implementationID,
       type(ManyToOneImplementationHolder).creationCode
     );
-    ManyToOneImplementationHolder(implementationHolder).setImplementationAddress(
-      implementationAddress
-    );
+
+    // Store the implementation holder address
     _implementationHolders[implementationID] = implementationHolder;
+
+    // Sets the implementation address.
+    _setImplementation(implementationHolder, implementation);
+
     emit ManyToOne_ImplementationCreated(
       implementationID,
-      implementationAddress
+      implementation
     );
   }
 
@@ -167,25 +176,29 @@ contract DelegateCallProxyManager {
    * @dev Updates the implementation address for a many-to-one
    * proxy relationship.
    *
-   * @param implementationID Address of the deployed proxy
-   * @param implementationAddress Address with the runtime code for
-   * the proxies to use.
+   * @param implementationID Identifier for the implementation.
+   * @param implementation Address with the runtime code the proxies
+   * should use.
    */
   function setImplementationAddressManyToOne(
     bytes32 implementationID,
-    address implementationAddress
-  ) external _owner_ {
+    address implementation
+  )
+    external
+    _owner_
+  {
+    // Read the implementation holder address from storage.
     address implementationHolder = _implementationHolders[implementationID];
-    require(
-      implementationHolder != address(0),
-      "ERR_IMPLEMENTATION_ID"
-    );
-    ManyToOneImplementationHolder(implementationHolder).setImplementationAddress(
-      implementationAddress
-    );
+
+    // Verify that the implementation exists.
+    require(implementationHolder != address(0), "ERR_IMPLEMENTATION_ID");
+
+    // Set the implementation address
+    _setImplementation(implementationHolder, implementation);
+
     emit ManyToOne_ImplementationUpdated(
       implementationID,
-      implementationAddress
+      implementation
     );
   }
 
@@ -194,26 +207,27 @@ contract DelegateCallProxyManager {
    *
    * Note: This could work for many-to-one as well if the caller
    * provides the implementation holder address in place of the
-   * proxy address.
+   * proxy address, as they use the same access control and update
+   * mechanism.
    *
    * @param proxyAddress Address of the deployed proxy
-   * @param implementationAddress Address with the runtime code for
+   * @param implementation Address with the runtime code for
    * the proxy to use.
    */
   function setImplementationAddressOneToOne(
-    address payable proxyAddress,
-    address implementationAddress
-  ) external _owner_ {
-    DelegateCallProxyOneToOne(proxyAddress).setImplementationAddress(
-      implementationAddress
-    );
-    emit OneToOne_ImplementationUpdated(
-      proxyAddress,
-      implementationAddress
-    );
+    address proxyAddress,
+    address implementation
+  )
+    external
+    _owner_
+  {
+    // Set the implementation address
+    _setImplementation(proxyAddress, implementation);
+
+    emit OneToOne_ImplementationUpdated(proxyAddress, implementation);
   }
 
-/* Proxy Deployment */
+/* ---  Proxy Deployment  --- */
 
   /**
    * @dev Deploy a proxy contract with a one-to-one relationship
@@ -222,58 +236,74 @@ contract DelegateCallProxyManager {
    * The proxy will have its own implementation address which can
    * be updated by the proxy manager.
    *
-   * @param salt Salt to use for the create2 call
-   * @param implementationAddress Address with the runtime code the proxy
-   * should use.
+   * @param suppliedSalt Salt provided by the account requesting deployment.
+   * @param implementation Address of the contract with the runtime
+   * code that the proxy should use.
    */
   function deployProxyOneToOne(
-    bytes32 salt,
-    address implementationAddress
+    bytes32 suppliedSalt,
+    address implementation
   )
     external
     _owner_
   {
+    // Derive the create2 salt from the deployment requester's address
+    // and the requester-supplied salt.
+    bytes32 salt = Salty.deriveOneToOneSalt(msg.sender, suppliedSalt);
+
+    // Deploy the proxy
     address proxyAddress = Create2.deploy(
       0,
       salt,
       type(DelegateCallProxyOneToOne).creationCode
     );
-    DelegateCallProxyOneToOne(payable(proxyAddress)).setImplementationAddress(
-      implementationAddress
-    );
-    emit OneToOne_ProxyDeployed(
-      proxyAddress,
-      implementationAddress
-    );
+
+    // Set the implementation address on the new proxy.
+    _setImplementation(proxyAddress, implementation);
+
+    emit OneToOne_ProxyDeployed(proxyAddress, implementation);
   }
 
   /**
    * @dev Deploy a proxy with a many-to-one relationship with its implemenation.
    *
-   * The proxy will call the implementation holder for every transaction to determine
-   * the address to use in calls.
+   * The proxy will call the implementation holder for every transaction to
+   * determine the address to use in calls.
    *
    * @param implementationID Identifier for the proxy's implementation.
-   * @param salt Create2 salt to deploy the pool with.
+   * @param suppliedSalt Salt provided by the account requesting deployment.
    */
-  function deployProxyManyToOne(bytes32 implementationID, bytes32 salt)
+  function deployProxyManyToOne(bytes32 implementationID, bytes32 suppliedSalt)
     external
     _admin_
     returns(address proxyAddress)
   {
+    // Read the implementation holder address from storage.
     address implementationHolder = _implementationHolders[implementationID];
-    require(
-      implementationHolder != address(0),
-      "ERR_IMPLEMENTATION_ID"
+
+    // Verify that the implementation exists.
+    require(implementationHolder != address(0), "ERR_IMPLEMENTATION_ID");
+
+    // Derive the create2 salt from the deployment requester's address, the
+    // implementation ID and the requester-supplied salt.
+    bytes32 salt = Salty.deriveManyToOneSalt(
+      msg.sender,
+      implementationID,
+      suppliedSalt
     );
 
-    // Set the implementation holder so the proxy constructor can query it.
+    // Set the implementation holder address in storage so the proxy
+    // constructor can query it.
     _implementationHolder = implementationHolder;
+
+    // Deploy the proxy, which will query the implementation holder address
+    // and save it as an immutable in the contract bytecode.
     proxyAddress = Create2.deploy(
       0,
       salt,
       type(DelegateCallProxyManyToOne).creationCode
     );
+
     // Remove the address from temporary storage.
     _implementationHolder = address(0);
 
@@ -284,6 +314,7 @@ contract DelegateCallProxyManager {
   }
 
 /* ---  Queries  --- */
+
   /**
    * @dev Queries the temporary storage value `_implementationHolder`.
    * This is used in the constructor of the many-to-one proxy contract
@@ -314,35 +345,59 @@ contract DelegateCallProxyManager {
   }
 
   /**
-   * @dev Computes the create2 address for a one-to-one proxy deployed
-   * with `salt` as the create2 address.
+   * @dev Computes the create2 address for a one-to-one proxy requested
+   * by `originator` using `suppliedSalt`.
+   *
+   * @param originator Address of the account requesting deployment.
+   * @param suppliedSalt Salt provided by the account requesting deployment.
    */
-  function computeProxyAddressOneToOne(bytes32 salt)
+  function computeProxyAddressOneToOne(
+    address originator,
+    bytes32 suppliedSalt
+  )
     external
     view
     returns (address)
   {
+    bytes32 salt = Salty.deriveOneToOneSalt(originator, suppliedSalt);
     return Create2.computeAddress(salt, ONE_TO_ONE_CODEHASH);
   }
 
   /**
-   * @dev Computes the create2 address for a many-to-one proxy deployed
-   * with `salt` as the create2 salt.
+   * @dev Computes the create2 address for a many-to-one proxy for the
+   * implementation `implementationID` requested by `originator` using
+   * `suppliedSalt`.
+   *
+   * @param originator Address of the account requesting deployment.
+   * @param implementationID The identifier for the contract implementation.
+   * @param suppliedSalt Salt provided by the account requesting deployment.
   */
-  function computeProxyAddressManyToOne(bytes32 salt)
+  function computeProxyAddressManyToOne(
+    address originator,
+    bytes32 implementationID,
+    bytes32 suppliedSalt
+  )
     external
     view
     returns (address)
   {
+
+    bytes32 salt = Salty.deriveManyToOneSalt(
+      originator,
+      implementationID,
+      suppliedSalt
+    );
     return Create2.computeAddress(salt, MANY_TO_ONE_CODEHASH);
   }
 
   /**
    * @dev Computes the create2 address of the implementation holder
    * for `implementationID`.
+   *
+   * @param implementationID The identifier for the contract implementation.
   */
   function computeHolderAddressManyToOne(bytes32 implementationID)
-    external
+    public
     view
     returns (address)
   {
@@ -350,5 +405,34 @@ contract DelegateCallProxyManager {
       implementationID,
       IMPLEMENTATION_HOLDER_CODEHASH
     );
+  }
+
+/* ---  Internal Functions  --- */
+
+  /**
+   * @dev Sets the implementation address for a one-to-one proxy or
+   * many-to-one implementation holder. Both use the same access
+   * control and update mechanism, which is the receipt of a call
+   * from the proxy manager with the abi-encoded implementation address
+   * as the only calldata.
+   *
+   * Note: Verifies that the implementation address is a contract.
+   *
+   * @param proxyOrHolder Address of the one-to-one proxy or
+   * many-to-one implementation holder contract.
+   * @param implementation Address of the contract with the runtime
+   * code that the proxy or proxies should use.
+   */
+  function _setImplementation(
+    address proxyOrHolder,
+    address implementation
+  ) internal {
+    // Verify that the implementation address is a contract.
+    require(Address.isContract(implementation), "ERR_NOT_CONTRACT");
+    // Set the implementation address on the contract.
+
+    // solium-disable-next-line security/no-low-level-calls
+    (bool success,) = proxyOrHolder.call(abi.encode(implementation));
+    require(success, "ERR_SET_ADDRESS_REVERT");
   }
 }

@@ -1,20 +1,24 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 pragma solidity ^0.6.0;
-
+import { Proxy } from "@openzeppelin/contracts/proxy/Proxy.sol";
 
 /**
  * @dev Proxy contract which uses an implementation address shared with many
  * other proxies.
  *
- * An implementation holder contract stores the upgradeable logic address, and
- * the proxy contract calls the implementation holder to execute each delegated
+ * An implementation holder contract stores the upgradeable logic address.
+ * The proxy contract calls the implementation holder to execute each delegated
  * transaction.
+ *
+ * Note: This contract does not verify that the implementation
+ * address is a valid delegation target. The manager must perform
+ * this safety check before updating the implementation on the holder.
  */
-contract DelegateCallProxyManyToOne {
+contract DelegateCallProxyManyToOne is Proxy {
 /* ---  Constants  --- */
 
   // Address that stores the implementation address.
-  ImplementationHolder internal immutable _implementationHolder;
+  address internal immutable _implementationHolder;
 
 /* ---  Constructor  --- */
 
@@ -24,33 +28,21 @@ contract DelegateCallProxyManyToOne {
     _implementationHolder = ProxyDeployer(msg.sender).getImplementationHolder();
   }
 
-/* ---  Fallbacks  --- */
+/* ---  Internal Overrides  --- */
 
-  receive() external payable {
-    return;
-  }
-
-  fallback() external payable {
-    address implementationAddress = _implementationHolder.getImplementationAddress();
-    // Don't check impl for null address - this is checked in the holder contract.
-    (
-      bool success,
-      bytes memory data
-    ) = implementationAddress.delegatecall(msg.data);
-    if (success) {
-      assembly { return(add(data, 32), mload(data)) }
-    } else {
-      assembly { revert(add(data, 32), mload(data)) }
-    }
+  /**
+   * @dev Queries the implementation address from the implementation holder.
+   */
+  function _implementation() internal override view returns (address) {
+    // Queries the implementation address from the implementation holder.
+    (bool success, bytes memory data) = _implementationHolder.staticcall("");
+    require(success, string(data));
+    address implementation = abi.decode((data), (address));
+    require(implementation != address(0), "ERR_NULL_IMPLEMENTATION");
+    return implementation;
   }
 }
-
-
-interface ImplementationHolder {
-  function getImplementationAddress() external view returns (address);
-}
-
 
 interface ProxyDeployer {
-  function getImplementationHolder() external view returns (ImplementationHolder);
+  function getImplementationHolder() external view returns (address);
 }
