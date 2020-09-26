@@ -1,6 +1,7 @@
 pragma solidity ^0.6.0;
 pragma experimental ABIEncoderV2;
 
+import "./Owned.sol";
 import { IPool } from "./balancer/IPool.sol";
 import {
   DelegateCallProxyManager
@@ -17,7 +18,7 @@ import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
  * @title PoolFactory
  * @author d1ll0n
  */
-contract PoolFactory {
+contract PoolFactory is Owned {
 /* ---  Constants  --- */
 
   bytes32 internal constant PROXY_CODEHASH
@@ -26,8 +27,6 @@ contract PoolFactory {
   bytes32 internal constant POOL_IMPLEMENTATION_ID
     = keccak256("IPool.sol");
 
-  // Address of the NDX governance contract
-  address internal immutable _ndx;
   // Address of the proxy manager contract.
   DelegateCallProxyManager internal immutable _proxyManager;
 
@@ -48,11 +47,6 @@ contract PoolFactory {
 
 /* ---  Modifiers  --- */
 
-  modifier _ndx_ {
-    require(msg.sender == _ndx, "ERR_ONLY_OWNER");
-    _;
-  }
-
   modifier _approved_ {
     require(_approvedControllers[msg.sender], "ERR_NOT_APPROVED");
     _;
@@ -69,22 +63,21 @@ contract PoolFactory {
 /* ---  Constructor  --- */
 
   constructor(
-    address ndx,
+    address owner,
     DelegateCallProxyManager proxyManager
-  ) public {
-    _ndx = ndx;
+  ) public Owned(owner) {
     _proxyManager = proxyManager;
   }
 
 /* ---  Controller Approval  --- */
 
   /** @dev Approves `controller` to deploy index pools. */
-  function approvePoolController(address controller) external _ndx_ {
+  function approvePoolController(address controller) external _owner_ {
     _approvedControllers[controller] = true;
   }
 
   /** @dev Removes the ability of `controller` to deploy index pools. */
-  function disapprovePoolController(address controller) external _ndx_ {
+  function disapprovePoolController(address controller) external _owner_ {
     _approvedControllers[controller] = false;
   }
 
