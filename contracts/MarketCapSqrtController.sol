@@ -24,7 +24,7 @@ import { Create2 } from "@openzeppelin/contracts/utils/Create2.sol";
 /**
  * @title MarketCapSqrtController
  * @author d1ll0n
- * @notice This contract implements the market cap square root index management strategy.
+ * @dev This contract implements the market cap square root index management strategy.
  *
  * Categories are periodically sorted, ranking their tokens in descending order by
  * market cap.
@@ -32,6 +32,16 @@ import { Create2 } from "@openzeppelin/contracts/utils/Create2.sol";
  * Index pools have a defined size which is used to select the top tokens from the pool's
  * category.
  *
+ * CRITERIA
+ * To be added to the controller, a token should meet the following requirements:
+ * 1. The token is at least a week old.
+ * 2. The token complies with the ERC20 standard (boolean return values not required)
+ * 3. No major vulnerabilities have been discovered in the token contract.
+ * 4. The token does not have a deflationary supply model.
+ * 5. The token's supply can not be arbitrarily inflated or deflated maliciously.
+ * 5.a. The control model should be considered if the supply can be modified arbitrarily.
+ *
+ * REBALANCING
  * Every 2 weeks, pools are either re-weighed or re-indexed.
  * They are re-indexed once for every three re-weighs.
  *
