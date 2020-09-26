@@ -38,7 +38,11 @@ contract MockProxyApprovedDeployer {
       implementationID,
       salt
     );
-    address expected = _proxyManager.computeProxyAddressManyToOne(salt);
+    address expected = _proxyManager.computeProxyAddressManyToOne(
+      address(this),
+      implementationID,
+      salt
+    );
     require(deployed == expected, "ERR_INVALID_ADDRESS");
   }
 }
