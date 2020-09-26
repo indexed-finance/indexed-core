@@ -5,7 +5,7 @@ const { expect } = chai;
 
 const { soliditySha3 } = require('web3-utils');
 
-describe('Mock Proxy Factory', async () => {
+describe('Proxies', async () => {
   let proxyManager;
   let proxyAddress, from;
   let implementation1, implementation2;
@@ -33,6 +33,14 @@ describe('Mock Proxy Factory', async () => {
       expect(receipt.events.length).to.eq(1);
       proxyAddress = receipt.events[0].args.proxyAddress;
       proxy = await ethers.getContractAt('MockProxyLogic', proxyAddress);
+    });
+
+    it('Uses the correct address', async () => {
+      const expectedAddress = await proxyManager.computeProxyAddressOneToOne(
+        from,
+        salt
+      );
+      expect(expectedAddress).to.eq(proxyAddress);
     });
     
     it('Proxy forwards calls to implementation address', async () => {
