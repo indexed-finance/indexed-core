@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 pragma solidity ^0.6.0;
 pragma experimental ABIEncoderV2;
 
@@ -9,6 +10,7 @@ import {
 import {
   DelegateCallProxyManyToOne
 } from "./proxies/DelegateCallProxyManyToOne.sol";
+import { SaltyLib as Salty } from "./proxies/SaltyLib.sol";
 import { Create2 } from "@openzeppelin/contracts/utils/Create2.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
@@ -21,18 +23,24 @@ import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
 contract PoolFactory is Owned {
 /* ---  Constants  --- */
 
-  bytes32 internal constant PROXY_CODEHASH
-    = keccak256(type(DelegateCallProxyManyToOne).creationCode);
-
-  bytes32 internal constant POOL_IMPLEMENTATION_ID
-    = keccak256("IPool.sol");
+  // Default pool implementation ID.
+  bytes32 internal constant POOL_IMPLEMENTATION_ID = keccak256("IPool.sol");
 
   // Address of the proxy manager contract.
   DelegateCallProxyManager internal immutable _proxyManager;
 
 /* ---  Events  --- */
 
-  event LOG_NEW_POOL(
+  /** @dev Emitted when a pool using the default implementation is deployed. */
+  event LOG_NEW_DEFAULT_POOL(
+    address indexed pool,
+    address controller,
+    bool approved
+  );
+
+  /** @dev Emitted when a pool using a non-default implementation is deployed. */
+  event LOG_NEW_NON_DEFAULT_POOL(
+    bytes32 implementationID,
     address indexed pool,
     address controller,
     bool approved
@@ -43,20 +51,10 @@ contract PoolFactory is Owned {
   mapping(address => bool) internal _approvedControllers;
   mapping(address => bool) internal _isIPool;
 
-  bytes32 internal _publicImplementationId;
-
 /* ---  Modifiers  --- */
 
   modifier _approved_ {
     require(_approvedControllers[msg.sender], "ERR_NOT_APPROVED");
-    _;
-  }
-
-  modifier _public_ {
-    require(
-      _publicImplementationId != bytes32(0),
-      "ERR_NOT_PUBLIC"
-    );
     _;
   }
 
@@ -91,12 +89,12 @@ contract PoolFactory is Owned {
    *
    * Note: Must be called by an approved controller.
    *
-   * @param suppliedSalt Create2 salt provided by the deployer
+   * @param controllerSalt Create2 salt provided by the deployer
    * @param name Name of the index token - should indicate the category and size
    * @param symbol Symbol for the index token
    */
   function deployIndexPool(
-    bytes32 suppliedSalt,
+    bytes32 controllerSalt,
     string calldata name,
     string calldata symbol
   )
@@ -104,12 +102,12 @@ contract PoolFactory is Owned {
     _approved_
     returns (address poolAddress)
   {
-    bytes32 salt = keccak256(abi.encodePacked(
-      msg.sender, suppliedSalt
+    bytes32 suppliedSalt = keccak256(abi.encodePacked(
+      msg.sender, controllerSalt
     ));
     poolAddress = _proxyManager.deployProxyManyToOne(
       POOL_IMPLEMENTATION_ID,
-      salt
+      suppliedSalt
     );
     _isIPool[poolAddress] = true;
     IPool(poolAddress).configure(
@@ -117,40 +115,43 @@ contract PoolFactory is Owned {
       name,
       symbol
     );
-    emit LOG_NEW_POOL(poolAddress, msg.sender, true);
+    emit LOG_NEW_DEFAULT_POOL(poolAddress, msg.sender, true);
   }
 
+  /**
+   * @dev Deploys an index pool using an implementation ID other than
+   * the default (keccak256("IPool.sol")) and returns the address.
+   *
+   * Note: To support future interfaces, this does not initialize or
+   * configure the pool, this must be executed by the controller.
+   *
+   * Note: Must be called by an approved controller.
+   *
+   * @param implementationID Implementation ID for the pool
+   * @param controllerSalt Create2 salt provided by the deployer
+   */
   function deployIndexPool(
-    bytes32 suppliedSalt,
-    string calldata name,
-    string calldata symbol,
-    address[] calldata tokens,
-    uint256[] calldata balances,
-    uint96[] calldata denorms,
-    address tokenProvider
+    bytes32 implementationID,
+    bytes32 controllerSalt
   )
     external
-    _public_
+    _approved_
     returns (address poolAddress)
   {
-    bytes32 salt = keccak256(abi.encodePacked(
-     _publicImplementationId, msg.sender, suppliedSalt
+    bytes32 suppliedSalt = keccak256(abi.encodePacked(
+      msg.sender, controllerSalt
     ));
     poolAddress = _proxyManager.deployProxyManyToOne(
-      _publicImplementationId,
-      salt
+      implementationID,
+      suppliedSalt
     );
     _isIPool[poolAddress] = true;
-    PublicPoolImplementation(poolAddress).initialize(
+    emit LOG_NEW_NON_DEFAULT_POOL(
+      implementationID,
+      poolAddress,
       msg.sender,
-      name,
-      symbol,
-      tokens,
-      balances,
-      denorms,
-      tokenProvider
+      true
     );
-    emit LOG_NEW_POOL(poolAddress, msg.sender, false);
   }
 
 /* ---  Queries  --- */
@@ -166,34 +167,22 @@ contract PoolFactory is Owned {
    * @dev Compute the create2 address for a pool deployed by an approved
    * indexed controller.
    */
-  function computePoolAddress(address controller, bytes32 suppliedSalt)
+  function computePoolAddress(
+    address controller,
+    bytes32 controllerSalt
+  )
     public
     view
     returns (address poolAddress)
   {
-    bytes32 salt = keccak256(abi.encodePacked(
-      controller, suppliedSalt
+    bytes32 suppliedSalt = keccak256(abi.encodePacked(
+      controller, controllerSalt
     ));
-    poolAddress = Create2.computeAddress(
-      salt, PROXY_CODEHASH, address(_proxyManager)
-    );
-  }
-
-  /**
-   * @dev Compute the create2 address for a pool deployed by a
-   * non-approved controller.
-   */
-  function computePublicPoolAddress(address controller, bytes32 suppliedSalt)
-    public
-    view
-    _public_
-    returns (address poolAddress)
-  {
-    bytes32 salt = keccak256(abi.encodePacked(
-     _publicImplementationId, controller, suppliedSalt
-    ));
-    poolAddress = Create2.computeAddress(
-      salt, PROXY_CODEHASH, address(_proxyManager)
+    poolAddress = Salty.computeProxyAddressManyToOne(
+      address(_proxyManager),
+      address(this),
+      POOL_IMPLEMENTATION_ID,
+      suppliedSalt
     );
   }
 
