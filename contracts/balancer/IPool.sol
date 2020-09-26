@@ -341,6 +341,7 @@ contract IPool is BToken, BMath {
   }
 
 /* ---  Liquidity Provider Actions  --- */
+
   /**
    * @dev Mint new pool tokens by providing the proportional amount of each
    * underlying token's balance equal to the proportion of pool tokens minted.
@@ -605,7 +606,8 @@ contract IPool is BToken, BMath {
 
   /**
    * @dev Absorb any tokens that have been sent to the pool.
-   * If the token is not bound, it will be sent to the controller.
+   * If the token is not bound, it will be sent to the unbound
+   * token handler.
    */
   function gulp(address token) external _lock_ {
     Record memory record = _records[token];
@@ -616,7 +618,8 @@ contract IPool is BToken, BMath {
         _updateInputToken(token, record, balance);
       }
     } else {
-      _pushUnderlying(token, _controller, balance);
+      _pushUnderlying(token, address(_unbindHandler), balance);
+      _unbindHandler.handleUnbindToken(token, balance);
     }
   }
 
