@@ -108,23 +108,40 @@ contract IPool is BToken, BMath {
 
   bool internal _mutex;
 
-  address internal _controller; // has CONTROL role
+  // Account with CONTROL role. Able to modify the swap fee,
+  // adjust token weights, bind and unbind tokens and lock
+  // public swaps & joins.
+  address internal _controller;
+
+  // Contract that handles unbound tokens.
   TokenUnbindHandler internal _unbindHandler;
 
-  // `setPublicSwap` requires CONTROL
-  // `bindInitial` sets _publicSwap to true
-  bool internal _publicSwap; // true if PUBLIC can call SWAP functions
+  // True if PUBLIC can call SWAP & JOIN functions
+  bool internal _publicSwap;
 
   // `setSwapFee` requires CONTROL
   uint256 internal _swapFee;
 
+  // Array of underlying tokens in the pool.
   address[] internal _tokens;
+
   // Internal records of the pool's underlying tokens
   mapping(address => Record) internal _records;
+
+  // Total denormalized weight of the pool.
   uint256 internal _totalWeight;
-  // minimum balances for tokens which have been added without the
+
+  // Minimum balances for tokens which have been added without the
   // requisite initial balance.
   mapping(address => uint256) internal _minimumBalances;
+
+  // Maximum LP tokens that can be bound.
+  // Used in alpha to restrict the economic impact of a catastrophic
+  // failure. It can be gradually increased as the pool continues to
+  // not be exploited.
+  uint256 internal _maxPoolTokens;
+
+/* ---  Controls  --- */
 
   /**
    * @dev Sets the controller address and the token name & symbol.
@@ -203,6 +220,19 @@ contract IPool is BToken, BMath {
     _mintPoolShare(INIT_POOL_SUPPLY);
     _pushPoolShare(tokenProvider, INIT_POOL_SUPPLY);
     _unbindHandler = TokenUnbindHandler(unbindHandler);
+  }
+
+  /**
+   * @dev Sets the maximum number of pool tokens that can be minted.
+   *
+   * This value will be used in the alpha to limit the maximum damage
+   * that can be caused by a catastrophic error. It can be gradually
+   * increased as the pool continues to not be exploited.
+   *
+   * If it is set to 0, the limit will be removed.
+   */
+  function setMaxPoolTokens(uint256 maxPoolTokens) external _control_ {
+    _maxPoolTokens = maxPoolTokens;
   }
 
 /* ---  Configuration Actions  --- */
@@ -344,7 +374,8 @@ contract IPool is BToken, BMath {
 
   /**
    * @dev Mint new pool tokens by providing the proportional amount of each
-   * underlying token's balance equal to the proportion of pool tokens minted.
+   * underlying token's balance relative to the proportion of pool tokens minted.
+   *
    * For any underlying tokens which are not initialized, the caller must provide
    * the proportional share of the minimum balance for the token rather than the
    * actual balance.
@@ -358,6 +389,16 @@ contract IPool is BToken, BMath {
     uint256 ratio = bdiv(poolAmountOut, poolTotal);
     require(ratio != 0, "ERR_MATH_APPROX");
     require(maxAmountsIn.length == _tokens.length, "ERR_ARR_LEN");
+
+
+    uint256 maxPoolTokens = _maxPoolTokens;
+    if (maxPoolTokens > 0) {
+      require(
+        badd(poolTotal, poolAmountOut) <= _maxPoolTokens,
+        "ERR_MAX_POOL_TOKENS"
+      );
+    }
+
     for (uint256 i = 0; i < maxAmountsIn.length; i++) {
       address t = _tokens[i];
       (Record memory record, uint256 realBalance) = _getInputToken(t);
@@ -407,6 +448,14 @@ contract IPool is BToken, BMath {
       _swapFee
     );
 
+    uint256 maxPoolTokens = _maxPoolTokens;
+    if (maxPoolTokens > 0) {
+      require(
+        badd(_totalSupply, poolAmountOut) <= _maxPoolTokens,
+        "ERR_MAX_POOL_TOKENS"
+      );
+    }
+
     require(poolAmountOut >= minPoolAmountOut, "ERR_LIMIT_OUT");
 
     _updateInputToken(tokenIn, inRecord, badd(realInBalance, tokenAmountIn));
@@ -436,6 +485,14 @@ contract IPool is BToken, BMath {
     _public_
     returns (uint256 tokenAmountIn)
   {
+    uint256 maxPoolTokens = _maxPoolTokens;
+    if (maxPoolTokens > 0) {
+      require(
+        badd(_totalSupply, poolAmountOut) <= _maxPoolTokens,
+        "ERR_MAX_POOL_TOKENS"
+      );
+    }
+
     (Record memory inRecord, uint256 realInBalance) = _getInputToken(tokenIn);
 
     tokenAmountIn = calcSingleInGivenPoolOut(
@@ -856,14 +913,14 @@ contract IPool is BToken, BMath {
   }
 
 /* ---  Token Queries  --- */
+  function getMaximumPoolTokens() external view returns (uint256) {
+    return _maxPoolTokens;
+  }
+
   /**
    * @dev Check if a token is bound to the pool.
    */
-  function isBound(address t)
-    external
-    view
-    returns (bool)
-  {
+  function isBound(address t) external view returns (bool) {
     return _records[t].bound;
   }
 
@@ -1199,7 +1256,7 @@ contract IPool is BToken, BMath {
     ) return;
     uint96 oldWeight = record.denorm;
     uint96 denorm = record.desiredDenorm;
-    uint256 maxDiff = bmul(oldWeight, _swapFee / 2);
+    uint256 maxDiff = bmul(oldWeight, WEIGHT_CHANGE_PCT);
     uint256 diff = bsub(denorm, oldWeight);
     if (diff > maxDiff) {
       denorm = uint96(badd(oldWeight, maxDiff));
@@ -1224,7 +1281,7 @@ contract IPool is BToken, BMath {
     ) return;
     uint96 oldWeight = record.denorm;
     uint96 denorm = record.desiredDenorm;
-    uint256 maxDiff = bmul(oldWeight, _swapFee / 2);
+    uint256 maxDiff = bmul(oldWeight, WEIGHT_CHANGE_PCT);
     uint256 diff = bsub(oldWeight, denorm);
     if (diff > maxDiff) {
       denorm = uint96(bsub(oldWeight, maxDiff));
