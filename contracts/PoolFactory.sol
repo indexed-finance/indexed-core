@@ -33,17 +33,15 @@ contract PoolFactory is Owned {
 
   /** @dev Emitted when a pool using the default implementation is deployed. */
   event LOG_NEW_DEFAULT_POOL(
-    address indexed pool,
-    address controller,
-    bool approved
+    address pool,
+    address controller
   );
 
   /** @dev Emitted when a pool using a non-default implementation is deployed. */
   event LOG_NEW_NON_DEFAULT_POOL(
-    bytes32 implementationID,
-    address indexed pool,
+    address pool,
     address controller,
-    bool approved
+    bytes32 implementationID
   );
 
 /* ---  Storage  --- */
@@ -115,7 +113,7 @@ contract PoolFactory is Owned {
       name,
       symbol
     );
-    emit LOG_NEW_DEFAULT_POOL(poolAddress, msg.sender, true);
+    emit LOG_NEW_DEFAULT_POOL(poolAddress, msg.sender);
   }
 
   /**
@@ -147,10 +145,9 @@ contract PoolFactory is Owned {
     );
     _isIPool[poolAddress] = true;
     emit LOG_NEW_NON_DEFAULT_POOL(
-      implementationID,
       poolAddress,
       msg.sender,
-      true
+      implementationID
     );
   }
 
