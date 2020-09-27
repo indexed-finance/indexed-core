@@ -14,7 +14,6 @@ const {
 
 const { soliditySha3 } = require('web3-utils');
 
-const { getERC20 } = require('./lib/erc20');
 const { deploy, contractExists } = require('./lib/util/contracts');
 
 let getDeployed = (bre, name) => {
@@ -38,6 +37,11 @@ const deployERC20 = async (name, symbol) => {
   const factory = await ethers.getContractFactory('MockERC20');
   const token = await factory.deploy(name, symbol);
   await token.deployed();
+  return token;
+}
+
+const getERC20 = async (address) => {
+  const token = await ethers.getContractAt('MockERC20', address);
   return token;
 }
 
@@ -258,7 +262,7 @@ internalTask("deploy_pool_implementation", "Deploys the pool implementation or r
         'ManyToOneImplementationHolder',
         poolImplementationHolder
       );
-      const poolImplementation = await holder.getImplementationAddress();
+      const poolImplementation = await holder.call();
       printDebug(`Pool Implementation found at ${poolImplementation.address}`);
       return setDeployed(
         bre,
@@ -285,8 +289,8 @@ internalTask(
 )
   .setAction(async () => {
     const bre = getBre();
-    if (getDeployed(bre, 'poolInitializer')) {
-      return getDeployed(bre, 'poolInitializer');
+    if (getDeployed(bre, 'poolInitializerImplementation')) {
+      return getDeployed(bre, 'poolInitializerImplementation');
     }
     const oracle = await bre.run('deploy_short_term_uniswap_oracle');
     const proxyManager = getDeployed(bre, 'proxyManager');
@@ -317,10 +321,11 @@ internalTask(
         await ethers.getContractAt('PoolInitializer', initializerImplementation)
       );
     }
+    const controller = getDeployed(bre, 'controller');
     const PoolInitializer = await ethers.getContractFactory('PoolInitializer');
     const poolInitializerImplementation = await PoolInitializer.deploy(
       oracle.address,
-      from
+      controller.address
     );
     await poolInitializerImplementation.deployed();
     await proxyManager.createManyToOneProxyRelationship(
@@ -339,8 +344,7 @@ internalTask("deploy_pool_factory", "Deploys the pool factory or returns the exi
       return getDeployed(bre, 'poolFactory');
     }
     await bre.run('deploy_pool_implementation');
-    await bre.run('deploy_pool_initializer_implementation');
-    const from = getDeployed(bre, 'from');
+    const from = await bre.run('get_from');
     const proxyManager = getDeployed(bre, 'proxyManager');
     const PoolFactory = await ethers.getContractFactory('PoolFactory');
     const poolFactory = await PoolFactory.deploy(
@@ -353,8 +357,29 @@ internalTask("deploy_pool_factory", "Deploys the pool factory or returns the exi
   })
 
 internalTask(
+  "deploy_category_oracle",
+  "Deploys a test MarketCapSortedTokenCategories contract or returns the existing one."
+)
+  .setAction(async () => {
+    if (debug) printDebug(`Deploying category oracle...`)
+    const bre = getBre();
+    if (getDeployed(bre, 'categoryOracle')) {
+      return getDeployed(bre, 'categoryOracle');
+    }
+    const oracle = await bre.run('deploy_uniswap_oracle');
+    const from = getDeployed(bre, 'from');
+    const MarketCapSortedTokenCategories = await ethers.getContractFactory('MarketCapSortedTokenCategories');
+    const categoryOracle = await MarketCapSortedTokenCategories.deploy(
+      oracle.address,
+      from
+    );
+    await categoryOracle.deployed();
+    return setDeployed(bre, 'categoryOracle', categoryOracle);
+  });
+
+internalTask(
   "deploy_controller",
-  "Deploys the Market Cap Square Root controller."
+  "Deploys the Market Cap Square Root controller or returns the existing one."
 )
   .setAction(async () => {
     if (debug) printDebug(`Deploying pool controller...`)
@@ -374,7 +399,9 @@ internalTask(
       proxyManager.address
     );
     await controller.deployed();
-    return setDeployed(bre, 'controller', controller);
+    setDeployed(bre, 'controller', controller);
+    await bre.run('deploy_pool_initializer_implementation');
+    return controller;
   });
 
 internalTask('approve_deployers', "Approves the controller & factory to use the proxy manager")
@@ -388,6 +415,8 @@ internalTask('approve_deployers', "Approves the controller & factory to use the 
     printDebug(`Approved the pool factory to deploy proxies`);
     await proxyManager.approveDeployer(controller.address);
     printDebug(`Approved the pool controller to deploy proxies`);
+    await poolFactory.approvePoolController(controller.address);
+    printDebug('Approved pool controller to deploy pools');
   })
 
 internalTask("deploy_contracts", "deploys all the core contracts")
