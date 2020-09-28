@@ -4,25 +4,41 @@ const { soliditySha3 } = require('web3-utils');
 const BN = require('bn.js');
 const bre = require("@nomiclabs/buidler");
 
-const { setupUniSwapV2 } = require('./lib/uniswap-setup');
 const { wrapped_tokens: wrappedTokens } = require('./testData/categories.json');
 const { nTokens, nTokensHex } = require('./lib/tokens');
+const { calcRelativeDiff } = require("./lib/calc_comparisons");
 
 chai.use(chaiAsPromised);
 const { expect } = chai;
 
+const errorDelta = 10 ** -8;
 const keccak256 = (data) => soliditySha3(data);
-const toBN = (bn) => new BN(bn._hex.slice(2), 'hex');
+const toBN = (bn) => BN.isBN(bn) ? bn : bn._hex ? new BN(bn._hex.slice(2), 'hex') : new BN(bn);
 
 describe("MarketCapSqrtController.sol", () => {
   let uniswapFactory, uniswapRouter, weth;
-  let from, marketOracle;
+  let from, uniswapOracle, shortUniswapOracle;
+  let initializer;
   let erc20Factory, controller;
   let timestampAddition = 0;
+  let sortedTokens;
+
+  const fromWei = (_bn) => web3.utils.fromWei(toBN(_bn).toString(10));
+  const toWei = (_bn) => web3.utils.toWei(toBN(_bn).toString(10));
+  const decToWeiHex = (dec) => {
+    let str = String(dec);
+    if (str.includes('.')) {
+      const comps = str.split('.');
+      if (comps[1].length > 18) {
+        str = `${comps[0]}.${comps[1].slice(0, 18)}`;
+      }
+    }
+    return `0x` + new BN(web3.utils.toWei(str)).toString('hex');
+  }
 
   const getTimestamp = () => Math.floor(new Date().getTime() / 1000) + timestampAddition;
-  const increaseTimeByOnePeriod = () => {
-    timestampAddition += 3.5 * 24 * 60 * 60;
+  const increaseTimeByDays = (n = 3.5) => {
+    timestampAddition += n * 24 * 60 * 60;
     const timestamp = getTimestamp();
     return web3.currentProvider._sendJsonRpcRequest({
       method: "evm_setNextBlockTimestamp",
@@ -40,9 +56,11 @@ describe("MarketCapSqrtController.sol", () => {
       uniswapFactory,
       uniswapRouter,
       weth,
-      uniswapOracle: marketOracle,
-      controller
+      uniswapOracle,
+      controller,
+      shortUniswapOracle
     } = bre.config.deployed);
+    await bre.run('approve_deployers');
     [from] = await web3.eth.getAccounts();
   });
 
@@ -84,6 +102,15 @@ describe("MarketCapSqrtController.sol", () => {
       from,
       timestamp
     ).send({ from });
+  }
+
+  async function addLiquidityAll() {
+    for (let i = 0; i < wrappedTokens.length; i++) {
+      const { token, initialPrice } = wrappedTokens[i];
+      // In order to update the cumulative prices on the market pairs,
+      // we need to add some more liquidity (could also execute trades)
+      await addTokenLiquidity(token, initialPrice, 50);
+    }
   }
 
   /**
@@ -143,12 +170,13 @@ describe("MarketCapSqrtController.sol", () => {
     it('Should fail to return a price if the latest price is not old enough', async () => {
       const [token] = await controller.getCategoryTokens(1);
       expect(
-        marketOracle.computeAveragePrice(token)
+        uniswapOracle.computeAveragePrice(token)
       ).to.be.rejectedWith(/ERR_USABLE_PRICE_NOT_FOUND/g)
     });
 
     it('Should update the block timestamp', async () => {
-      await increaseTimeByOnePeriod();
+      await increaseTimeByDays();
+      await uniswapOracle.updatePrices(wrappedTokens.map(t => t.address));
     });
 
     it('Should return the correct market caps', async () => {
@@ -202,14 +230,120 @@ describe("MarketCapSqrtController.sol", () => {
       expect(
         mapToHex(categorySorted.map((t) => t.marketCap))
       ).to.deep.equal(mapToHex(marketCapsSorted));
+      sortedTokens = categorySorted.map((t) => t.token);
       const receipt = await controller.orderCategoryTokensByMarketCap(
-        1, categorySorted.map((t) => t.token)
+        1, sortedTokens
       ).then((r) => r.wait());
       const categoryAfterSort = await getCategoryData(1);
       expect(
         mapToHex(categoryAfterSort.map((t) => t.marketCap))
       ).to.deep.equal(mapToHex(marketCapsSorted));
       console.log(`Cost To Sort Tokens: ${toBN(receipt.cumulativeGasUsed).toNumber()}`)
+    });
+  });
+
+  describe('Pool Queries', async () => {
+    it('getInitialTokensAndBalances()', async () => {
+      const prices = [10, 2, 1];
+      const marketCapsSqrts = [10, 2, 1].map(n => Math.sqrt(n * 150));
+      const sqrtSum = marketCapsSqrts.reduce((a, b) => a+b, 0);
+      const normWeights = marketCapsSqrts.map(m => m / sqrtSum);
+      const ethValues = normWeights.map(w => w * 10);
+      const balances = ethValues.map((v, i) => v / prices[i]);
+      const { balances: targets } = await controller.getInitialTokensAndBalances(
+        1,
+        3,
+        nTokensHex(10)
+      );
+      for (let i = 0; i < 3; i++) {
+        const diff = calcRelativeDiff(balances[i], fromWei(targets[i]));
+        expect(+diff).to.be.lte(errorDelta)
+      }
+    });
+  })
+
+  describe('Pool Deployment', async () => {
+    let pool;
+    it('prepareIndexPool()', async () => {
+      const receipt = await controller.prepareIndexPool(
+        1,
+        3,
+        nTokensHex(10),
+        'Wrapped Tokens Top 3 Index',
+        'WTI3'
+      ).then(r => r.wait());
+
+      const poolEvent = receipt.events.filter(e => e.event == 'NewDefaultPool')[0];
+      expect(poolEvent).to.not.be.null;
+
+      const { pool: _pool, controller: ctrlAddress } = poolEvent.args;
+      expect(ctrlAddress).to.eq(controller.address);
+
+      const initializerEvent = receipt.events.filter(e => e.event == 'NewPoolInitializer')[0];
+      expect(initializerEvent).to.not.be.null;
+
+      const {
+        poolAddress,
+        initializerAddress,
+        categoryID,
+        indexSize
+      } = initializerEvent.args;
+      expect(poolAddress).to.eq(_pool);
+      const expectedInitializerAddress = await controller.computeInitializerAddress(
+        poolAddress
+      );
+      expect(initializerAddress).to.eq(expectedInitializerAddress);
+      expect(categoryID).to.eq('1');
+      expect(indexSize).to.eq('3');
+      pool = await ethers.getContractAt('IPool', poolAddress);
+      initializer = await ethers.getContractAt('PoolInitializer', initializerAddress);
+    });
+
+    it('Does not make the pool public', async () => {
+      const public = await pool.isPublicSwap();
+      expect(public).to.eq(false);
+    });
+  });
+    
+  describe('Pool Initializer', async () => {
+    it('getDesiredTokens()', async () => {
+      const desiredTokens = await initializer.getDesiredTokens();
+      expect(desiredTokens).to.deep.equal(sortedTokens);
+    });
+
+    it('getDesiredAmounts()', async () => {
+      const prices = [10, 2, 1];
+      const marketCapsSqrts = [10, 2, 1].map(n => Math.sqrt(n * 150));
+      const sqrtSum = marketCapsSqrts.reduce((a, b) => a+b, 0);
+      const normWeights = marketCapsSqrts.map(m => m / sqrtSum);
+      const ethValues = normWeights.map(w => w * 10);
+      const balances = ethValues.map((v, i) => v / prices[i]);
+      const targets = await initializer.getDesiredAmounts(sortedTokens);
+      for (let i = 0; i < 3; i++) {
+        const diff = calcRelativeDiff(balances[i], fromWei(targets[i]));
+        expect(+diff).to.be.lte(errorDelta)
+      }
+    });
+
+    it('Updates token markets & oracle', async () => {
+      await addLiquidityAll();
+      await shortUniswapOracle.updatePrices(wrappedTokens.map(t => t.address));
+      await increaseTimeByDays(1 / 24);
+      await addLiquidityAll();
+    });
+
+    it('getCreditForTokens()', async () => {
+      for (let t of wrappedTokens) {
+        const desiredAmount = fromWei(
+          await initializer.getDesiredAmount(t.address)
+        );
+        const expected = t.initialPrice * (+desiredAmount);
+        const actual = fromWei(
+          await initializer.getCreditForTokens(t.address, decToWeiHex(desiredAmount))
+        );
+        const diff = calcRelativeDiff(expected, actual);
+        expect(+diff).to.be.lte(errorDelta);
+      }
     });
   });
 });
