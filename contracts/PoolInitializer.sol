@@ -320,6 +320,17 @@ contract PoolInitializer {
     return _remainingDesiredAmounts[token];
   }
 
+  function getDesiredAmounts(address[] calldata tokens)
+    external
+    view
+    returns (uint256[] memory amounts)
+  {
+    amounts = new uint256[](tokens.length);
+    for (uint256 i = 0; i < tokens.length; i++) {
+      amounts[i] = _remainingDesiredAmounts[tokens[i]];
+    }
+  }
+
 /* ---  External Price Queries --- */
   /**
    * @dev Get the amount of WETH the contract will credit a user
