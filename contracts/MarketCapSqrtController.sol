@@ -2,20 +2,20 @@
 pragma solidity ^0.6.0;
 pragma experimental ABIEncoderV2;
 
-import "./Owned.sol";
 import { IPool } from "./balancer/IPool.sol";
 import "./lib/FixedPoint.sol";
 import "./lib/Babylonian.sol";
 import { MCapSqrtLibrary as MCapSqrt } from "./lib/MCapSqrtLibrary.sol";
-import { UniSwapV2PriceOracle } from "./UniSwapV2PriceOracle.sol";
 import { PoolFactory } from "./PoolFactory.sol";
 import { PoolInitializer } from "./PoolInitializer.sol";
 import { UnboundTokenSeller } from "./UnboundTokenSeller.sol";
-
 import { DelegateCallProxyManager } from "./proxies/DelegateCallProxyManager.sol";
 import { SaltyLib as Salty } from "./proxies/SaltyLib.sol";
-import { MarketCapSortedTokenCategories } from "./MarketCapSortedTokenCategories.sol";
-
+import {
+  MarketCapSortedTokenCategories,
+  UniSwapV2PriceOracle
+} from "./MarketCapSortedTokenCategories.sol";
+import { GovernorAlpha as Gov } from "./governance/GovernorAlpha.sol";
 import { SafeMath } from "@openzeppelin/contracts/math/SafeMath.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
@@ -80,14 +80,14 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
 /* ---  Events  --- */
 
   /** @dev Emitted when a pool is initialized and made public. */
-  event LOG_POOL_INITIALIZED(
+  event PoolInitialized(
     address indexed pool,
     uint256 categoryID,
     uint256 indexSize
   );
 
   /** @dev Emitted when a pool and its initializer are deployed. */
-  event LOG_NEW_POOL_INITIALIZER(
+  event NewPoolInitializer(
     address poolAddress,
     address initializerAddress,
     uint256 categoryID,
@@ -95,19 +95,19 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
   );
 
   /** @dev Emitted when a pool's unbound token seller is deployed. */
-  event LOG_NEW_POOL_UNBOUND_TOKEN_SELLER(
+  event NewPoolUnboundTokenSeller(
     address poolAddress,
     address sellerAddress
   );
 
   /** @dev Emitted when a pool using the default implementation is deployed. */
-  event LOG_NEW_DEFAULT_POOL(
+  event NewDefaultPool(
     address pool,
     address controller
   );
 
   /** @dev Emitted when a pool using a non-default implementation is deployed. */
-  event LOG_NEW_NON_DEFAULT_POOL(
+  event NewNonDefaultPool(
     address pool,
     address controller,
     bytes32 implementationID
@@ -177,31 +177,6 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
     defaultSellerPremium = _defaultSellerPremium;
   }
 
-  /**
-   * @dev Emergency function that allows the dao to force a token sale
-   * through UniSwap. This exists in case of an emergency which demands
-   * immediate removal of a token.
-   */
-  function emergencyExecuteSwapTokensForExactTokens(
-    address sellerAddress,
-    address tokenIn,
-    address tokenOut,
-    uint256 maxAmountIn,
-    uint256 amountOut,
-    address[] calldata path
-  )
-    external
-    _owner_
-  {
-    UnboundTokenSeller(sellerAddress).emergencyExecuteSwapTokensForExactTokens(
-      tokenIn,
-      tokenOut,
-      maxAmountIn,
-      amountOut,
-      path
-    );
-  }
-
 /* ---  Pool Deployment  --- */
 
   /**
@@ -255,7 +230,7 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
       balances
     );
 
-    emit LOG_NEW_POOL_INITIALIZER(
+    emit NewPoolInitializer(
       poolAddress,
       address(initializer),
       categoryID,
@@ -306,7 +281,7 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
       sellerAddress
     );
     _poolMeta[poolAddress].initialized = true;
-    emit LOG_POOL_INITIALIZED(
+    emit PoolInitialized(
       poolAddress,
       meta.categoryID,
       meta.indexSize
@@ -315,7 +290,7 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
       IPool(poolAddress),
       defaultSellerPremium
     );
-    emit LOG_NEW_POOL_UNBOUND_TOKEN_SELLER(
+    emit NewPoolUnboundTokenSeller(
       poolAddress,
       sellerAddress
     );
@@ -330,7 +305,7 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
   function updateSellerPremiumToDefault(
     address sellerAddress
   ) external _owner_ {
-    UnboundTokenSeller(sellerAddress).setPremiumRate(defaultSellerPremium);
+    UnboundTokenSeller(sellerAddress).setPremiumPercent(defaultSellerPremium);
   }
 
   /**
@@ -343,7 +318,7 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
     for (uint256 i = 0; i < sellerAddresses.length; i++) {
       UnboundTokenSeller(
         sellerAddresses[i]
-      ).setPremiumRate(defaultSellerPremium);
+      ).setPremiumPercent(defaultSellerPremium);
     }
   }
 
@@ -378,7 +353,11 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
   /**
    * @dev Freezes public trading and liquidity providing on an index pool.
    */
-  function pausePublicTrading(address poolAddress) external _owner_ {
+  function pausePublicTrading(address poolAddress) external {
+    require(
+      msg.sender == poolAddress || msg.sender == Gov(_owner).guardian(),
+      "ERR_NOT_OWNER_OR_GUARDIAN"
+    );
     require(_havePool(poolAddress), "ERR_POOL_NOT_FOUND");
     IPool(poolAddress).setPublicSwap(false);
   }
@@ -538,36 +517,6 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
       POOL_IMPLEMENTATION_ID,
       keccak256(abi.encodePacked(categoryID, indexSize))
     );
-  }
-
-  /**
-   * @dev Queries the top `indexSize` tokens in a category from the market _oracle,
-   * computes their relative weights by market cap square root and determines
-   * the weighted balance of each token to meet a specified total value.
-   */
-  function getInitialTokenWeightsAndBalances(
-    uint256 categoryID,
-    uint256 indexSize,
-    uint256 wethValue
-  )
-    public
-    view
-    returns (
-      address[] memory tokens,
-      uint96[] memory denormalizedWeights,
-      uint256[] memory balances
-    )
-  {
-    tokens = getTopCategoryTokens(categoryID, indexSize);
-    FixedPoint.uq112x112[] memory prices = _oracle.computeAveragePrices(tokens);
-    FixedPoint.uq112x112[] memory weights = MCapSqrt.computeTokenWeights(tokens, prices);
-    balances = new uint256[](indexSize);
-    denormalizedWeights = new uint96[](indexSize);
-    for (uint256 i = 0; i < indexSize; i++) {
-      uint144 weightedValue = weights[i].mul(wethValue).decode144();
-      balances[i] = uint256(prices[i].reciprocal().mul(weightedValue).decode144());
-      denormalizedWeights[i] = _denormalizeFractionalWeight(weights[i]);
-    }
   }
 
   /**

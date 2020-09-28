@@ -32,13 +32,13 @@ contract PoolFactory is Owned {
 /* ---  Events  --- */
 
   /** @dev Emitted when a pool using the default implementation is deployed. */
-  event LOG_NEW_DEFAULT_POOL(
+  event NewDefaultPool(
     address pool,
     address controller
   );
 
   /** @dev Emitted when a pool using a non-default implementation is deployed. */
-  event LOG_NEW_NON_DEFAULT_POOL(
+  event NewNonDefaultPool(
     address pool,
     address controller,
     bytes32 implementationID
@@ -113,7 +113,7 @@ contract PoolFactory is Owned {
       name,
       symbol
     );
-    emit LOG_NEW_DEFAULT_POOL(poolAddress, msg.sender);
+    emit NewDefaultPool(poolAddress, msg.sender);
   }
 
   /**
@@ -144,7 +144,7 @@ contract PoolFactory is Owned {
       suppliedSalt
     );
     _isIPool[poolAddress] = true;
-    emit LOG_NEW_NON_DEFAULT_POOL(
+    emit NewNonDefaultPool(
       poolAddress,
       msg.sender,
       implementationID
