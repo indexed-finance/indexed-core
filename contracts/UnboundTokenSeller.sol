@@ -43,6 +43,8 @@ contract UnboundTokenSeller {
 
 /* ---  Events  --- */
 
+  event PremiumPercentSet(uint8 premium);
+
   event NewTokensToSell(
     address indexed token,
     uint256 amountReceived
@@ -150,12 +152,13 @@ contract UnboundTokenSeller {
   /**
    * @dev Set the premium rate as a percent.
    */
-  function setPremiumRate(uint8 premiumPercent) external _control_ {
+  function setPremiumPercent(uint8 premiumPercent) external _control_ {
     require(
       premiumPercent > 0 && premiumPercent < 20,
       "ERR_PREMIUM"
     );
     _premiumPercent = premiumPercent;
+    emit PremiumPercentSet(premiumPercent);
   }
 
   /**
@@ -430,6 +433,10 @@ contract UnboundTokenSeller {
   }
 
 /* ---  Swap Queries  --- */
+
+  function getPremiumPercent() external view returns (uint8) {
+    return _premiumPercent;
+  }
 
   /**
    * @dev Calculate the amount of `tokenIn` the pool will accept for
