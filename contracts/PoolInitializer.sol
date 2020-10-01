@@ -1,11 +1,7 @@
+// SPDX-License-Identifier: GPL-3.0
 pragma solidity ^0.6.0;
 pragma experimental ABIEncoderV2;
 
-import {
-  UniswapV2OracleLibrary as UniV2Oracle
-} from "./lib/UniswapV2OracleLibrary.sol";
-import { UniswapV2Library as UniV2 } from "./lib/UniswapV2Library.sol";
-import { IUniswapV2Router02 as UniV2Router } from "./interfaces/IUniswapV2Router02.sol";
 import { IPool } from "./balancer/IPool.sol";
 import { UniSwapV2PriceOracle } from "./UniSwapV2PriceOracle.sol";
 import "@openzeppelin/contracts/math/SafeMath.sol";
@@ -58,7 +54,7 @@ contract PoolInitializer {
   bool internal _finished;
   address internal _poolAddress;
   bool internal _mutex;
-  uint256 internal constant TOKENS_MINTED = 100e18;
+  uint256 internal constant TOKENS_MINTED = 1e20;
 
 /* ---  Modifiers  --- */
 
