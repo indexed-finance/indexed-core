@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: GPL-3.0
 pragma solidity ^0.6.0;
 pragma experimental ABIEncoderV2;
 
@@ -15,7 +15,6 @@ import {
   MarketCapSortedTokenCategories,
   UniSwapV2PriceOracle
 } from "./MarketCapSortedTokenCategories.sol";
-import { GovernorAlpha as Gov } from "./governance/GovernorAlpha.sol";
 import { SafeMath } from "@openzeppelin/contracts/math/SafeMath.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
@@ -81,23 +80,18 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
 
   /** @dev Emitted when a pool is initialized and made public. */
   event PoolInitialized(
-    address indexed pool,
+    address pool,
+    address unboundTokenSeller,
     uint256 categoryID,
     uint256 indexSize
   );
 
   /** @dev Emitted when a pool and its initializer are deployed. */
   event NewPoolInitializer(
-    address poolAddress,
-    address initializerAddress,
+    address pool,
+    address initializer,
     uint256 categoryID,
     uint256 indexSize
-  );
-
-  /** @dev Emitted when a pool's unbound token seller is deployed. */
-  event NewPoolUnboundTokenSeller(
-    address poolAddress,
-    address sellerAddress
   );
 
   /** @dev Emitted when a pool using the default implementation is deployed. */
@@ -166,17 +160,6 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
     _proxyManager = proxyManager;
   }
 
-/* ---  Controls  --- */
-
-  /**
-   * @dev Sets the default premium rate for token seller contracts.
-   */
-  function setDefaultSellerPremium(
-    uint8 _defaultSellerPremium
-  ) external _owner_ {
-    defaultSellerPremium = _defaultSellerPremium;
-  }
-
 /* ---  Pool Deployment  --- */
 
   /**
@@ -195,11 +178,12 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
   )
     external
     _owner_
+    returns (address poolAddress, address initializerAddress)
   {
     require(indexSize >= MIN_INDEX_SIZE, "ERR_MIN_INDEX_SIZE");
     require(indexSize <= MAX_INDEX_SIZE, "ERR_MAX_INDEX_SIZE");
 
-    address poolAddress = _factory.deployIndexPool(
+    poolAddress = _factory.deployIndexPool(
       keccak256(abi.encodePacked(categoryID, indexSize)),
       name,
       symbol
@@ -211,12 +195,12 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
       initialized: false
     });
 
-    PoolInitializer initializer = PoolInitializer(
-      _proxyManager.deployProxyManyToOne(
-        INITIALIZER_IMPLEMENTATION_ID,
-        keccak256(abi.encodePacked(poolAddress))
-      )
+    initializerAddress = _proxyManager.deployProxyManyToOne(
+      INITIALIZER_IMPLEMENTATION_ID,
+      keccak256(abi.encodePacked(poolAddress))
     );
+
+    PoolInitializer initializer = PoolInitializer(initializerAddress);
 
     // Get the initial tokens and balances for the pool.
     (
@@ -224,15 +208,11 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
       uint256[] memory balances
     ) = getInitialTokensAndBalances(categoryID, indexSize, initialWethValue);
 
-    initializer.initialize(
-      poolAddress,
-      tokens,
-      balances
-    );
+    initializer.initialize(poolAddress, tokens, balances);
 
     emit NewPoolInitializer(
       poolAddress,
-      address(initializer),
+      initializerAddress,
       categoryID,
       indexSize
     );
@@ -258,7 +238,7 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
     require(!meta.initialized, "ERR_INITIALIZED");
     uint96[] memory denormalizedWeights = new uint96[](len);
     uint256 valueSum;
-    uint144[] memory ethValues = _oracle.computeAverageAmountsOut(
+    uint144[] memory ethValues = oracle.computeAverageAmountsOut(
       tokens, balances
     );
     for (uint256 i = 0; i < len; i++) {
@@ -283,6 +263,7 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
     _poolMeta[poolAddress].initialized = true;
     emit PoolInitialized(
       poolAddress,
+      sellerAddress,
       meta.categoryID,
       meta.indexSize
     );
@@ -290,13 +271,22 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
       IPool(poolAddress),
       defaultSellerPremium
     );
-    emit NewPoolUnboundTokenSeller(
-      poolAddress,
-      sellerAddress
-    );
   }
 
 /* ---  Pool Management  --- */
+
+  /**
+   * @dev Sets the default premium rate for token seller contracts.
+   */
+  function setDefaultSellerPremium(
+    uint8 _defaultSellerPremium
+  ) external _owner_ {
+    require(
+      _defaultSellerPremium > 0 && _defaultSellerPremium < 20,
+      "ERR_PREMIUM"
+    );
+    defaultSellerPremium = _defaultSellerPremium;
+  }
 
   /**
    * @dev Update the premium rate on `sellerAddress` with the current
@@ -304,7 +294,7 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
    */
   function updateSellerPremiumToDefault(
     address sellerAddress
-  ) external _owner_ {
+  ) external {
     UnboundTokenSeller(sellerAddress).setPremiumPercent(defaultSellerPremium);
   }
 
@@ -314,7 +304,7 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
    */
   function updateSellerPremiumToDefault(
     address[] calldata sellerAddresses
-  ) external _owner_ {
+  ) external {
     for (uint256 i = 0; i < sellerAddresses.length; i++) {
       UnboundTokenSeller(
         sellerAddresses[i]
@@ -351,38 +341,6 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
   }
 
   /**
-   * @dev Freezes public trading and liquidity providing on an index pool.
-   */
-  function pausePublicTrading(address poolAddress) external {
-    require(
-      msg.sender == poolAddress || msg.sender == Gov(_owner).guardian(),
-      "ERR_NOT_OWNER_OR_GUARDIAN"
-    );
-    require(_havePool(poolAddress), "ERR_POOL_NOT_FOUND");
-    IPool(poolAddress).setPublicSwap(false);
-  }
-
-  /**
-   * @dev Resumes public trading and liquidity providing on an index pool.
-   */
-  function resumePublicTrading(address poolAddress) external _owner_ {
-    require(_havePool(poolAddress), "ERR_POOL_NOT_FOUND");
-    IPool(poolAddress).setPublicSwap(true);
-  }
-
-  /**
-   * @dev Forcibly removes a token from a pool.
-   *
-   * This should only be used as a last resort if a token is experiencing
-   * a sudden crash or major vulnerability. Otherwise, tokens should only
-   * be removed gradually through re-indexing events.
-   */
-  function removeTokenFromPool(address poolAddress, address tokenAddress) external _owner_ {
-    require(_havePool(poolAddress), "ERR_POOL_NOT_FOUND");
-    IPool(poolAddress).unbind(tokenAddress);
-  }
-
-  /**
    * @dev Updates the minimum balance of an uninitialized token, which is
    * useful when the token's price on the pool is too low relative to
    * external prices for people to trade it in.
@@ -392,7 +350,7 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
     IPool.Record memory record = pool.getTokenRecord(tokenAddress);
     require(!record.ready, "ERR_TOKEN_READY");
     uint256 poolValue = _estimatePoolValue(pool);
-    FixedPoint.uq112x112 memory price = _oracle.computeAveragePrice(tokenAddress);
+    FixedPoint.uq112x112 memory price = oracle.computeAveragePrice(tokenAddress);
     pool.setMinimumBalance(
       tokenAddress,
       price.reciprocal().mul(poolValue).decode144() / 100
@@ -419,7 +377,7 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
     );
     uint256 size = meta.indexSize;
     address[] memory tokens = getTopCategoryTokens(meta.categoryID, size);
-    FixedPoint.uq112x112[] memory prices = _oracle.computeAveragePrices(tokens);
+    FixedPoint.uq112x112[] memory prices = oracle.computeAveragePrices(tokens);
     FixedPoint.uq112x112[] memory weights = MCapSqrt.computeTokenWeights(tokens, prices);
     uint256[] memory minimumBalances = new uint256[](size);
     uint96[] memory denormalizedWeights = new uint96[](size);
@@ -458,7 +416,7 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
       "ERR_REWEIGH_INDEX"
     );
     address[] memory tokens = IPool(poolAddress).getCurrentDesiredTokens();
-    FixedPoint.uq112x112[] memory prices = _oracle.computeAveragePrices(tokens);
+    FixedPoint.uq112x112[] memory prices = oracle.computeAveragePrices(tokens);
     FixedPoint.uq112x112[] memory weights = MCapSqrt.computeTokenWeights(tokens, prices);
     uint96[] memory denormalizedWeights = new uint96[](tokens.length);
     for (uint256 i = 0; i < tokens.length; i++) {
@@ -520,7 +478,7 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
   }
 
   /**
-   * @dev Queries the top `indexSize` tokens in a category from the market _oracle,
+   * @dev Queries the top `indexSize` tokens in a category from the market oracle,
    * computes their relative weights by market cap square root and determines
    * the weighted balance of each token to meet a specified total value.
    */
@@ -537,7 +495,7 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
     )
   {
     tokens = getTopCategoryTokens(categoryID, indexSize);
-    FixedPoint.uq112x112[] memory prices = _oracle.computeAveragePrices(tokens);
+    FixedPoint.uq112x112[] memory prices = oracle.computeAveragePrices(tokens);
     FixedPoint.uq112x112[] memory weights = MCapSqrt.computeTokenWeights(tokens, prices);
     balances = new uint256[](indexSize);
     for (uint256 i = 0; i < indexSize; i++) {
@@ -559,7 +517,7 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
    */
   function _estimatePoolValue(IPool pool) internal view returns (uint144) {
     (address token, uint256 value) = pool.extrapolatePoolValueFromToken();
-    FixedPoint.uq112x112 memory price = _oracle.computeAveragePrice(token);
+    FixedPoint.uq112x112 memory price = oracle.computeAveragePrice(token);
     return price.mul(value).decode144();
   }
 
