@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: GPL-3.0
 pragma solidity ^0.6.0;
 pragma experimental ABIEncoderV2;
 
@@ -42,7 +42,7 @@ contract MarketCapSortedTokenCategories is Owned {
   uint256 internal constant MAX_CATEGORY_TOKENS = 15;
 
   // Long term price oracle
-  UniSwapV2PriceOracle internal immutable _oracle;
+  UniSwapV2PriceOracle public immutable oracle;
 
 /* ---  Events  --- */
 
@@ -80,11 +80,11 @@ contract MarketCapSortedTokenCategories is Owned {
    * @dev Deploy the controller and configure the addresses
    * of the related contracts.
    */
-  constructor(UniSwapV2PriceOracle oracle, address owner)
+  constructor(UniSwapV2PriceOracle _oracle, address owner)
     public
     Owned(owner)
   {
-    _oracle = oracle;
+    oracle = _oracle;
   }
 
 
@@ -114,7 +114,7 @@ contract MarketCapSortedTokenCategories is Owned {
       "ERR_MAX_CATEGORY_TOKENS"
     );
     _addToken(token, categoryID);
-    _oracle.updatePrice(token);
+    oracle.updatePrice(token);
     // Decrement the timestamp for the last category update to ensure
     // that the new token is sorted before the category's top tokens
     // can be queried.
@@ -144,7 +144,7 @@ contract MarketCapSortedTokenCategories is Owned {
     for (uint256 i = 0; i < tokens.length; i++) {
       _addToken(tokens[i], categoryID);
     }
-    _oracle.updatePrices(tokens);
+    oracle.updatePrices(tokens);
     // Decrement the timestamp for the last category update to ensure
     // that the new tokens are sorted before the category's top tokens
     // can be queried.
@@ -204,7 +204,7 @@ contract MarketCapSortedTokenCategories is Owned {
     returns (uint144 marketCap)
   {
     uint256 totalSupply = IERC20(token).totalSupply();
-    return _oracle.computeAverageAmountOut(token, totalSupply);
+    return oracle.computeAverageAmountOut(token, totalSupply);
   }
 
   /**
@@ -220,7 +220,7 @@ contract MarketCapSortedTokenCategories is Owned {
     for (uint256 i = 0; i < len; i++) {
       totalSupplies[i] = IERC20(tokens[i]).totalSupply();
     }
-    marketCaps = _oracle.computeAverageAmountsOut(
+    marketCaps = oracle.computeAverageAmountsOut(
       tokens, totalSupplies
     );
   }
