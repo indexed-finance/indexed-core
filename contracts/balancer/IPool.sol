@@ -258,15 +258,6 @@ contract IPool is BToken, BMath {
     emit LOG_SWAP_FEE_UPDATED(swapFee);
   }
 
-  // /**
-  //  * @dev Public swapping is enabled as soon as tokens are bound,
-  //  * but this function exists in case of an emergency.
-  //  */
-  // function setPublicSwap(bool public_) external _control_ {
-  //   _publicSwap = public_;
-  //   emit LOG_PUBLIC_SWAP_TOGGLED(public_);
-  // }
-
 /* ---  Token Management Actions  --- */
 
   /**
@@ -348,18 +339,6 @@ contract IPool is BToken, BMath {
         _setDesiredDenorm(token, denorm);
       }
     }
-  }
-
-  /**
-   * @dev Unbinds a token from the pool and sends the remaining balance to the
-   * pool controller. This should only be used as a last resort if a token is
-   * experiencing a sudden crash or major vulnerability. Otherwise, tokens
-   * should only be removed gradually through re-indexing.
-   */
-  function unbind(address token) external _lock_ _control_ {
-    require(_records[token].bound, "ERR_NOT_BOUND");
-    _totalWeight = bsub(_totalWeight, _records[token].denorm);
-    _unbind(token);
   }
 
   /**
