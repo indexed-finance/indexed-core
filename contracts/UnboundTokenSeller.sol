@@ -1,14 +1,19 @@
+// SPDX-License-Identifier: GPL-3.0
 pragma solidity ^0.6.0;
 pragma experimental ABIEncoderV2;
 
 import "./lib/FixedPoint.sol";
-import { IUniswapV2Pair as Pair } from "./interfaces/IUniswapV2Pair.sol";
-import { IUniswapV2Router02 as UniV2Router } from "./interfaces/IUniswapV2Router02.sol";
 import { IPool } from "./balancer/IPool.sol";
 import { UniSwapV2PriceOracle } from "./UniSwapV2PriceOracle.sol";
 import { SafeMath } from "@openzeppelin/contracts/math/SafeMath.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
+import {
+  IUniswapV2Pair as Pair
+} from "@uniswap/v2-core/contracts/interfaces/IUniswapV2Pair.sol";
+import {
+  IUniswapV2Router02 as UniV2Router
+} from "@uniswap/v2-periphery/contracts/interfaces/IUniswapV2Router02.sol";
 
 
 /**
@@ -56,26 +61,11 @@ contract UnboundTokenSeller {
    * @param soldAmount Amount of `tokenSold` paid to caller
    * @param boughtAmount Amount of `tokenBought` sent to pool
    */
-  event SwapWithCaller(
+  event SwappedTokens(
     address indexed tokenSold,
     address indexed tokenBought,
     uint256 soldAmount,
     uint256 boughtAmount
-  );
-
-  /**
-   * @param tokenSold Token sent to UniSwap
-   * @param tokenBought Token received from UniSwap and sent to pool
-   * @param soldAmount Amount of `tokenSold` paid to UniSwap
-   * @param boughtAmount Amount of `tokenBought` sent to pool
-   * @param premiumPaid Amount of `tokenBought` sent to caller
-   */
-  event SwapWithUniSwap(
-    address indexed tokenSold,
-    address indexed tokenBought,
-    uint256 soldAmount,
-    uint256 boughtAmount,
-    uint256 premiumPaid
   );
 
 /* ---  Storage  --- */
@@ -195,12 +185,11 @@ contract UnboundTokenSeller {
     );
     uint256 amountIn = amounts[0];
     _pool.gulp(tokenOut);
-    emit SwapWithUniSwap(
+    emit SwappedTokens(
       tokenIn,
       tokenOut,
       amountIn,
-      amountOut,
-      0
+      amountOut
     );
   }
 
@@ -268,12 +257,11 @@ contract UnboundTokenSeller {
     IERC20(tokenOut).safeTransfer(msg.sender, premiumPaidToCaller);
     // Update the pool's balance of the token.
     _pool.gulp(tokenOut);
-    emit SwapWithUniSwap(
+    emit SwappedTokens(
       tokenIn,
       tokenOut,
       amountIn,
-      poolAmountOut,
-      premiumPaidToCaller
+      poolAmountOut.add(premiumPaidToCaller)
     );
   }
 
@@ -334,12 +322,11 @@ contract UnboundTokenSeller {
     IERC20(tokenOut).safeTransfer(msg.sender, premiumPaidToCaller);
     // Update the pool's balance of the token.
     _pool.gulp(tokenOut);
-    emit SwapWithUniSwap(
+    emit SwappedTokens(
       tokenIn,
       tokenOut,
       amountIn,
-      poolAmountOut,
-      premiumPaidToCaller
+      poolAmountOut.add(premiumPaidToCaller)
     );
   }
 
@@ -380,7 +367,7 @@ contract UnboundTokenSeller {
     _pool.gulp(tokenIn);
     // Transfer the output tokens to the caller
     IERC20(tokenOut).safeTransfer(msg.sender, amountOut);
-    emit SwapWithCaller(
+    emit SwappedTokens(
       tokenOut,
       tokenIn,
       amountOut,
@@ -424,7 +411,7 @@ contract UnboundTokenSeller {
     _pool.gulp(tokenIn);
     // Transfer the output tokens to the caller
     IERC20(tokenOut).safeTransfer(msg.sender, amountOut);
-    emit SwapWithCaller(
+    emit SwappedTokens(
       tokenOut,
       tokenIn,
       amountOut,
