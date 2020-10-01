@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: GPL-3.0
 pragma solidity ^0.6.0;
 pragma experimental ABIEncoderV2;
 
@@ -79,11 +79,20 @@ contract IPool is BToken, BMath {
     uint256 minimumBalance
   );
 
+  /** @dev Emitted when a token's minimum balance is updated. */
+  event LOG_MINIMUM_BALANCE_UPDATED(address token, uint256 minimumBalance);
+
   /** @dev Emitted when a token reaches its minimum balance. */
   event LOG_TOKEN_READY(address indexed token);
 
   /** @dev Emitted when public trades are enabled or disabled. */
   event LOG_PUBLIC_SWAP_TOGGLED(bool publicSwap);
+
+  /** @dev Emitted when the maximum tokens value is updated. */
+  event LOG_MAX_TOKENS_UPDATED(uint256 maxPoolTokens);
+
+  /** @dev Emitted when the swap fee is updated. */
+  event LOG_SWAP_FEE_UPDATED(uint256 swapFee);
 
 /* ---  Modifiers  --- */
 
@@ -233,6 +242,7 @@ contract IPool is BToken, BMath {
    */
   function setMaxPoolTokens(uint256 maxPoolTokens) external _control_ {
     _maxPoolTokens = maxPoolTokens;
+    emit LOG_MAX_TOKENS_UPDATED(maxPoolTokens);
   }
 
 /* ---  Configuration Actions  --- */
@@ -245,16 +255,17 @@ contract IPool is BToken, BMath {
     require(swapFee >= MIN_FEE, "ERR_MIN_FEE");
     require(swapFee <= MAX_FEE, "ERR_MAX_FEE");
     _swapFee = swapFee;
+    emit LOG_SWAP_FEE_UPDATED(swapFee);
   }
 
-  /**
-   * @dev Public swapping is enabled as soon as tokens are bound,
-   * but this function exists in case of an emergency.
-   */
-  function setPublicSwap(bool public_) external _control_ {
-    _publicSwap = public_;
-    emit LOG_PUBLIC_SWAP_TOGGLED(public_);
-  }
+  // /**
+  //  * @dev Public swapping is enabled as soon as tokens are bound,
+  //  * but this function exists in case of an emergency.
+  //  */
+  // function setPublicSwap(bool public_) external _control_ {
+  //   _publicSwap = public_;
+  //   emit LOG_PUBLIC_SWAP_TOGGLED(public_);
+  // }
 
 /* ---  Token Management Actions  --- */
 
@@ -368,6 +379,7 @@ contract IPool is BToken, BMath {
     require(record.bound, "ERR_NOT_BOUND");
     require(!record.ready, "ERR_READY");
     _minimumBalances[token] = minimumBalance;
+    emit LOG_MINIMUM_BALANCE_UPDATED(token, minimumBalance);
   }
 
 /* ---  Liquidity Provider Actions  --- */
@@ -913,7 +925,7 @@ contract IPool is BToken, BMath {
   }
 
 /* ---  Token Queries  --- */
-  function getMaximumPoolTokens() external view returns (uint256) {
+  function getMaxPoolTokens() external view returns (uint256) {
     return _maxPoolTokens;
   }
 
