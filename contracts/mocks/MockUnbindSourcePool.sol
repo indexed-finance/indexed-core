@@ -2,7 +2,7 @@ pragma solidity ^0.6.0;
 pragma experimental ABIEncoderV2;
 
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-
+import { MockERC20 } from "./MockERC20.sol";
 
 /**
  * @dev Mock contract for testing the unbound token sale functionality.
@@ -40,11 +40,22 @@ contract MockUnbindSourcePool {
     require(record.bound, "ERR_NOT_BOUND");
   }
 
+  function getBalance(address token)
+    external
+    view
+    returns (uint256 balance)
+  {
+    Record memory record = _records[token];
+    require(record.bound, "ERR_NOT_BOUND");
+    balance = record.balance;
+  }
+
   function addToken(
     address token,
     uint96 desiredDenorm,
     uint256 balance
   ) external {
+
     _records[token] = Record(
       true,
       true,
@@ -54,7 +65,7 @@ contract MockUnbindSourcePool {
       0,
       balance
     );
-    IERC20(token).transferFrom(msg.sender, address(this), balance);
+    MockERC20(token).getFreeTokens(address(this), balance);
   }
 
   function gulp(address token) external {

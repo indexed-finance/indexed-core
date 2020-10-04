@@ -37,21 +37,6 @@ contract MockTokenMarketDeployer is BMath {
     router = _router;
   }
 
-  function computePoolValue(
-    UniSwapV2PriceOracle oracle,
-    IPool pool
-  ) external view returns (uint256) {
-    address[] memory tokens = pool.getCurrentTokens();
-    uint256 totalValue = 0;
-    for (uint256 i = 0; i < tokens.length; i++) {
-      address token = tokens[i];
-      uint256 bal = pool.getBalance(token);
-      uint256 balValue = oracle.computeAverageAmountOut(token, bal);
-      totalValue += balValue;
-    }
-    return totalValue;
-  }
-
   function deployTokenAndMarketWithLiquidity(
     string memory name,
     string memory symbol,
@@ -135,7 +120,6 @@ contract MockTokenMarketDeployer is BMath {
       uint256 tokenAmountIn = bmul(ratio, usedBalance);
       a = tokenAmountIn;
     }
-    // return 50;
   }
 
   function mintPoolTokens(
@@ -154,9 +138,6 @@ contract MockTokenMarketDeployer is BMath {
       MockERC20(token).approve(address(pool), tokenAmountIn);
       maxAmountsIn[i] = tokenAmountIn;
     }
-    pool.joinPool(
-      poolAmountOut,
-      maxAmountsIn
-    );
+    pool.joinPool(poolAmountOut, maxAmountsIn);
   }
 }
