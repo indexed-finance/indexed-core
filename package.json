@@ -10,7 +10,6 @@
     "deploy:rinkeby": "buidler --network rinkeby deploy",
     "test:pool": "buidler test ./test/test-pool.spec.js",
     "test:seller": "buidler test ./test/test-seller.spec.js",
-    "test:seller2": "buidler test ./test/test-token-seller.spec.js",
     "test:categories": "buidler test ./test/test-categories.spec.js",
     "test:controller": "buidler test ./test/test-controller.spec.js",
     "test:oracle": "buidler test ./test/test-oracle.spec.js",
