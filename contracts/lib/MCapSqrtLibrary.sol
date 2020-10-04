@@ -5,38 +5,40 @@ pragma experimental ABIEncoderV2;
 import "./FixedPoint.sol";
 import "./Babylonian.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import { PriceLibrary as Prices } from "./PriceLibrary.sol";
 
 
 library MCapSqrtLibrary {
   using Babylonian for uint256;
   using FixedPoint for FixedPoint.uq112x112;
   using FixedPoint for FixedPoint.uq144x112;
+  using Prices for Prices.TwoWayAveragePrice;
 
   /**
    * @dev Compute the average market cap of a token by extrapolating the
    * average price to the token's total supply.
    * @param token Address of the ERC20 token
-   * @param averagePrice Average price of the token from UniSwap.
+   * @param averagePrice Two-way average price of the token (token-weth & weth-token).
    * @return Extrapolated average market cap.
    */
   function computeAverageMarketCap(
     address token,
-    FixedPoint.uq112x112 memory averagePrice
+    Prices.TwoWayAveragePrice memory averagePrice
   ) internal view returns (uint144) {
     uint256 totalSupply = IERC20(token).totalSupply();
-    return averagePrice.mul(totalSupply).decode144();
+    return averagePrice.priceAverage.mul(totalSupply).decode144();
   }
 
   /**
    * @dev Calculate the square roots of the market caps of the indexed tokens.
    * @param tokens Array of ERC20 tokens to get the market cap square roots for.
-   * @param averagePrices Array of average prices from UniSwap. Must be in the
-   * same order as the tokens array.
+   * @param averagePrices Array of two-way average prices of each token.
+   *  - Must be in the same order as the tokens array.
    * @return sqrts Array of market cap square roots for the provided tokens.
    */
   function computeMarketCapSqrts(
     address[] memory tokens,
-    FixedPoint.uq112x112[] memory averagePrices
+    Prices.TwoWayAveragePrice[] memory averagePrices
   ) internal view returns (uint112[] memory sqrts) {
     uint256 len = tokens.length;
     sqrts = new uint112[](len);
@@ -56,7 +58,7 @@ library MCapSqrtLibrary {
    */
   function computeTokenWeights(
     address[] memory tokens,
-    FixedPoint.uq112x112[] memory averagePrices
+    Prices.TwoWayAveragePrice[] memory averagePrices
   ) internal view returns (FixedPoint.uq112x112[] memory weights) {
     // Get the square roots of token market caps
     uint112[] memory sqrts = computeMarketCapSqrts(tokens, averagePrices);
@@ -81,29 +83,16 @@ library MCapSqrtLibrary {
    * by price, but without rounding the price).
    * @param totalValue Total value of the index in the stablecoin
    * @param weight Fraction of the total value that should be held in the token.
-   * @param averagePrice Average price of the token on UniSwap.
+   * @param averagePrice Two-way average price of the token.
    * @return weightedBalance Desired balance of the token based on the weighted value.
    */
   function computeWeightedBalance(
     uint144 totalValue,
     FixedPoint.uq112x112 memory weight,
-    FixedPoint.uq112x112 memory averagePrice
+    Prices.TwoWayAveragePrice memory averagePrice
   ) internal pure returns (uint144 weightedBalance) {
-    uint144 desiredValue = weight.mul(totalValue).decode144();
+    uint144 desiredWethValue = weight.mul(totalValue).decode144();
     // Multiply by reciprocal to avoid rounding in intermediary steps.
-    return averagePrice.reciprocal().mul(desiredValue).decode144();
-  }
-
-  function computePoolValue(
-    address poolAddress,
-    address[] memory tokens,
-    FixedPoint.uq112x112[] memory averagePrices
-  ) internal view returns (uint256 totalValue) {
-    for (uint256 i = 0; i < tokens.length; i++) {
-      IERC20 token = IERC20(tokens[i]);
-      FixedPoint.uq112x112 memory averagePrice = averagePrices[i];
-      uint256 balance = token.balanceOf(poolAddress);
-      totalValue += averagePrice.mul(balance).decode144();
-    }
+    return averagePrice.computeAverageTokensForEth(desiredWethValue);
   }
 }

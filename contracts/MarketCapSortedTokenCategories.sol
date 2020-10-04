@@ -13,8 +13,7 @@ import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
  * @dev This contract stores token categories created by the contract owner.
  * Token categories are sorted by their fully diluted market caps, which is
  * extrapolated by multiplying each token's total supply by its moving
- * average price on UniSwap.
- *
+ * average weth price on UniSwap.
  *
  * Categories are periodically sorted, ranking their tokens in descending order by
  * market cap.
@@ -194,9 +193,9 @@ contract MarketCapSortedTokenCategories is Owned {
 /* ---  Market Cap Queries  --- */
 
   /**
-   * @dev Compute the average market cap of a token in WETH.
+   * @dev Compute the average market cap of a token in weth.
    * Queries the average amount of ether that the total supply is worth
-   * using the recent moving average.
+   * using the recent moving average price.
    */
   function computeAverageMarketCap(address token)
     public
@@ -254,8 +253,7 @@ contract MarketCapSortedTokenCategories is Owned {
   }
 
   /**
-   * @dev Returns the market capitalization rates for the tokens
-   * in a category.
+   * @dev Returns the fully diluted market caps for the tokens in a category.
    */
   function getCategoryMarketCaps(uint256 categoryID)
     external

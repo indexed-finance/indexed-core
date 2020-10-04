@@ -3,6 +3,7 @@ pragma solidity ^0.6.0;
 pragma experimental ABIEncoderV2;
 
 import { IPool } from "./balancer/IPool.sol";
+import { PriceLibrary as Prices } from "./lib/PriceLibrary.sol";
 import "./lib/FixedPoint.sol";
 import "./lib/Babylonian.sol";
 import { MCapSqrtLibrary as MCapSqrt } from "./lib/MCapSqrtLibrary.sol";
@@ -44,6 +45,7 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
   using FixedPoint for FixedPoint.uq144x112;
   using Babylonian for uint144;
   using SafeMath for uint256;
+  using Prices for Prices.TwoWayAveragePrice;
 
 /* ---  Constants  --- */
   // Minimum number of tokens in an index.
@@ -182,6 +184,7 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
   {
     require(indexSize >= MIN_INDEX_SIZE, "ERR_MIN_INDEX_SIZE");
     require(indexSize <= MAX_INDEX_SIZE, "ERR_MAX_INDEX_SIZE");
+    require(initialWethValue < uint144(-1), "ERR_MAX_UINT144");
 
     poolAddress = _factory.deployIndexPool(
       keccak256(abi.encodePacked(categoryID, indexSize)),
@@ -206,7 +209,7 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
     (
       address[] memory tokens,
       uint256[] memory balances
-    ) = getInitialTokensAndBalances(categoryID, indexSize, initialWethValue);
+    ) = getInitialTokensAndBalances(categoryID, indexSize, uint144(initialWethValue));
 
     initializer.initialize(poolAddress, tokens, balances);
 
@@ -350,11 +353,9 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
     IPool.Record memory record = pool.getTokenRecord(tokenAddress);
     require(!record.ready, "ERR_TOKEN_READY");
     uint256 poolValue = _estimatePoolValue(pool);
-    FixedPoint.uq112x112 memory price = oracle.computeAveragePrice(tokenAddress);
-    pool.setMinimumBalance(
-      tokenAddress,
-      price.reciprocal().mul(poolValue).decode144() / 100
-    );
+    Prices.TwoWayAveragePrice memory price = oracle.computeTwoWayAveragePrice(tokenAddress);
+    uint256 minimumBalance = price.computeAverageTokensForEth(poolValue) / 100;
+    pool.setMinimumBalance(tokenAddress, minimumBalance);
   }
 
 /* ---  Pool Rebalance Actions  --- */
@@ -377,18 +378,20 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
     );
     uint256 size = meta.indexSize;
     address[] memory tokens = getTopCategoryTokens(meta.categoryID, size);
-    FixedPoint.uq112x112[] memory prices = oracle.computeAveragePrices(tokens);
+  
+    Prices.TwoWayAveragePrice[] memory prices = oracle.computeTwoWayAveragePrices(tokens);
     FixedPoint.uq112x112[] memory weights = MCapSqrt.computeTokenWeights(tokens, prices);
+
     uint256[] memory minimumBalances = new uint256[](size);
     uint96[] memory denormalizedWeights = new uint96[](size);
     uint144 totalValue = _estimatePoolValue(IPool(poolAddress));
+
     for (uint256 i = 0; i < size; i++) {
-      // The minimum balance is the number of tokens worth
-      // the minimum weight of the pool. The minimum weight
-      // is 1/100, so we divide the total value by 100.
-      minimumBalances[i] = prices[i].reciprocal().mul(
-        totalValue
-      ).decode144() / 100;
+      // The minimum balance is the number of tokens worth the minimum weight
+      // of the pool. The minimum weight is 1/100, so we divide the total value
+      // by 100 to get the desired weth value, then multiply by the price of eth
+      // in terms of that token to get the minimum balance.
+      minimumBalances[i] = prices[i].computeAverageTokensForEth(totalValue) / 100;
       denormalizedWeights[i] = _denormalizeFractionalWeight(weights[i]);
     }
     IPool(poolAddress).reindexTokens(
@@ -416,7 +419,7 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
       "ERR_REWEIGH_INDEX"
     );
     address[] memory tokens = IPool(poolAddress).getCurrentDesiredTokens();
-    FixedPoint.uq112x112[] memory prices = oracle.computeAveragePrices(tokens);
+    Prices.TwoWayAveragePrice[] memory prices = oracle.computeTwoWayAveragePrices(tokens);
     FixedPoint.uq112x112[] memory weights = MCapSqrt.computeTokenWeights(tokens, prices);
     uint96[] memory denormalizedWeights = new uint96[](tokens.length);
     for (uint256 i = 0; i < tokens.length; i++) {
@@ -471,9 +474,12 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
   {
     poolAddress = Salty.computeProxyAddressManyToOne(
       address(_proxyManager),
-      address(this),
+      address(_factory),
       POOL_IMPLEMENTATION_ID,
-      keccak256(abi.encodePacked(categoryID, indexSize))
+      keccak256(abi.encodePacked(
+        address(this),
+        keccak256(abi.encodePacked(categoryID, indexSize))
+      ))
     );
   }
 
@@ -485,7 +491,7 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
   function getInitialTokensAndBalances(
     uint256 categoryID,
     uint256 indexSize,
-    uint256 wethValue
+    uint144 wethValue
   )
     public
     view
@@ -495,12 +501,11 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
     )
   {
     tokens = getTopCategoryTokens(categoryID, indexSize);
-    FixedPoint.uq112x112[] memory prices = oracle.computeAveragePrices(tokens);
+    Prices.TwoWayAveragePrice[] memory prices = oracle.computeTwoWayAveragePrices(tokens);
     FixedPoint.uq112x112[] memory weights = MCapSqrt.computeTokenWeights(tokens, prices);
     balances = new uint256[](indexSize);
     for (uint256 i = 0; i < indexSize; i++) {
-      uint144 weightedValue = weights[i].mul(wethValue).decode144();
-      balances[i] = uint256(prices[i].reciprocal().mul(weightedValue).decode144());
+      balances[i] = MCapSqrt.computeWeightedBalance(wethValue, weights[i], prices[i]);
     }
   }
 
@@ -517,7 +522,7 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
    */
   function _estimatePoolValue(IPool pool) internal view returns (uint144) {
     (address token, uint256 value) = pool.extrapolatePoolValueFromToken();
-    FixedPoint.uq112x112 memory price = oracle.computeAveragePrice(token);
+    FixedPoint.uq112x112 memory price = oracle.computeAverageTokenPrice(token);
     return price.mul(value).decode144();
   }
 
