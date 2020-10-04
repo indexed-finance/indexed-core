@@ -11,6 +11,7 @@ import {
 import { SaltyLib as Salty } from "./SaltyLib.sol";
 import { Create2 } from "@openzeppelin/contracts/utils/Create2.sol";
 import { Address } from "@openzeppelin/contracts/utils/Address.sol";
+import "../Owned.sol";
 
 
 /**
@@ -26,7 +27,7 @@ import { Address } from "@openzeppelin/contracts/utils/Address.sol";
  * A many-to-one proxy is a single upgradeable implementation address that may be
  * used by many proxy contracts.
  */
-contract DelegateCallProxyManager {
+contract DelegateCallProxyManager is Owned {
 /* ---  Constants  --- */
   bytes32 internal constant ONE_TO_ONE_CODEHASH
   = keccak256(type(DelegateCallProxyOneToOne).creationCode);
@@ -68,8 +69,6 @@ contract DelegateCallProxyManager {
   );
 
 /* ---  Storage  --- */
-  address internal _owner;
-
   // Addresses allowed to deploy many-to-one proxies.
   mapping(address => bool) internal _approvedDeployers;
 
@@ -85,11 +84,6 @@ contract DelegateCallProxyManager {
 
 /* ---  Modifiers  --- */
 
-  modifier _owner_ {
-    require(msg.sender == _owner, "ERR_NOT_OWNER");
-    _;
-  }
-
   modifier _admin_ {
     require(
       msg.sender == _owner || _approvedDeployers[msg.sender],
@@ -100,18 +94,9 @@ contract DelegateCallProxyManager {
 
 /* ---  Constructor  --- */
 
-  constructor() public {
-    _owner = msg.sender;
-  }
+  constructor() public Owned(msg.sender) {}
 
 /* ---  Controls  --- */
-
-  /**
-   * @dev Sets the owner address.
-   */
-  function setOwner(address owner) external _owner_ {
-    _owner = owner;
-  }
 
   /**
    * @dev Allows `deployer` to deploy many-to-one proxies.
@@ -246,13 +231,14 @@ contract DelegateCallProxyManager {
   )
     external
     _owner_
+    returns(address proxyAddress)
   {
     // Derive the create2 salt from the deployment requester's address
     // and the requester-supplied salt.
     bytes32 salt = Salty.deriveOneToOneSalt(msg.sender, suppliedSalt);
 
     // Deploy the proxy
-    address proxyAddress = Create2.deploy(
+    proxyAddress = Create2.deploy(
       0,
       salt,
       type(DelegateCallProxyOneToOne).creationCode
@@ -314,6 +300,10 @@ contract DelegateCallProxyManager {
   }
 
 /* ---  Queries  --- */
+
+  function isApprovedDeployer(address deployer) external view returns (bool) {
+    return _approvedDeployers[deployer];
+  }
 
   /**
    * @dev Queries the temporary storage value `_implementationHolder`.
