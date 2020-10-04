@@ -3,9 +3,9 @@ const chaiAsPromised = require('chai-as-promised');
 chai.use(chaiAsPromised);
 
 const BN = require('bn.js');
-const Decimal = require('decimal.js');
 const bre = require("@nomiclabs/buidler");
 
+const { deployments, getNamedAccounts, ethers } = bre;
 const { wrapped_tokens: wrappedTokens } = require('./testData/categories.json');
 
 const { nTokensHex, nTokens } = require('./lib/tokens');
@@ -38,19 +38,18 @@ describe('UnboundTokenSeller.sol', async () => {
 
   before(async () => {
     premiumPercent = 2;
+    await deployments.fixture();
     erc20Factory = await ethers.getContractFactory("MockERC20");
-    await bre.run('deploy_short_term_uniswap_oracle');
-    ({
-      from,
-      uniswapFactory,
-      uniswapRouter,
-      weth,
-      shortUniswapOracle: marketOracle
-    } = bre.config.deployed);
+
+    [from] = await web3.eth.getAccounts();
+    uniswapFactory = await ethers.getContract('uniswapFactory');
+    uniswapRouter = await ethers.getContract('uniswapRouter');
+    weth = await ethers.getContract('weth');
+    marketOracle = await ethers.getContract('HourlyTWAPUniswapV2Oracle');
     [from] = await web3.eth.getAccounts();
     const UnboundTokenSeller = await ethers.getContractFactory('UnboundTokenSeller');
     seller = await UnboundTokenSeller.deploy(
-      uniswapRouter.options.address,
+      uniswapRouter.address,
       marketOracle.address,
       from
     );
@@ -75,12 +74,12 @@ describe('UnboundTokenSeller.sol', async () => {
     const amountToken = nTokensHex(liquidity);
     const amountWeth = nTokensHex(liquidity * price);
     await token.getFreeTokens(from, amountToken).then(r => r.wait());
-    await weth.getFreeTokens(from, amountWeth).then(r => r.wait());;
-    await token.approve(uniswapRouter.options.address, amountToken).then(r => r.wait());
+    await weth.getFreeTokens(from, amountWeth).then(r => r.wait());
+    await token.approve(uniswapRouter.address, amountToken).then(r => r.wait());
     
-    await weth.approve(uniswapRouter.options.address, amountWeth).then(r => r.wait())
+    await weth.approve(uniswapRouter.address, amountWeth).then(r => r.wait())
     const timestamp = getTimestamp() + 1000;
-    await uniswapRouter.methods.addLiquidity(
+    await uniswapRouter.addLiquidity(
       token.address,
       weth.address,
       amountToken,
@@ -89,7 +88,7 @@ describe('UnboundTokenSeller.sol', async () => {
       amountWeth,
       from,
       timestamp
-    ).send({ from });
+    );
   }
 
   /**
@@ -99,8 +98,9 @@ describe('UnboundTokenSeller.sol', async () => {
    */
   async function createTokenMarket(tokenObj, liquidity) {
     const { address, initialPrice, token } = tokenObj;
-    const result = await uniswapFactory.methods.createPair(address, weth.address).send({ from });
-    const { pair } = result.events.PairCreated.returnValues;
+    const receipt = await uniswapFactory.createPair(address, weth.address);
+    const { events } = await receipt.wait();
+    const { args: { pair } } = events.filter(e => e.event == 'PairCreated')[0];
     tokenObj.pair = pair;
     await addTokenLiquidity(token, initialPrice, liquidity);
   }
@@ -141,8 +141,8 @@ describe('UnboundTokenSeller.sol', async () => {
     it('Should add the tokens to the mock pool', async () => {
       for (let token of wrappedTokens) {
         const amount = nTokens(10000).divn(token.initialPrice);
-        await token.token.getFreeTokens(from, `0x${amount.toString('hex')}`);
-        await token.token.approve(pool.address, `0x${amount.toString('hex')}`);
+        // await token.token.getFreeTokens(from, `0x${amount.toString('hex')}`);
+        // await token.token.approve(pool.address, `0x${amount.toString('hex')}`);
         await pool.addToken(
           token.address,
           nTokensHex(10),
@@ -164,8 +164,6 @@ describe('UnboundTokenSeller.sol', async () => {
       expect(event.eventSignature).to.eq('NewTokensToSell(address,uint256)');
       expect(event.args.token).to.eq(token.address);
       const amount = nTokens(10000).divn(token.initialPrice);
-      console.log(amount);
-      console.log(token.initialPrice)
       expect(
         event.args.amountReceived._hex.toString()
       ).to.eq(

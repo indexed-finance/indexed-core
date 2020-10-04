@@ -57,6 +57,25 @@ function calcSingleInGivenPoolOut(tokenBalanceIn, tokenWeightIn, poolSupply, tot
   return tokenAmountIn;
 }
 
+
+function calcInGivenPrice(
+  tokenBalanceIn,
+  tokenWeightIn,
+  tokenBalanceOut,
+  tokenWeightOut,
+  externalPrice,
+  swapFee
+) {
+  const marketPrice = calcSpotPrice(tokenBalanceIn, tokenWeightIn, tokenBalanceOut, tokenWeightOut, swapFee);
+  const priceRatio = Decimal(externalPrice).div(marketPrice);
+  const weightSum = Decimal(tokenWeightOut).add(tokenWeightIn);
+  const weightExp = Decimal(tokenWeightOut).div(weightSum);
+  const foo = priceRatio.pow(weightExp);
+  const bar = foo.sub(Decimal(1));
+  const tokenAmountIn = Decimal(tokenBalanceIn).mul(bar);
+  return tokenAmountIn;
+}
+
 module.exports = {
   calcSpotPrice,
   calcOutGivenIn,
@@ -64,4 +83,5 @@ module.exports = {
   calcPoolOutGivenSingleIn,
   calcSingleInGivenPoolOut,
   calcRelativeDiff,
+  calcInGivenPrice
 };

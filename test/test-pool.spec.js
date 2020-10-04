@@ -2,12 +2,16 @@ const chai = require("chai");
 const chaiAsPromised = require('chai-as-promised');
 chai.use(chaiAsPromised);
 
+const bre = require("@nomiclabs/buidler");
+const { ethers } = bre;
+
 const BN = require('bn.js');
 const Decimal = require('decimal.js');
 
 const { nTokensHex } = require('./lib/tokens');
 const { wrapped_tokens: wrappedTokens } = require('./testData/categories.json');
 const { calcRelativeDiff } = require('./lib/calc_comparisons');
+
 const PoolHelper = require('./lib/pool-helper');
 
 const { expect } = chai;
@@ -20,19 +24,7 @@ const errorDelta = 10 ** -8;
 
 describe('IPool.sol', async () => {
   let poolHelper, from, indexPool, erc20Factory, unbindTokenHandler;
-  let timestampAddition = 0;
 
-  const getTimestamp = () => Math.floor(new Date().getTime() / 1000) + timestampAddition;
-  const increaseTimeBySeconds = (seconds) => {
-    timestampAddition += seconds;
-    const timestamp = getTimestamp();
-    return web3.currentProvider._sendJsonRpcRequest({
-      method: "evm_setNextBlockTimestamp",
-      params: [timestamp],
-      jsonrpc: "2.0",
-      id: new Date().getTime()
-    });
-  };
   const fromWei = (_bn) => web3.utils.fromWei(toBN(_bn).toString(10));
   const toWei = (_bn) => web3.utils.toWei(toBN(_bn).toString(10));
 
@@ -422,7 +414,7 @@ describe('IPool.sol', async () => {
       poolHelper.setDesiredWeights();
       const tokens = wrappedTokens.map(t => t.address);
       const denorms = tokens.map(t => decToWeiHex(poolHelper.records[t].desiredDenorm));
-      await increaseTimeBySeconds(100 * 60);
+      await bre.run('increaseTime', { seconds: 100 * 60 });
       const receipt = await indexPool.reweighTokens(tokens, denorms).then(r => r.wait());
       for (let token of poolHelper.tokens) {
         records[token] = await indexPool.getTokenRecord(token);
@@ -469,7 +461,7 @@ describe('IPool.sol', async () => {
       poolHelper.setDesiredWeights();
       const tokens = wrappedTokens.map(t => t.address);
       const denorms = tokens.map(t => decToWeiHex(poolHelper.records[t].desiredDenorm));
-      await increaseTimeBySeconds(100 * 60);
+      await bre.run('increaseTime', { seconds: 100 * 60 });
       await indexPool.reweighTokens(tokens, denorms);
       for (let token of poolHelper.tokens) {
         records[token] = await indexPool.getTokenRecord(token);
@@ -485,7 +477,7 @@ describe('IPool.sol', async () => {
   
     it('swapExactAmountIn', async () => {
       const maxPrice = web3.utils.toTwosComplement(-1);
-      await increaseTimeBySeconds(60 * 60);
+      await bre.run('increaseTime', { seconds: 60 * 60 });
       let costs = [];
       for (let i = 0; i < tokens.length; i++) {
         const tokenIn = tokens[i];
@@ -526,7 +518,7 @@ describe('IPool.sol', async () => {
   
     it('swapExactAmountOut', async () => {
       const maxPrice = web3.utils.toTwosComplement(-1);
-      await increaseTimeBySeconds(60 * 60);
+      await bre.run('increaseTime', { seconds: 60 * 60 });
       let costs = [];
       for (let i = 0; i < tokens.length; i++) {
         const tokenIn = tokens[i];
@@ -577,10 +569,10 @@ describe('IPool.sol', async () => {
     before(async () => {
       newToken = await erc20Factory.deploy('NewToken', 'NTK');
       const t = {
-        price: 1.5,
+        price: 5,
         token: newToken,
         address: newToken.address,
-        totalSupply: 10000
+        totalSupply: 20000
       };
       newTokenAddress = t.address;
       wrappedTokens.push(t);
@@ -589,9 +581,13 @@ describe('IPool.sol', async () => {
     });
 
     it('Reindexes the pool', async () => {
-      const balances = poolHelper.tokens.map(t => decToWeiHex(poolHelper.records[t].minimumBalance || 0));
-      const denorms = poolHelper.tokens.map(t => decToWeiHex(poolHelper.records[t].desiredDenorm));
-      await indexPool.reindexTokens(poolHelper.tokens, denorms, balances);
+      const localRecords = poolHelper.tokens.map(t => ({ ...poolHelper.records[t], address: t }));
+      const keepRecords = localRecords.filter(r => r.desiredDenorm != 0);
+      const keepTokens = keepRecords.map(r => r.address);
+      const minimumBalances = keepRecords.map(r => decToWeiHex(r.minimumBalance || 0));
+      const denorms = keepRecords.map(r => decToWeiHex(r.desiredDenorm));
+      await indexPool.reindexTokens(keepTokens, denorms, minimumBalances);
+      ({ tokens, balances, normalizedWeights } = await getPoolData());
     });
 
     it('Adds the correct values for new token', async () => {
@@ -614,6 +610,15 @@ describe('IPool.sol', async () => {
         const record = await indexPool.getTokenRecord(token);
         expect(record.ready).to.be.true;
       }
+    });
+
+    it('Marked the token not included in the re-index for removal', async () => {
+      const lastRecord = poolHelper.tokens.map(t => ({
+        ...poolHelper.records[t], address: t
+      })).filter(r => r.desiredDenorm == 0)[0];
+      expect(lastRecord).to.not.be.null;
+      const record = await indexPool.getTokenRecord(lastRecord.address);
+      expect(+fromWei(record.desiredDenorm)).to.eq(0);
     });
 
     describe('Prices the new token using the minimum balance', () => {
@@ -671,24 +676,87 @@ describe('IPool.sol', async () => {
         }
       });
     });
+
+    describe('Token Removal', async () => {
+      let iterations, tokenToRemove;
+
+      it('Removes the last token from the pool', async () => {
+        let target, current;
+        
+        for (let token of poolHelper.tokens) {
+          if (token == newTokenAddress) continue;
+          const record = await indexPool.getTokenRecord(token);
+          target = +fromWei(record.desiredDenorm);
+          if (target == 0) {
+            tokenToRemove = token;
+            current = +fromWei(record.denorm);
+            iterations = Math.ceil(
+              (Math.log(0.01) - Math.log(current / 25)) / Math.log(0.99)
+            );
+            break;
+          }
+        }
+        expect(tokenToRemove).to.not.be.null;
+        console.log(`Removal should take ${iterations} steps to go from ${current/25} to 0.01`);
+      });
+
+      it('Updates the pool helper', async () => {
+        const realDenorms = await Promise.all(poolHelper.tokens.map(
+          (t) => indexPool.getDenormalizedWeight(t).then(d => +fromWei(d))
+        ));
+        const balances = await Promise.all(poolHelper.tokens.map(
+          (t) => indexPool.getBalance(t).then(b => +fromWei(b))
+        ));
+        for (let i = 0; i < realDenorms.length; i++) {
+          const token = poolHelper.tokens[i];
+          poolHelper.records[token].denorm = realDenorms[i];
+          poolHelper.records[token].balance = balances[i];
+        }
+      });
+
+      it(`Swaps until the token is removed`, async () => {
+        console.log(`Notice: This test takes a while to run - it probably is not frozen.`);
+        console.log(`It may take a minute or two when running sol coverage.`)
+        const maxPrice = web3.utils.toTwosComplement(-1);
+        const tokenIn = poolHelper.tokens[0];
+        const tokenOut = tokenToRemove;
+        const originalSpotPrice = poolHelper.calcSpotPrice(tokenOut, tokenIn);
+
+        const poolBalanceIn = await indexPool.getBalance(tokenIn);
+
+        await mintAndApprove(tokenIn, `0x${toBN(poolBalanceIn).divn(100).toString('hex')}`);
+
+        await (await ethers.getContractAt('MockERC20', tokenIn)).approve(
+          indexPool.address, maxPrice
+        );
+        await (await ethers.getContractAt('MockERC20', tokenOut)).approve(
+          indexPool.address, maxPrice
+        );
+
+        async function executeSwapToTargetPrice() {
+          let amtIn = poolHelper.calcInGivenPrice(tokenOut, tokenIn, originalSpotPrice);
+          amtIn = Math.min(poolHelper.records[tokenOut].balance / 2, amtIn);
+          poolHelper.calcOutGivenIn(tokenOut, tokenIn, amtIn, true, true);
+          await indexPool.swapExactAmountIn(
+            tokenOut, decToWeiHex(amtIn), tokenIn, 0, maxPrice
+          );
+        }
+        for (let i = 0; i < iterations; i++) {
+
+          const amountIn = poolHelper.records[tokenIn].balance / 150;
+          await indexPool.swapExactAmountIn(tokenIn, decToWeiHex(amountIn), tokenOut, 0, maxPrice);
+          poolHelper.calcOutGivenIn(tokenIn, tokenOut, amountIn, true, true);
+          
+          if (i < iterations - 1) {
+            // Swap back to the original price
+            await executeSwapToTargetPrice();
+            // Wait an hour so we can update the weights again
+            await bre.run('increaseTime', { hours: 1 });
+          }
+        }
+        const stillBound = await indexPool.isBound(tokenOut);
+        expect(stillBound).to.be.false;
+      });
+    });
   });
-
-  describe('Unbind Tokens', async () => {
-    let token, balance;
-    it('Unbinds a token from the pool', async () => {
-      token = wrappedTokens[0].token;
-      balance = await indexPool.getBalance(token.address);
-      await indexPool.unbind(token.address);
-    });
-
-    it('Seller receives the `handleUnbindToken` call', async () => {
-      const amount = await unbindTokenHandler.getReceivedTokens(token.address);
-      expect(amount).to.eq(balance);
-    });
-
-    it('Seller received the tokens', async () => {
-      const realBalance = await token.balanceOf(unbindTokenHandler.address);
-      expect(realBalance).to.eq(balance)
-    });
-  })
 });

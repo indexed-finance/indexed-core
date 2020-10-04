@@ -1,4 +1,4 @@
-const { calcSpotPrice, calcOutGivenIn, calcSingleInGivenPoolOut, calcInGivenOut } = require("./calc_comparisons");
+const { calcSpotPrice, calcOutGivenIn, calcSingleInGivenPoolOut, calcInGivenOut, calcInGivenPrice } = require("./calc_comparisons");
 const { default: Decimal } = require("decimal.js");
 
 module.exports = class PoolHelper {
@@ -11,6 +11,7 @@ module.exports = class PoolHelper {
     this.records = {};
     this.marketCaps = {};
     this.poolSupply = Decimal(100);
+    this.size = token_objects.length;
     for (let token of token_objects) {
       const { address, price, totalSupply, balance } = token;
       this.tokens.push(address);
@@ -51,17 +52,34 @@ module.exports = class PoolHelper {
     this.records[address].minimumBalance = Decimal((totalValue / 100) / price);
   }
 
+  getSortedRecords() {
+    const records = this.tokens.map(t => ({ ...this.records[t], address: t }));
+    records.map(r => (r.marketCap = Decimal(r.totalSupply).mul(r.price)));
+    records.sort((a, b) => (+(a.marketCap) < +(b.marketCap)) ? 1 : -1);
+    return records;
+  }
+
   setDesiredWeights() {
-    const marketCaps = this.tokens.map(a => {
-      const { totalSupply, price } = this.records[a];
-      return (this.records[a].marketCap = Decimal(totalSupply).mul(price));
-    });
-    const marketCapSqrts = marketCaps.map(m => Math.sqrt(m));
+    // const marketCaps = this.tokens.map(a => {
+    //   const { totalSupply, price } = this.records[a];
+    //   return (this.records[a].marketCap = Decimal(totalSupply).mul(price));
+    // });
+    // marketCaps.sort((a, b) => (+a < +b) ? 1 : -1);
+    let records = this.getSortedRecords();
+    if (records.length > this.size) {
+      const removed = records.splice(this.size);
+      for (let r of removed) {
+        this.records[r.address].desiredDenorm = 0;
+      }
+    }
+    const marketCaps = records.map(r => r.marketCap);
+    const marketCapSqrts = marketCaps.map(m => Math.sqrt(+m));
     const sqrtSum = marketCapSqrts.reduce((a, b) => a + b, 0);
     let weights = marketCapSqrts.map(m => 25 * m / sqrtSum);
     this.totalWeight = weights.reduce((a, b) => a+b, 0);
-    for (let i = 0; i < marketCaps.length; i++) {
-      this.records[this.tokens[i]].desiredDenorm = weights[i];
+    for (let i = 0; i < records.length; i++) {
+      let a = records[i].address;
+      this.records[a].desiredDenorm = weights[i];
     }
   }
 
@@ -75,7 +93,7 @@ module.exports = class PoolHelper {
     let desiredDenorm = record.desiredDenorm;
     if (oldWeight >= desiredDenorm) return oldWeight;
     let denorm = desiredDenorm;
-    const maxDiff = oldWeight * this.swapFee / 2;
+    const maxDiff = oldWeight * 0.01;
     let diff = desiredDenorm - oldWeight;
     if (diff > maxDiff) denorm = oldWeight + maxDiff;
     return denorm;
@@ -87,7 +105,7 @@ module.exports = class PoolHelper {
     const desiredDenorm = record.desiredDenorm;
     if (oldWeight <= desiredDenorm) return oldWeight;
     let denorm = desiredDenorm;
-    const maxDiff = oldWeight * this.swapFee / 2;
+    const maxDiff = oldWeight * 0.01;
     const diff = oldWeight - desiredDenorm;
     if (diff > maxDiff) denorm = oldWeight - maxDiff;
     return denorm;
@@ -103,7 +121,7 @@ module.exports = class PoolHelper {
     return calcSpotPrice(bI, dI, bO, dO, this.swapFee);
   }
 
-  calcOutGivenIn(tokenIn, tokenOut, amountIn, updateWeightAfter = false) {
+  calcOutGivenIn(tokenIn, tokenOut, amountIn, updateWeightAfter = false, saveUpdate = false) {
     let { denorm: dI, balance: bI, ready: rI, realBalance: rbI } = this.getInputToken(tokenIn);
     let { denorm: dO, balance: bO, ready: rO } = this.records[tokenOut];
     if (!rO) throw new Error('Out token not ready.');
@@ -140,6 +158,15 @@ module.exports = class PoolHelper {
       dO,
       this.swapFee
     );
+    if (saveUpdate) {
+      this.records[tokenIn].balance = rbI;
+      this.records[tokenOut].balance = bO;
+      this.records[tokenOut].denorm = dO;
+      if (rI) {
+        this.records[tokenIn].denorm = dI;
+        this.records[tokenIn].ready = true;
+      }
+    }
     return [tokenAmountOut, spotPriceAfter];
   }
 
@@ -226,6 +253,12 @@ module.exports = class PoolHelper {
     );
     return [Decimal(amountIn), spotPriceAfter];
   }
+
+  calcSpotPrice(tokenIn, tokenOut) {
+    const { balance: bI, denorm: dI } = this.getInputToken(tokenIn);
+    const { denorm: dO, balance: bO } = this.records[tokenOut];
+    return calcSpotPrice(+bI, +dI, +bO, +dO, this.swapFee);
+  }
   
   calcPoolOutGivenSingleIn(tokenIn, tokenAmountIn) {
     const { denorm: dI, balance: bI } = this.records[tokenIn];
@@ -235,5 +268,18 @@ module.exports = class PoolHelper {
   calcSingleInGivenPoolOut(tokenIn, poolAmountOut) {
     const { denorm: dI, balance: bI } = this.records[tokenIn];
     return calcSingleInGivenPoolOut(bI, dI, this.poolSupply, this.totalWeight, poolAmountOut, this.swapFee);
+  }
+
+  calcInGivenPrice(tokenIn, tokenOut, extPrice) {
+    const { balance: bI, denorm: dI } = this.getInputToken(tokenIn);
+    const { denorm: dO, balance: bO } = this.records[tokenOut];
+    return calcInGivenPrice(
+      +bI,
+      +dI,
+      +bO,
+      +dO,
+      +extPrice,
+      this.swapFee
+    )
   }
 }

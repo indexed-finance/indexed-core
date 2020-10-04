@@ -4,9 +4,10 @@ const { soliditySha3 } = require('web3-utils');
 const BN = require('bn.js');
 const bre = require("@nomiclabs/buidler");
 
-const { setupUniSwapV2 } = require('./lib/uniswap-setup');
+const { deployments, ethers } = bre;
+
 const { wrapped_tokens: wrappedTokens } = require('./testData/categories.json');
-const { nTokens, nTokensHex } = require('./lib/tokens');
+const { nTokensHex } = require('./lib/tokens');
 
 chai.use(chaiAsPromised);
 const { expect } = chai;
@@ -20,28 +21,13 @@ describe("UniSwapV2PriceOracle.sol", () => {
   let erc20Factory, tokens;
   let timestampAddition = 0;
 
-  const getTimestamp = () => Math.floor(new Date().getTime() / 1000) + timestampAddition;
-  const increaseTimeByOnePeriod = () => {
-    timestampAddition += 3.5 * 24 * 60 * 60;
-    const timestamp = getTimestamp();
-    return web3.currentProvider._sendJsonRpcRequest({
-      method: "evm_setNextBlockTimestamp",
-      params: [timestamp],
-      jsonrpc: "2.0",
-      id: new Date().getTime()
-    });
-  }
-
   before(async () => {
     erc20Factory = await ethers.getContractFactory("MockERC20");
-    await bre.run('deploy_uniswap_oracle');
-    ({
-      from,
-      uniswapFactory,
-      uniswapRouter,
-      weth,
-      uniswapOracle: marketOracle
-    } = bre.config.deployed);
+    await deployments.fixture();
+    uniswapFactory = await ethers.getContract('uniswapFactory');
+    uniswapRouter = await ethers.getContract('uniswapRouter');
+    weth = await ethers.getContract('weth');
+    marketOracle = await ethers.getContract('WeeklyTWAPUniSwapV2Oracle');
     [from] = await web3.eth.getAccounts();
   });
 
@@ -62,11 +48,11 @@ describe("UniSwapV2PriceOracle.sol", () => {
     const amountWeth = nTokensHex(liquidity * price);
     await token.getFreeTokens(from, amountToken).then(r => r.wait());
     await weth.getFreeTokens(from, amountWeth).then(r => r.wait());;
-    await token.approve(uniswapRouter.options.address, amountToken).then(r => r.wait());
+    await token.approve(uniswapRouter.address, amountToken).then(r => r.wait());
     
-    await weth.approve(uniswapRouter.options.address, amountWeth).then(r => r.wait())
-    const timestamp = getTimestamp() + 1000;
-    await uniswapRouter.methods.addLiquidity(
+    await weth.approve(uniswapRouter.address, amountWeth).then(r => r.wait())
+    const timestamp = await bre.run('getTimestamp') + 1000;
+    await uniswapRouter.addLiquidity(
       token.address,
       weth.address,
       amountToken,
@@ -75,7 +61,7 @@ describe("UniSwapV2PriceOracle.sol", () => {
       amountWeth,
       from,
       timestamp
-    ).send({ from });
+    );
   }
 
   /**
@@ -85,21 +71,11 @@ describe("UniSwapV2PriceOracle.sol", () => {
    */
   async function createTokenMarket(tokenObj, liquidity) {
     const { address, initialPrice, token } = tokenObj;
-    const result = await uniswapFactory.methods.createPair(address, weth.address).send({ from });
-    const { pair } = result.events.PairCreated.returnValues;
+    const receipt = await uniswapFactory.createPair(address, weth.address);
+    const { events } = await receipt.wait();
+    const { args: { pair } } = events.filter(e => e.event == 'PairCreated')[0];
     tokenObj.pair = pair;
     await addTokenLiquidity(token, initialPrice, liquidity);
-  }
-
-  async function uniswapGetAmountOut(tokenObjIn, tokenObjOut, amountIn) {
-    const amounts = await uniswapRouter.methods.swapExactTokensForTokens(
-      nTokensHex(amountIn),
-      0,
-      [tokenObjIn.address, tokenObjOut.address],
-      from,
-      getTimestamp() + 1000
-    ).call();
-    return amounts[0]
   }
 
   describe('Initialize Tokens', async () => {
@@ -130,7 +106,7 @@ describe("UniSwapV2PriceOracle.sol", () => {
     });
   
     it('computeAverageAmountOut()', async () => {
-      await increaseTimeByOnePeriod();
+      await bre.run('increaseTime', { days: 2 });
       for (let i = 0; i < wrappedTokens.length; i++) {
         const { address, token, initialPrice } = wrappedTokens[i];
         // In order to update the cumulative prices on the market pairs,
