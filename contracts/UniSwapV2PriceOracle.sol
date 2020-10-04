@@ -2,10 +2,11 @@
 pragma solidity ^0.6.0;
 pragma experimental ABIEncoderV2;
 
-import {
-  UniswapV2OracleLibrary as UniV2Oracle
-} from "./lib/UniswapV2OracleLibrary.sol";
+// import {
+//   UniswapV2OracleLibrary as UniV2Oracle
+// } from "./lib/UniswapV2OracleLibrary.sol";
 import "./lib/FixedPoint.sol";
+import { PriceLibrary as Prices } from "./lib/PriceLibrary.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 
@@ -26,6 +27,12 @@ import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
  * https://uniswap.org/whitepaper.pdf#subsection.2.2
  */
 contract UniSwapV2PriceOracle {
+  using Prices for address;
+  using Prices for Prices.PriceObservation;
+  using Prices for Prices.TwoWayAveragePrice;
+  using FixedPoint for FixedPoint.uq112x112;
+  using FixedPoint for FixedPoint.uq144x112;
+
 /* ---  Constants  --- */
 
   // Period over which prices are observed, each period should have 1 price observation.
@@ -36,13 +43,6 @@ contract UniSwapV2PriceOracle {
 
   // Maximum age an observation can have to still be usable in standard price queries.
   uint32 public immutable MAXIMUM_OBSERVATION_AGE;
-
-/* ---  Structs  --- */
-
-  struct PriceObservation {
-    uint32 timestamp;
-    uint224 priceCumulativeLast;
-  }
 
 /* ---  Events  --- */
 
@@ -58,7 +58,7 @@ contract UniSwapV2PriceOracle {
 
   // Price observations for tokens indexed by time period.
   mapping(
-    address => mapping(uint256 => PriceObservation)
+    address => mapping(uint256 => Prices.PriceObservation)
   ) internal _priceObservations;
 
   constructor(
@@ -85,18 +85,18 @@ contract UniSwapV2PriceOracle {
    * @return didUpdate Whether the token price was updated.
    */
   function updatePrice(address token) public returns (bool didUpdate) {
-    PriceObservation memory _new = _observePrice(token);
+    Prices.PriceObservation memory _new = _uniswapFactory.observePrice(token, _weth);
     // We use the observation's timestamp rather than `now` because the
     // UniSwap pair may not have updated the price this block.
     uint256 observationIndex = observationIndexOf(_new.timestamp);
 
-    PriceObservation storage current = _priceObservations[token][observationIndex];
+    Prices.PriceObservation storage current = _priceObservations[token][observationIndex];
     if (current.timestamp != 0) {
       // If an observation has already been made for this period, do not update.
       return false;
     }
 
-    PriceObservation memory previous = _priceObservations[token][observationIndex - 1];
+    Prices.PriceObservation memory previous = _priceObservations[token][observationIndex - 1];
     uint256 timeElapsed = _new.timestamp - previous.timestamp;
     if (timeElapsed < MINIMUM_OBSERVATION_DELAY) {
       // If less than half a period has passed since the previous observation, do not update.
@@ -124,7 +124,7 @@ contract UniSwapV2PriceOracle {
     }
   }
 
-/* ---  Queries  --- */
+/* ---  Observation Queries  --- */
 
   /**
    * @dev Gets the price observation at `observationIndex` for `token`.
@@ -135,7 +135,7 @@ contract UniSwapV2PriceOracle {
   function getPriceObservation(address token, uint256 observationIndex)
     external
     view
-    returns (PriceObservation memory)
+    returns (Prices.PriceObservation memory)
   {
     return _priceObservations[token][observationIndex];
   }
@@ -148,7 +148,7 @@ contract UniSwapV2PriceOracle {
   }
 
   function canUpdatePrice(address token) external view returns (bool) {
-    PriceObservation memory _new = _observePrice(token);
+    Prices.PriceObservation memory _new = _uniswapFactory.observePrice(token, _weth);
     // We use the observation's timestamp rather than `now` because the
     // UniSwap pair may not have updated the price this block.
     uint256 observationIndex = observationIndexOf(_new.timestamp);
@@ -161,40 +161,35 @@ contract UniSwapV2PriceOracle {
     return timeElapsed >= MINIMUM_OBSERVATION_DELAY;
   }
 
+/* ---  Value Queries  --- */
+
   /**
-   * @dev Compute the average value in _weth of a given amount
-   * of a token. Queries the current cumulative price and retrieves
-   * the last stored cumulative price, then calculates the average
-   * price and multiplies it by the input amount.
+   * @dev Computes the average value in weth of `amountIn` of `token`.
    */
   function computeAverageAmountOut(address token, uint256 amountIn)
     public
     view
     returns (uint144 amountOut)
   {
-    // Get the current cumulative price
-    PriceObservation memory current = _observePrice(token);
-
-    // Get the latest usable price
-    PriceObservation memory previous = _getLatestUsableObservation(
-      token,
-      current.timestamp
-    );
-
-    return
-      UniV2Oracle.computeAverageAmountOut(
-        previous.priceCumulativeLast,
-        current.priceCumulativeLast,
-        uint32(current.timestamp - previous.timestamp),
-        amountIn
-      );
+    FixedPoint.uq112x112 memory priceAverage = computeAverageTokenPrice(token);
+    return priceAverage.mul(amountIn).decode144();
   }
 
   /**
-   * @dev Compute the average value in _weth of a given amount
-   * of a token. Queries the current cumulative price and retrieves
-   * the last stored cumulative price, then calculates the average
-   * price and multiplies it by the input amount.
+   * @dev Computes the average value in `token` of `amountOut` of weth.
+   */
+  function computeAverageAmountIn(address token, uint256 amountOut)
+    public
+    view
+    returns (uint144 amountIn)
+  {
+    FixedPoint.uq112x112 memory priceAverage = computeAverageEthPrice(token);
+    return priceAverage.mul(amountOut).decode144();
+  }
+
+  /**
+   * @dev Compute the average value in weth of each token in `tokens`
+   * for the corresponding token amount in `amountsIn`.
    */
   function computeAverageAmountsOut(
     address[] calldata tokens,
@@ -212,37 +207,103 @@ contract UniSwapV2PriceOracle {
     }
   }
 
+
   /**
-   * @dev Returns the UQ112x112 struct representing the average price.
+   * @dev Compute the average value of each amount of weth in `amountsOut`
+   * in terms of the corresponding token in `tokens`.
+   */
+  function computeAverageAmountsIn(
+    address[] calldata tokens,
+    uint256[] calldata amountsOut
+  )
+    external
+    view
+    returns (uint144[] memory amountsIn)
+  {
+    uint256 len = tokens.length;
+    require(amountsOut.length == len, "ERR_ARR_LEN");
+    amountsIn = new uint144[](len);
+    for (uint256 i = 0; i < len; i++) {
+      amountsIn[i] = computeAverageAmountIn(tokens[i], amountsOut[i]);
+    }
+  }
+
+/* ---  Price Queries  --- */
+
+  /**
+   * @dev Returns the UQ112x112 struct representing the average price of
+   * `token` in terms of weth.
    *
    * Note: Requires that the token has a price observation between 0.5
    * and 2 periods old.
    */
-  function computeAveragePrice(address token)
+  function computeAverageTokenPrice(address token)
     public
     view
     returns (FixedPoint.uq112x112 memory priceAverage)
   {
     // Get the current cumulative price
-    PriceObservation memory current = _observePrice(token);
+    Prices.PriceObservation memory current = _uniswapFactory.observePrice(token, _weth);
     // Get the latest usable price
-    PriceObservation memory previous = _getLatestUsableObservation(
+    Prices.PriceObservation memory previous = _getLatestUsableObservation(
       token,
       current.timestamp
     );
 
-    return
-      UniV2Oracle.computeAveragePrice(
-        previous.priceCumulativeLast,
-        current.priceCumulativeLast,
-        uint32(current.timestamp - previous.timestamp)
-      );
+    return previous.computeAverageTokenPrice(current);
   }
 
   /**
-   * @dev Returns the average market caps for each token.
+   * @dev Returns the UQ112x112 struct representing the average price of
+   * weth in terms of `token`.
+   *
+   * Note: Requires that the token has a price observation between 0.5
+   * and 2 periods old.
    */
-  function computeAveragePrices(address[] memory tokens)
+  function computeAverageEthPrice(address token)
+    public
+    view
+    returns (FixedPoint.uq112x112 memory priceAverage)
+  {
+    // Get the current cumulative price
+    Prices.PriceObservation memory current = _uniswapFactory.observePrice(token, _weth);
+    // Get the latest usable price
+    Prices.PriceObservation memory previous = _getLatestUsableObservation(
+      token,
+      current.timestamp
+    );
+
+    return previous.computeAverageEthPrice(current);
+  }
+
+  /**
+   * @dev Returns the TwoWayAveragePrice struct representing the average price of
+   * weth in terms of `token` and the average price of `token` in terms of weth.
+   *
+   * Note: Requires that the token has a price observation between 0.5
+   * and 2 periods old.
+   */
+  function computeTwoWayAveragePrice(address token)
+    public
+    view
+    returns (Prices.TwoWayAveragePrice memory)
+  {
+    // Get the current cumulative price
+    Prices.PriceObservation memory current = _uniswapFactory.observePrice(token, _weth);
+    // Get the latest usable price
+    Prices.PriceObservation memory previous = _getLatestUsableObservation(
+      token,
+      current.timestamp
+    );
+
+    return previous.computeTwoWayAveragePrice(current);
+  }
+
+  /**
+   * @dev Returns the UQ112x112 structs representing the average price of
+   * each token in `tokens` in terms of weth.
+   */
+  function computeAverageTokenPrices(address[] memory tokens)
     public
     view
     returns (FixedPoint.uq112x112[] memory averagePrices)
@@ -250,35 +311,59 @@ contract UniSwapV2PriceOracle {
     uint256 len = tokens.length;
     averagePrices = new FixedPoint.uq112x112[](len);
     for (uint256 i = 0; i < len; i++) {
-      averagePrices[i] = computeAveragePrice(tokens[i]);
+      averagePrices[i] = computeAverageTokenPrice(tokens[i]);
+    }
+  }
+
+  /**
+   * @dev Returns the UQ112x112 structs representing the average price of
+   * weth in terms of each token in `tokens`.
+   */
+  function computeAverageEthPrices(address[] memory tokens)
+    public
+    view
+    returns (FixedPoint.uq112x112[] memory averagePrices)
+  {
+    uint256 len = tokens.length;
+    averagePrices = new FixedPoint.uq112x112[](len);
+    for (uint256 i = 0; i < len; i++) {
+      averagePrices[i] = computeAverageEthPrice(tokens[i]);
+    }
+  }
+
+  /**
+   * @dev Returns the TwoWayAveragePrice structs representing the average price of
+   * weth in terms of each token in `tokens` and the average price of each token
+   * in terms of weth.
+   *
+   * Note: Requires that the token has a price observation between 0.5
+   * and 2 periods old.
+   */
+  function computeTwoWayAveragePrices(address[] memory tokens)
+    public
+    view
+    returns (Prices.TwoWayAveragePrice[] memory averagePrices)
+  {
+    uint256 len = tokens.length;
+    averagePrices = new Prices.TwoWayAveragePrice[](len);
+    for (uint256 i = 0; i < len; i++) {
+      averagePrices[i] = computeTwoWayAveragePrice(tokens[i]);
     }
   }
 
 /* ---  Internal Observation Functions  --- */
 
   /**
-   * @dev Query the current cumulative price for a token.
-   */
-  function _observePrice(address token)
-    internal
-    view
-    returns (PriceObservation memory)
-  {
-    (uint256 priceCumulative, uint32 blockTimestamp) = UniV2Oracle
-      .getCurrentCumulativePrice(_uniswapFactory, token, _weth);
-    return PriceObservation(blockTimestamp, uint224(priceCumulative));
-  }
-
-  /**
    * @dev Gets the latest price observation which is at least half a period older
    * than `timestamp` and at most 2 periods older.
+   *
    * @param token Token to get the latest price for
    * @param timestamp Reference timestamp for comparison
    */
   function _getLatestUsableObservation(address token, uint32 timestamp)
     internal
     view
-    returns (PriceObservation memory observation)
+    returns (Prices.PriceObservation memory observation)
   {
     uint256 observationIndex = observationIndexOf(timestamp);
     uint256 periodTimeElapsed = timestamp % OBSERVATION_PERIOD;
