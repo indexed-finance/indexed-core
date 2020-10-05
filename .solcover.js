@@ -1,5 +1,6 @@
 module.exports = {
   mocha: {
-    enableTimeouts: false
+    enableTimeouts: false,
+    timeout: 250000
   }
 }
