@@ -30,7 +30,7 @@ import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
  *
  * REBALANCING
  * ===============
- * Every 4 weeks, pools are either re-weighed or re-indexed.
+ * Every 2 weeks, pools are either re-weighed or re-indexed.
  * They are re-indexed once for every three re-weighs.
  *
  * Re-indexing involves selecting the top tokens from the pool's category and weighing them
@@ -67,7 +67,7 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
   uint256 internal constant WEIGHT_MULTIPLIER = 25e18;
 
   // Time between reweigh/reindex calls.
-  uint256 internal constant POOL_REWEIGH_DELAY = 4 weeks;
+  uint256 internal constant POOL_REWEIGH_DELAY = 2 weeks;
 
   // The number of reweighs which occur before a pool is re-indexed.
   uint256 internal constant REWEIGHS_BEFORE_REINDEX = 3;
