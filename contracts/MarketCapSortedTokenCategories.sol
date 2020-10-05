@@ -90,7 +90,15 @@ contract MarketCapSortedTokenCategories is Owned {
 /* ---  Category Management  --- */
 
   /**
-   * @dev Create a new token category.
+   * @dev Updates the prices on the oracle for all the tokens in a category.
+   */
+  function updateCategoryPrices(uint256 categoryID) external {
+    address[] memory tokens = _categoryTokens[categoryID];
+    oracle.updatePrices(tokens);
+  }
+
+  /**
+   * @dev Creates a new token category.
    * @param metadataHash Hash of metadata about the token category
    * which can be distributed on IPFS.
    */
