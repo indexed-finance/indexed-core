@@ -587,6 +587,7 @@ contract IPool is BToken, BMath {
       "ERR_MAX_OUT_RATIO"
     );
 
+    _pushUnderlying(tokenOut, msg.sender, tokenAmountOut);
     _records[tokenOut].balance = bsub(outRecord.balance, tokenAmountOut);
     _decreaseDenorm(outRecord, tokenOut);
     uint256 exitFee = bmul(poolAmountIn, EXIT_FEE);
@@ -596,7 +597,6 @@ contract IPool is BToken, BMath {
     _pullPoolShare(msg.sender, poolAmountIn);
     _burnPoolShare(bsub(poolAmountIn, exitFee));
     _pushPoolShare(_controller, exitFee);
-    _pushUnderlying(tokenOut, msg.sender, tokenAmountOut);
 
     return tokenAmountOut;
   }
@@ -635,6 +635,7 @@ contract IPool is BToken, BMath {
     require(poolAmountIn != 0, "ERR_MATH_APPROX");
     require(poolAmountIn <= maxPoolAmountIn, "ERR_LIMIT_IN");
 
+    _pushUnderlying(tokenOut, msg.sender, tokenAmountOut);
     _records[tokenOut].balance = bsub(outRecord.balance, tokenAmountOut);
     _decreaseDenorm(outRecord, tokenOut);
 
@@ -645,7 +646,6 @@ contract IPool is BToken, BMath {
     _pullPoolShare(msg.sender, poolAmountIn);
     _burnPoolShare(bsub(poolAmountIn, exitFee));
     _pushPoolShare(_controller, exitFee);
-    _pushUnderlying(tokenOut, msg.sender, tokenAmountOut);
 
     return poolAmountIn;
   }
@@ -764,17 +764,21 @@ contract IPool is BToken, BMath {
     );
 
     require(tokenAmountOut >= minAmountOut, "ERR_LIMIT_OUT");
+
+    _pullUnderlying(tokenIn, msg.sender, tokenAmountIn);
+    _pushUnderlying(tokenOut, msg.sender, tokenAmountOut);
+
     realInBalance = badd(realInBalance, tokenAmountIn);
     _updateInputToken(tokenIn, inRecord, realInBalance);
     if (inRecord.ready) {
       inRecord.balance = realInBalance;
     }
-    // If needed, update the output token's weight.
-    _decreaseDenorm(outRecord, tokenOut);
     // Update the in-memory record for the spotPriceAfter calculation,
     // then update the storage record with the local balance.
     outRecord.balance = bsub(outRecord.balance, tokenAmountOut);
     _records[tokenOut].balance = outRecord.balance;
+    // If needed, update the output token's weight.
+    _decreaseDenorm(outRecord, tokenOut);
 
     spotPriceAfter = calcSpotPrice(
       inRecord.balance,
@@ -784,7 +788,7 @@ contract IPool is BToken, BMath {
       _swapFee
     );
 
-    require(spotPriceAfter >= spotPriceBefore, "ERR_MATH_APPROX");
+    require(spotPriceAfter >= spotPriceBefore, "ERR_MATH_APPROX_2");
     require(spotPriceAfter <= maxPrice, "ERR_LIMIT_PRICE");
     require(
       spotPriceBefore <= bdiv(tokenAmountIn, tokenAmountOut),
@@ -792,9 +796,6 @@ contract IPool is BToken, BMath {
     );
 
     emit LOG_SWAP(msg.sender, tokenIn, tokenOut, tokenAmountIn, tokenAmountOut);
-
-    _pullUnderlying(tokenIn, msg.sender, tokenAmountIn);
-    _pushUnderlying(tokenOut, msg.sender, tokenAmountOut);
 
     return (tokenAmountOut, spotPriceAfter);
   }
@@ -844,18 +845,22 @@ contract IPool is BToken, BMath {
     );
 
     require(tokenAmountIn <= maxAmountIn, "ERR_LIMIT_IN");
+
+    _pullUnderlying(tokenIn, msg.sender, tokenAmountIn);
+    _pushUnderlying(tokenOut, msg.sender, tokenAmountOut);
+
     // Update the balance and (if necessary) weight of the input token.
     realInBalance = badd(realInBalance, tokenAmountIn);
     _updateInputToken(tokenIn, inRecord, realInBalance);
     if (inRecord.ready) {
       inRecord.balance = realInBalance;
     }
-    // If needed, update the output token's weight.
-    _decreaseDenorm(outRecord, tokenOut);
     // Update the in-memory record for the spotPriceAfter calculation,
     // then update the storage record with the local balance.
     outRecord.balance = bsub(outRecord.balance, tokenAmountOut);
     _records[tokenOut].balance = outRecord.balance;
+    // If needed, update the output token's weight.
+    _decreaseDenorm(outRecord, tokenOut);
 
     spotPriceAfter = calcSpotPrice(
       inRecord.balance,
@@ -873,9 +878,6 @@ contract IPool is BToken, BMath {
     );
 
     emit LOG_SWAP(msg.sender, tokenIn, tokenOut, tokenAmountIn, tokenAmountOut);
-
-    _pullUnderlying(tokenIn, msg.sender, tokenAmountIn);
-    _pushUnderlying(tokenOut, msg.sender, tokenAmountOut);
 
     return (tokenAmountIn, spotPriceAfter);
   }
@@ -1308,7 +1310,7 @@ contract IPool is BToken, BMath {
    * bring the token above the minimum balance, this will
    * mark the token as initialized, remove the minimum
    * balance and set the weight to the minimum weight plus
-   * 1.25%.
+   * 1%.
    *
    *
    * @param token Address of the input token
