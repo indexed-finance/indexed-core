@@ -17,7 +17,6 @@ import {
 
 import { PriceLibrary as Prices } from "./lib/PriceLibrary.sol";
 
-import "@nomiclabs/buidler/console.sol";
 
 /**
  * @title UnboundTokenSeller
@@ -160,48 +159,6 @@ contract UnboundTokenSeller {
     emit PremiumPercentSet(premiumPercent);
   }
 
-  /**
-   * @dev Emergency function that allows the controller to force a token
-   * sale through UniSwap. This exists in case of an emergency which
-   * demands immediate removal of a token.
-   */
-  function emergencyExecuteSwapTokensForExactTokens(
-    address tokenIn,
-    address tokenOut,
-    uint256 maxAmountIn,
-    uint256 amountOut,
-    address[] calldata path
-  )
-    external
-    _lock_
-    _control_
-  {
-    // Approve UniSwap to transfer the input tokens
-    IERC20(tokenIn).safeApprove(address(_uniswapRouter), maxAmountIn);
-    // Verify that the first token in the path is the input token and that
-    // the last is the output token.
-    require(
-      path[0] == tokenIn && path[path.length - 1] == tokenOut,
-      "ERR_PATH_TOKENS"
-    );
-    // Execute the swap.
-    uint256[] memory amounts = _uniswapRouter.swapTokensForExactTokens(
-      amountOut,
-      maxAmountIn,
-      path,
-      address(_pool),
-      block.timestamp + 1
-    );
-    uint256 amountIn = amounts[0];
-    _pool.gulp(tokenOut);
-    emit SwappedTokens(
-      tokenIn,
-      tokenOut,
-      amountIn,
-      amountOut
-    );
-  }
-
 /* ---  Token Swaps  --- */
 
   /**
@@ -224,30 +181,18 @@ contract UnboundTokenSeller {
     _lock_
     returns (uint256 premiumPaidToCaller)
   {
-
-    /* (
-      Prices.TwoWayAveragePrice memory avgPriceIn,
-      Prices.TwoWayAveragePrice memory avgPriceOut
-    ) = _getAveragePrices(tokenIn, tokenOut);
-    uint256 valueOut = avgPriceOut.computeAverageEthForTokens(amountOut);
-    uint256 maxValueIn = _maximumPaidValue(valueOut);
-    uint256 maxAmountIn = avgPriceIn.computeAverageTokensForEth(maxValueIn); */
-    console.log("Try swap.");
     // calcOutGivenIn uses tokenIn as the token the pool is receiving and
     // tokenOut as the token the pool is paying, whereas this function is
     // the reverse.
     uint256 maxAmountIn = calcOutGivenIn(tokenOut, tokenIn, amountOut);
-    console.log("Max:", maxAmountIn);
     // Approve UniSwap to transfer the input tokens
     IERC20(tokenIn).safeApprove(address(_uniswapRouter), maxAmountIn);
-    console.log("did approve.");
     // Verify that the first token in the path is the input token and that
     // the last is the output token.
     require(
       path[0] == tokenIn && path[path.length - 1] == tokenOut,
       "ERR_PATH_TOKENS"
     );
-    console.log("did verify tokens.");
     // Execute the swap.
     uint256[] memory amounts = _uniswapRouter.swapTokensForExactTokens(
       amountOut,
@@ -256,22 +201,17 @@ contract UnboundTokenSeller {
       address(_pool),
       block.timestamp + 1
     );
-    console.log("reading amount in.");
     // Get the actual amount paid
     uint256 amountIn = amounts[0];
-    console.log("Actual:", amountIn);
-
     // If we did not swap the full amount, remove the UniSwap allowance.
     if (amountIn != maxAmountIn) {
       IERC20(tokenIn).safeApprove(address(_uniswapRouter), 0);
-      // Transfer the difference between the maximum input and the actual
-      // input to the caller.
       premiumPaidToCaller = maxAmountIn - amountIn;
-      console.log("Premium:", premiumPaidToCaller);
+      // Transfer the difference between what the contract was willing to pay and
+      // what it actually paid to the caller.
       IERC20(tokenIn).safeTransfer(msg.sender, premiumPaidToCaller);
+
     }
-    console.log("did swap.");
-    
     // Update the pool's balance of the token.
     _pool.gulp(tokenOut);
     emit SwappedTokens(
@@ -479,6 +419,52 @@ contract UnboundTokenSeller {
   }
 
 /* ---  Internal Functions  --- */
+
+  function _calcAmountToCallerAndPool(
+    address tokenPaid,
+    uint256 amountPaid,
+    address tokenReceived,
+    uint256 amountReceived
+  )
+    internal
+    view
+    returns (uint256 premiumAmount, uint256 poolAmount)
+  {
+    // Get the average weth value of the amounts received and paid
+    (uint144 avgReceivedValue, uint144 avgPaidValue) = _getAverageValues(
+      tokenReceived,
+      amountReceived,
+      tokenPaid,
+      amountPaid
+    );
+    // Compute the minimum acceptable received value
+    uint256 minReceivedValue = _minimumReceivedValue(avgPaidValue);
+    require(avgReceivedValue >= minReceivedValue, "ERR_MIN_RECEIVED");
+    // Compute the premium based on the value received above the minimum
+    premiumAmount = (amountReceived * (avgReceivedValue - minReceivedValue)) / avgReceivedValue;
+    poolAmount = amountPaid - premiumAmount;
+  }
+
+  function _getAverageValues(
+    address token1,
+    uint256 amount1,
+    address token2,
+    uint256 amount2
+  )
+    internal
+    view
+    returns (uint144 avgValue1, uint144 avgValue2)
+  {
+    address[] memory tokens = new address[](2);
+    tokens[0] = token1;
+    tokens[1] = token2;
+    uint256[] memory amounts = new uint256[](2);
+    amounts[0] = amount1;
+    amounts[1] = amount2;
+    uint144[] memory avgValues = _oracle.computeAverageAmountsOut(tokens, amounts);
+    avgValue1 = avgValues[0];
+    avgValue2 = avgValues[1];
+  }
 
   function _getAveragePrices(address token1, address token2)
     internal
