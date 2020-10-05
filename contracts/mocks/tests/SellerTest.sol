@@ -16,7 +16,7 @@ import "./util/Diff.sol";
 import "./util/TestOrder.sol";
 import { UnboundTokenSeller, IPool } from "../../UnboundTokenSeller.sol";
 import { MockUnbindSourcePool } from "../MockUnbindSourcePool.sol";
-import "@nomiclabs/buidler/console.sol";
+import { UniswapV2Library } from "../../lib/UniswapV2Library.sol";
 
 
 contract SellerTest is TestTokenMarkets, Diff, TestOrder {
@@ -202,45 +202,58 @@ contract SellerTest is TestTokenMarkets, Diff, TestOrder {
   }
 
   function test_executeSwapTokensForExactTokens() external {
-    console.log("ABC");
     uint256 amountOut = 1e17;
-    uint256 valueOut = amountOut * price2;
-    uint256 maxValueIn = _maximumPaidValue(valueOut);
+    uint256 maxValueIn = (amountOut * price2 * 100) / 98;
     uint256 maxAmountIn = maxValueIn / price1;
-    uint256 amountIn = valueOut / price1;
-    console.log("Local Max:", maxAmountIn);
-    console.log("Local Actual:", amountIn);
+    uint256 expectedWethSwap2 = UniswapV2Library.getAmountIn(amountOut, 1e20 * price2, 1e20);
+    uint256 expectedAmountIn = UniswapV2Library.getAmountIn(expectedWethSwap2, 1e20, 1e20 * price1);
+    uint256 expectedPremium = maxAmountIn - expectedAmountIn;
 
-    console.log("ABC");
     address[] memory path = new address[](3);
     path[0] = address(token1);
     path[1] = address(weth);
     path[2] = address(token2);
-    console.log("ABC");
+    uint256 poolBalance1 = pool.getBalance(address(token2));
     uint256 premium = seller.executeSwapTokensForExactTokens(
       address(token1),
       address(token2),
       amountOut,
       path
     );
-    console.log("Expected Premium:", maxAmountIn - amountIn);
-    console.log("Actual Premium:", premium);
-    testDiff(premium, maxAmountIn - amountIn, "Error: Unexpected premium received.");
-  }
-  function _maximumPaidValue(uint256 valueReceived)
-    internal
-    view
-    returns (uint256 maxPaidValue)
-  {
-    maxPaidValue = (100 * valueReceived) / 98;
+    uint256 poolBalance2 = pool.getBalance(address(token2));
+    require(
+      poolBalance1 + amountOut == poolBalance2,
+      "Error: Pool did not gulp tokens."
+    );
+    require(expectedPremium == premium, "Error: Unexpected premium.");
   }
 
+  function test_executeSwapExactTokensForTokens() external {
+    // Relatively small amount to avoid needing to calculate uniswap slippage for
+    // expected premium
+    uint256 amountIn = 1e17;
+    uint256 minValueOut = (amountIn * price1 * 98) / 100;
+    uint256 minAmountOut = minValueOut / price2;
+    uint256 expectedWethSwap1 = UniswapV2Library.getAmountOut(amountIn, 1e20, 1e20 * price1);
+    uint256 expectedAmountOut = UniswapV2Library.getAmountOut(expectedWethSwap1, 1e20 * price2, 1e20);
+    uint256 expectedPremium = expectedAmountOut - minAmountOut;
 
-  function _minimumReceivedValue(uint256 valuePaid)
-    internal
-    view
-    returns (uint256 minValueReceived)
-  {
-    minValueReceived = (valuePaid * 98) / 100;
+    address[] memory path = new address[](3);
+    path[0] = address(token1);
+    path[1] = address(weth);
+    path[2] = address(token2);
+    uint256 poolBalance1 = pool.getBalance(address(token2));
+    uint256 premium = seller.executeSwapExactTokensForTokens(
+      address(token1),
+      address(token2),
+      amountIn,
+      path
+    );
+    uint256 poolBalance2 = pool.getBalance(address(token2));
+    require(
+      poolBalance1 + minAmountOut == poolBalance2,
+      "Error: Pool did not gulp tokens."
+    );
+    require(expectedPremium == premium, "Error: Unexpected premium.");
   }
 }
