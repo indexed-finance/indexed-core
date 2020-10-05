@@ -48,6 +48,12 @@ describe('UnboundTokenSeller.sol', () => {
   });
 
   it('executeSwapTokensForExactTokens()', async () => {
-    await testContract.test_executeSwapTokensForExactTokens();
+    // Call static to avoid changing the uniswap pool reserves, which would mess
+    // up the calculations in the next test.
+    await testContract.callStatic.test_executeSwapTokensForExactTokens();
+  });
+
+  it('executeSwapExactTokensForTokens()', async () => {
+    await testContract.callStatic.test_executeSwapExactTokensForTokens();
   });
 });
