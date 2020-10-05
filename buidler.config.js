@@ -16,7 +16,10 @@ usePlugin('buidler-abi-exporter');
 usePlugin("solidity-coverage");
 
 const keys = {
-  rinkeby: fromPrivateKey(Buffer.from(process.env.RINKEBY_PVT_KEY.slice(2), 'hex') || randomBytes(32)).getPrivateKeyString()
+  rinkeby: fromPrivateKey(
+    process.env.RINKEBY_PVT_KEY
+      ? Buffer.from(process.env.RINKEBY_PVT_KEY.slice(2), 'hex')
+      : randomBytes(32)).getPrivateKeyString()
 };
 
 internalTask('getTimestamp', () => {
