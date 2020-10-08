@@ -8,6 +8,7 @@ describe('Proxies', async () => {
     testContract = await ProxyTest.deploy();
   });
 
+
   it('deployInvalidImplementation()', async () => {
     await testContract.test_deployInvalidImplementation()
   });
@@ -42,5 +43,17 @@ describe('Proxies', async () => {
 
   it('setImplementationAddressOneToOne()', async () => {
     await testContract.test_setImplementationAddressOneToOne()
-  })
+  });
+
+  it('setOwner()', async () => {
+    await testContract.test_setOwner()
+  });
+
+  it('DelegateCallProxyManyToOne', async () => {
+    await testContract.test_badImplementationHolder()
+  });
+
+  it('_owner_ modifier', async () => {
+    await testContract.test_onlyOwner()
+  });
 });
