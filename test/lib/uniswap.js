@@ -1,5 +1,5 @@
 const bre = require('@nomiclabs/buidler');
-const { nTokensHex } = require('../lib/tokens');
+const { nTokensHex } = require('./tokens');
 const { ethers, getNamedAccounts } = bre;
 
 async function addLiquidity(tokenAddress, priceInWeth, liquidity) {
