@@ -18,8 +18,6 @@ contract TestTokenMarkets is TestTokens {
   IUniswapV2Factory public factory;
   IUniswapV2Router02 public router;
 
-  uint256 internal _liquidityAll;
-
   bool internal _marketsReady;
   uint256 internal _deployIndex;
 
@@ -54,7 +52,6 @@ contract TestTokenMarkets is TestTokens {
     } else if (_deployIndex == 4) {
       _deployIndex++;
       _deployTokenWethMarketWithLiquidity(token5, 1e20, price5);
-      _liquidityAll = 1e20;
       _marketsReady = true;
     }
   }
@@ -65,7 +62,6 @@ contract TestTokenMarkets is TestTokens {
     _addLiquidity(token3, 1e19, price3);
     _addLiquidity(token4, 1e19, price4);
     _addLiquidity(token5, 1e19, price5);
-    _liquidityAll += 1e19;
   }
 
   function _addLiquidity(
