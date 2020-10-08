@@ -10,8 +10,9 @@ const poolInitializerID = soliditySha3('PoolInitializer.sol')
 const poolImplementationID = soliditySha3('IPool.sol');
 const sellerImplementationID = soliditySha3('UnboundTokenSeller.sol');
 
-const logger = {
-  info(v) {
+const Logger = (chainID) => ({
+  info: (v) => {
+    if (chainID != 1 && chainID != 4) return;
     console.log(
       chalk.bold.cyan(
         '@indexed-finance/core/deploy:' + moment(new Date()).format('HH:mm:ss') + ': '
@@ -19,7 +20,7 @@ const logger = {
     );
     return v;
   }
-};
+});
 
 module.exports = async ({
   deployments,
@@ -27,6 +28,8 @@ module.exports = async ({
   getNamedAccounts,
   ethers
 }) => {
+  const chainID = await getChainId();
+  const logger = Logger(chainID)
   const { save } = deployments;
   const { deployer } = await getNamedAccounts();
   const [ signer ] = await ethers.getSigners();
@@ -54,7 +57,6 @@ module.exports = async ({
   });
   weth = WETH.address;
 
-  const chainID = await getChainId();
   if (chainID != 1 && chainID != 4) {
     logger.info('Deploying UniSwap mocks');
 
