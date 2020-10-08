@@ -61,12 +61,6 @@ module.exports = {
       "node_modules/@uniswap/v2-periphery/build"
     ],
   },
-  gasReporter: {
-    currency: "USD",
-    showTimeSpent: true,
-    enabled: true,
-    currency: "USD",
-  },
   namedAccounts: {
     deployer: {
       default: 0
