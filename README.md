@@ -18,9 +18,17 @@ This tests the `Ipool.sol` contract only, using a mock contract for the unbound 
 
 ### Test controller
 
+`npm run test:controller:1`
+
+This tests the `MarketCapSqrtController.sol` contract and some of the interactions between the controller and the pool, token seller and pool initializer contracts using a solidity test file.
+
+`npm run test:controller:2`
+
+This tests the `MarketCapSqrtController.sol` contract and some of the interactions between the controller and the pool, token seller and pool initializer contracts using a mocha test file.
+
 `npm run test:controller`
 
-This tests the `MarketCapSqrtController.sol` contract and some of the interactions between the controller and the pool, token seller and pool initializer contracts.
+Runs both controller tests.
 
 ### Test category management
 
