@@ -96,7 +96,7 @@ contract CategoriesTest is TestTokenMarkets, Diff, TestOrder {
     address[] memory curTokens = categories.getCategoryTokens(1);
     testArrayDeepEq(sortedTokens, curTokens, "Error: Sorted tokens not equal.");
     uint144[] memory actualCaps = categories.getCategoryMarketCaps(1);
-    uint256[] memory expectedCaps = marketCapsOrderedByPrice(_liquidityAll);
+    uint256[] memory expectedCaps = marketCapsOrderedByPrice();
     testUintArrayDiff(
       expectedCaps,
       _to256Array(actualCaps),
@@ -128,7 +128,7 @@ contract CategoriesTest is TestTokenMarkets, Diff, TestOrder {
 
   function test_computeAverageMarketCaps() public testIndex(5) {
     address[] memory sortedTokens = tokensOrderedByPrice();
-    uint256[] memory expectedCaps = marketCapsOrderedByPrice(_liquidityAll);
+    uint256[] memory expectedCaps = marketCapsOrderedByPrice();
     uint144[] memory actualCaps = categories.computeAverageMarketCaps(sortedTokens);
     testUintArrayDiff(
       expectedCaps,
