@@ -6,7 +6,7 @@ describe('MarketCapSqrtController.sol', () => {
   let testContract;
 
   before(async () => {
-    await deployments.fixture();
+    await deployments.fixture('Core');
     const controller = await ethers.getContract('controller');
     const ControllerTest = await ethers.getContractFactory('ControllerTest');
     testContract = await ControllerTest.deploy(
@@ -54,5 +54,15 @@ describe('MarketCapSqrtController.sol', () => {
   
   it('setSwapFee', async () => {
     await testContract.test_setSwapFee();
+  });
+  
+  it('reweighPool', async () => {
+    await testContract.test_reweighPool_TooEarly();
+    await bre.run('increaseTime', { days: 10.5 });
+    await testContract.updatePrices_1();
+    // await bre.run('increaseTime', { days: 6 });
+    // await testContract.updatePrices_2();
+    await bre.run('increaseTime', { days: 3.5 });
+    await testContract.test_reweighPool();
   });
 });
