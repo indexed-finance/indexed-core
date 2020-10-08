@@ -29,6 +29,17 @@ contract Diff {
     }
   }
 
+  function testArrayDeepEq(
+    uint256[] memory expected,
+    uint256[] memory actual,
+    string memory errorMsg
+  ) internal pure {
+    require(expected.length == actual.length, "Error: Array lengths do not match.");
+    for (uint256 i = 0; i < actual.length; i++) {
+      require(expected[i] == actual[i], errorMsg);
+    }
+  }
+
   function testUintArrayDiff(
     uint[] memory expected,
     uint[] memory actual,
