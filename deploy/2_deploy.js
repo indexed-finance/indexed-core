@@ -1,34 +1,32 @@
 const chalk = require('chalk');
 const moment = require('moment');
-const BN = require('bn.js');
-const { soliditySha3 } = require('web3-utils');
 
 const { wrapped_tokens: wrappedTokens } = require('../test/testData/categories.json');
 
-const logger = {
-  info(v) {
+const Logger = (chainID) => ({
+  info: (v) => {
+    if (chainID != 1 && chainID != 4) return;
     console.log(
       chalk.bold.cyan(
-        '@indexed-finance/mocks/deploy:' + moment(new Date()).format('HH:mm:ss') + ': '
+        '@indexed-finance/core/deploy:' + moment(new Date()).format('HH:mm:ss') + ': '
       ) + v
     );
     return v;
   }
-};
-
-const nTokensHex = (amount) => toHex(nTokens(amount));
+});
 
 let uniswapFactory = '0x5C69bEe701ef814a2B6a3EDD4B1652CB9cc5aA6f';
 let uniswapRouter = '0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D';
 
 module.exports = async ({
+  config,
   deployments,
   getNamedAccounts,
   getChainId,
   ethers
 }) => {
   const chainID = await getChainId();
-  if (chainID != 4) return;
+  const logger = Logger(chainID);
   const { save } = deployments;
   const { deployer } = await getNamedAccounts();
   const [ signer ] = await ethers.getSigners();
@@ -49,17 +47,17 @@ module.exports = async ({
     return deployment;
   }
 
-  const weth = await deployments.get('weth');
+  const weth = await ethers.getContract('weth');
   if (chainID != 4) {
-    uniswapFactory = await deployments.get('uniswapFactory');
-    uniswapRouter = await deployments.get('uniswapRouter');
+    uniswapFactory = await ethers.getContract('uniswapFactory');
+    uniswapRouter = await ethers.getContract('uniswapRouter');
   } else {
     uniswapFactory = await ethers.getContractAt('UniswapV2Factory', uniswapFactory, signer);
     uniswapRouter = await ethers.getContractAt('UniswapV2Router', uniswapRouter, signer);
   }
 
   logger.info('Executing deployment script.');
-  
+  const tokens = [];
   for (let token of wrappedTokens) {
     const { name, symbol } = token;
     const erc20 = await deploy('MockERC20', symbol.toLowerCase(), {
@@ -67,40 +65,20 @@ module.exports = async ({
       gas: 4000000,
       args: [name, symbol]
     }, true);
-    token.token = erc20;
-    token.address = erc20.address;
-    const receipt = await this.uniswapFactory.methods.createPair(
-      token.address,
-      this.weth.options.address
+    const receipt = await uniswapFactory.createPair(
+      erc20.address,
+      weth.address
     );
     const { events } = await receipt.wait();
     const { args: { pair } } = events.filter(e => e.event == 'PairCreated')[0];
-    token.pair = await ethers.getContractAt('UniswapV2Pair', pair, signer);
-    const liquidity = nTokensHex(100);
-    const wethAmount = nTokensHex(liquidity * token.initialPrice);
-    await erc20.getFreeTokens(deployer, liquidity);
-    await weth.getFreeTokens(deployer, wethAmount);
-    await erc20.approve(uniswapRouter.address, liquidity);
-    await weth.approve(uniswapRouter.address, wethAmount);
-    await uniswapRouter.addLiquidity(
-      erc20.address,
-      weth.address,
-      liquidity,
-      wethAmount,
-      deployer,
-      await bre.run('getTimestamp')
-    );
+    tokens.push({
+      ...token,
+      token: erc20,
+      address: erc20.address,
+      pair: await ethers.getContractAt('UniswapV2Pair', pair, signer)
+    });
   }
-
-  const controller = await deployments.get('controller');
-  const metadata = {
-    name: 'Wrapped Tokens',
-    description: 'Category for wrapped tokens.'
-  };
-  const metadataHash = keccak256(JSON.stringify(metadata));
-  await controller.createCategory(metadataHash);
-  await controller.addTokens(1, wrappedTokens.map(w => w.address));
-  bre.config.wrappedTokens = wrappedTokens;
+  config.wrappedTokens = tokens;
 };
 
 module.exports.tags = ['Mocks'];
