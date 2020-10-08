@@ -1,9 +1,15 @@
 pragma solidity ^0.6.0;
 
 import "../../MockERC20.sol";
-
+import "../../../lib/Babylonian.sol";
+import "../../../lib/FixedPoint.sol";
 
 contract TestTokens {
+  using Babylonian for uint;
+  using FixedPoint for uint112;
+  using FixedPoint for FixedPoint.uq112x112;
+  using FixedPoint for FixedPoint.uq144x112;
+
   MockERC20 public token1;
   MockERC20 public token2;
   MockERC20 public token3;
@@ -43,6 +49,25 @@ contract TestTokens {
     tokens[4] = address(token4);
   }
 
+  function denormsOrderedByPrice()
+    internal
+    view
+    returns (uint256[] memory denorms)
+  {
+    denorms = new uint256[](5);
+    uint256[] memory marketCaps = marketCapsOrderedByPrice();
+    uint256 mcapSqrtSum = 0;
+    for (uint256 i = 0; i < 5; i++) {
+      uint256 mcapSqrt = marketCaps[i].sqrt();
+      mcapSqrtSum += mcapSqrt;
+    }
+    for (uint256 i = 0; i < 5; i++) {
+      uint256 mcapSqrt = marketCaps[i].sqrt();
+      denorms[i] = (mcapSqrt * 25e18) / mcapSqrtSum;
+    }
+    
+  }
+
   function orderedPrices()
     internal
     view
@@ -56,16 +81,16 @@ contract TestTokens {
     prices[4] = price4;
   }
 
-  function marketCapsOrderedByPrice(uint256 liquidityPer)
+  function marketCapsOrderedByPrice()
     internal
     view
     returns (uint256[] memory marketCaps)
   {
     marketCaps = new uint256[](5);
-    marketCaps[0] = price5 * liquidityPer;
-    marketCaps[1] = price1 * liquidityPer;
-    marketCaps[2] = price3 * liquidityPer;
-    marketCaps[3] = price2 * liquidityPer;
-    marketCaps[4] = price4 * liquidityPer;
+    marketCaps[0] = price5 * token5.totalSupply();
+    marketCaps[1] = price1 * token1.totalSupply();
+    marketCaps[2] = price3 * token3.totalSupply();
+    marketCaps[3] = price2 * token2.totalSupply();
+    marketCaps[4] = price4 * token4.totalSupply();
   }
 }
