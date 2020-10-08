@@ -1,6 +1,8 @@
 pragma solidity ^0.6.0;
 pragma experimental ABIEncoderV2;
 
+import "@nomiclabs/buidler/console.sol";
+
 import {
   IUniswapV2Pair
 } from "@uniswap/v2-core/contracts/interfaces/IUniswapV2Pair.sol";
@@ -61,38 +63,14 @@ contract ControllerTest is TestTokenMarkets, Diff, TestOrder {
     controller.addTokens(1, tokens);
   }
 
-  function init4() public testIndex(0) forceDelay(2 days) {
+  function init4() public forceDelay(2 days) {
     _addLiquidityAll();
     address[] memory sortedTokens = tokensOrderedByPrice();
     controller.orderCategoryTokensByMarketCap(1, sortedTokens);
     _shortOracle.updatePrices(tokensOrderedByPrice());
   }
 
-  function _getExpectedTokensAndBalances(uint256 wethValue)
-    internal
-    view
-    returns (
-      address[] memory expectedTokens,
-      uint256[] memory expectedBalances
-    )
-  {
-    expectedTokens = tokensOrderedByPrice();
-    uint256[] memory marketCaps = marketCapsOrderedByPrice(_liquidityAll);
-    uint256[] memory prices = orderedPrices();
-    expectedBalances = new uint256[](5);
-    uint256 mcapSqrtSum = 0;
-    for (uint256 i = 0; i < 5; i++) {
-      uint256 mcapSqrt = marketCaps[i].sqrt();
-      mcapSqrtSum += mcapSqrt;
-    }
-    for (uint256 i = 0; i < 5; i++) {
-      uint256 mcapSqrt = marketCaps[i].sqrt();
-      uint256 expectedValue = (wethValue * mcapSqrt) / mcapSqrtSum;
-      expectedBalances[i] = expectedValue / prices[i];
-    }
-  }
-
-  function test_getInitialTokensAndBalances() external testIndex(1) {
+  function test_getInitialTokensAndBalances() external testIndex(0) {
     uint256 wethValue = 5e18;
     (
       address[] memory expectedTokens,
@@ -114,7 +92,7 @@ contract ControllerTest is TestTokenMarkets, Diff, TestOrder {
     );
   }
 
-  function test_prepareIndexPool() external testIndex(2) forceDelay(1 hours) {
+  function test_prepareIndexPool() external testIndex(1) forceDelay(1 hours) {
     uint256 wethValue = 5e18;
     (
       address poolAddress,
@@ -154,30 +132,61 @@ contract ControllerTest is TestTokenMarkets, Diff, TestOrder {
     );
   }
 
-  function test_finishPreparedIndexPool() external testIndex(3) {
+  function test_finishPreparedIndexPool() external testIndex(2) {
+    uint256 wethValue = 5e18;
+    (,uint256[] memory expectedBalances) = _getExpectedTokensAndBalances(wethValue);
+
     address[] memory tokens = tokensOrderedByPrice();
     uint256[] memory amounts = _initializer.getDesiredAmounts(tokens);
+
     for (uint256 i = 0; i < 5; i++) {
       MockERC20(tokens[i]).getFreeTokens(address(this), amounts[i]);
       MockERC20(tokens[i]).approve(address(_initializer), amounts[i]);
     }
+
     _initializer.contributeTokens(tokens, amounts, 0);
+
     require(
       _initializer.getCreditOf(address(this)) == _initializer.getTotalCredit(),
       "Error: Caller did not receive all credit."
     );
+
     _initializer.finish();
     _initializer.claimTokens();
+
     require(
       _initializer.getCreditOf(address(this)) == 0,
       "Error: Caller's credit not zero after claim."
     );
+
     uint256 balance = _pool.balanceOf(address(this));
     require(balance == 1e20, "Error: Initializer did not give 100 pool tokens.");
+
+    uint256[] memory expectedDenorms = new uint256[](5);
+    uint256[] memory prices = orderedPrices();
+    uint256 valueSum = 0;
+
+    for (uint256 i = 0; i < 5; i++) {
+      valueSum += prices[i] * expectedBalances[i];
+    }
+    for (uint256 i = 0; i < 5; i++) {
+      expectedDenorms[i] = (prices[i] * expectedBalances[i] * 25e18) / valueSum;
+    }
+    testUintArrayDiff(
+      expectedDenorms,
+      _getActualDesiredDenorms(),
+      "Error: Pool had incorrect desired weights."
+    );
+
+    testUintArrayDiff(
+      expectedDenorms,
+      _getActualDenorms(),
+      "Error: Pool had incorrect weights."
+    );
   }
 
-  function test_setMaxPoolTokens() external testIndex(4) {
-    uint256 max = 1e21; 
+  function test_setMaxPoolTokens() external testIndex(3) {
+    uint256 max = 1e21;
     controller.setMaxPoolTokens(address(_pool), max);
     require(
       _pool.getMaxPoolTokens() == max,
@@ -185,7 +194,7 @@ contract ControllerTest is TestTokenMarkets, Diff, TestOrder {
     );
   }
 
-  function test_setDefaultSellerPremium() external testIndex(5) {
+  function test_setDefaultSellerPremium() external testIndex(4) {
     try controller.setDefaultSellerPremium(0) {
       revert("Expected Error");
     } catch Error(string memory errorMsg) {
@@ -209,7 +218,7 @@ contract ControllerTest is TestTokenMarkets, Diff, TestOrder {
     require(premium == 1, "Error: default premium not set.");
   }
 
-  function test_updateSellerPremiumToDefault() external testIndex(6) {
+  function test_updateSellerPremiumToDefault() external testIndex(5) {
     address sellerAddress = controller.computeSellerAddress(address(_pool));
     controller.updateSellerPremiumToDefault(sellerAddress);
     require(
@@ -218,7 +227,7 @@ contract ControllerTest is TestTokenMarkets, Diff, TestOrder {
     );
   }
 
-  function test_setSwapFee() external testIndex(7) {
+  function test_setSwapFee() external testIndex(6) {
     try controller.setSwapFee(address(_pool), 1e17 + 1) {
       revert("Expected setSwapFee to revert.");
     } catch Error(string memory errorMsg) {
@@ -241,5 +250,78 @@ contract ControllerTest is TestTokenMarkets, Diff, TestOrder {
       _pool.getSwapFee() == fee,
       "Error: Swap fee not set on pool"
     );
+  }
+
+  function test_reweighPool_TooEarly() external testIndex(7) {
+    try controller.reweighPool(address(_pool)) {
+      revert("Expected error.");
+    } catch Error(string memory errorMsg) {
+      require(
+        keccak256(abi.encodePacked(errorMsg)) == keccak256("ERR_POOL_REWEIGH_DELAY"),
+        "Error: Expected ERR_POOL_REWEIGH_DELAY error message."
+      );
+    }
+    _addLiquidityAll();
+  }
+
+  function updatePrices_1() public testIndex(8) forceDelay(1.5 weeks) {
+    _addLiquidityAll();
+    controller.updateCategoryPrices(1);
+  }
+
+  function test_reweighPool() external testIndex(9) forceDelay(3.5 days) {
+    _addLiquidityAll();
+    address[] memory orderedTokens = tokensOrderedByPrice();
+    controller.orderCategoryTokensByMarketCap(1, orderedTokens);
+    uint256[] memory expectedDesiredDenorms = denormsOrderedByPrice();
+    controller.reweighPool(address(_pool));
+    uint256[] memory actualDesiredDenorms = _getActualDesiredDenorms();
+    testUintArrayDiff(
+      expectedDesiredDenorms,
+      actualDesiredDenorms,
+      "Error: Desired denorms unexpectedly changed after reweigh."
+    );
+  }
+
+  function _getExpectedTokensAndBalances(uint256 wethValue)
+    internal
+    view
+    returns (
+      address[] memory expectedTokens,
+      uint256[] memory expectedBalances
+    )
+  {
+    expectedTokens = tokensOrderedByPrice();
+    uint256[] memory marketCaps = marketCapsOrderedByPrice();
+    uint256[] memory prices = orderedPrices();
+    expectedBalances = new uint256[](5);
+    uint256 mcapSqrtSum = 0;
+    for (uint256 i = 0; i < 5; i++) {
+      uint256 mcapSqrt = marketCaps[i].sqrt();
+      mcapSqrtSum += mcapSqrt;
+    }
+    for (uint256 i = 0; i < 5; i++) {
+      uint256 mcapSqrt = marketCaps[i].sqrt();
+      uint256 expectedValue = (wethValue * mcapSqrt) / mcapSqrtSum;
+      expectedBalances[i] = expectedValue / prices[i];
+    }
+  }
+
+  function _getActualDesiredDenorms() internal view returns (uint256[] memory desiredDenorms) {
+    desiredDenorms = new uint256[](5);
+    address[] memory tokens = tokensOrderedByPrice();
+    for (uint256 i = 0; i < 5; i++) {
+      IPool.Record memory record = _pool.getTokenRecord(tokens[i]);
+      desiredDenorms[i] = record.desiredDenorm;
+    }
+  }
+
+  function _getActualDenorms() internal view returns (uint256[] memory desiredDenorms) {
+    desiredDenorms = new uint256[](5);
+    address[] memory tokens = tokensOrderedByPrice();
+    for (uint256 i = 0; i < 5; i++) {
+      IPool.Record memory record = _pool.getTokenRecord(tokens[i]);
+      desiredDenorms[i] = record.denorm;
+    }
   }
 }
