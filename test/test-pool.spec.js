@@ -9,7 +9,7 @@ const BN = require('bn.js');
 const Decimal = require('decimal.js');
 
 const { nTokensHex } = require('./lib/tokens');
-const { wrapped_tokens: wrappedTokens } = require('./testData/categories.json');
+const wrappedTokens = [...require('./testData/categories.json').wrapped_tokens];
 const { calcRelativeDiff } = require('./lib/calc_comparisons');
 
 const PoolHelper = require('./lib/pool-helper');
@@ -29,8 +29,8 @@ describe('IPool.sol', async () => {
   const toWei = (_bn) => web3.utils.toWei(toBN(_bn).toString(10));
 
   async function initializePool() {
-    // deploy tokens and mint initial supply
-    for (let i = 0; i < wrappedTokens.length; i++) {
+    // Deploy tokens and mint initial supply
+    for (let i = 0; i < 3; i++) {
       const { name, symbol, initialPrice } = wrappedTokens[i];
       const token = await erc20Factory.deploy(name, symbol);
       await token.getFreeTokens(from, nTokensHex(10000));
@@ -44,21 +44,15 @@ describe('IPool.sol', async () => {
       };
       wrappedTokens[i] = tokenObj;
     }
+    const tokens = wrappedTokens.map(
+      ({ initialPrice, totalSupply, address }) => ({
+        price: initialPrice, totalSupply, address, balance: 0
+      })
+    );
 
-    const tokens = [];
     const denormWeights = [];
     const balances = [];
-    for (let tokenObj of wrappedTokens) {
-      const { initialPrice, token, address } = tokenObj;
-      const totalSupply = Decimal(fromWei(await token.totalSupply()));
-      const balance = 0;
-      tokens.push({
-        price: initialPrice,
-        totalSupply,
-        balance,
-        address
-      });
-    }
+    // Set up the weights & balances
     poolHelper = new PoolHelper(tokens, swapFee, 0);
     const totalValue = 50;
     for (let token of tokens) {
@@ -69,14 +63,16 @@ describe('IPool.sol', async () => {
       balances.push(decToWeiHex(balance));
       poolHelper.records[address].balance = balance;
     }
+    // Deploy contracts
     const IPoolFactory = await ethers.getContractFactory("IPool");
     const MockUnbindTokenHandler = await ethers.getContractFactory('MockUnbindTokenHandler');
     unbindTokenHandler = await MockUnbindTokenHandler.deploy();
-    await unbindTokenHandler.deployed();
     indexPool = await IPoolFactory.deploy();
+    // Approve pool to transfer initial balances
     for (let token of wrappedTokens) {
       await token.token.approve(indexPool.address, nTokensHex(100000))
     }
+    // Initialize pool
     await indexPool.configure(
       from,
       "Test Pool",
@@ -121,7 +117,7 @@ describe('IPool.sol', async () => {
   }
 
   before(async () => {
-    [from] = await web3.eth.getAccounts();
+    ([from] = await web3.eth.getAccounts());
     erc20Factory = await ethers.getContractFactory("MockERC20");
     await initializePool();
   });
@@ -419,7 +415,6 @@ describe('IPool.sol', async () => {
       for (let token of poolHelper.tokens) {
         records[token] = await indexPool.getTokenRecord(token);
       }
-      console.log(`Cost to reweigh pool ${receipt.cumulativeGasUsed}`)
     });
 
     it('Sets the correct target weights', async () => {
