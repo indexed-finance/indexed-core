@@ -57,11 +57,9 @@ describe('MarketCapSqrtController.sol', () => {
   });
   
   it('reweighPool', async () => {
-    await testContract.test_reweighPool_TooEarly();
+    // await testContract.test_reweighPool_TooEarly();
     await bre.run('increaseTime', { days: 10.5 });
     await testContract.updatePrices_1();
-    // await bre.run('increaseTime', { days: 6 });
-    // await testContract.updatePrices_2();
     await bre.run('increaseTime', { days: 3.5 });
     await testContract.test_reweighPool();
   });
