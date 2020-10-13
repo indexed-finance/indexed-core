@@ -86,9 +86,9 @@ contract BTokenBase is BNum {
 
 
 contract BToken is BTokenBase, IERC20 {
+  uint8 private constant DECIMALS = 18;
   string private _name;
   string private _symbol;
-  uint8 private _decimals = 18;
 
   function _initializeToken(string memory name, string memory symbol) internal {
     require(
@@ -125,7 +125,7 @@ contract BToken is BTokenBase, IERC20 {
     view
     returns (uint8)
   {
-    return _decimals;
+    return DECIMALS;
   }
 
   function allowance(address src, address dst)
