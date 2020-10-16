@@ -204,7 +204,7 @@ contract UnboundTokenSeller {
     // Get the actual amount paid
     uint256 amountIn = amounts[0];
     // If we did not swap the full amount, remove the UniSwap allowance.
-    if (amountIn != maxAmountIn) {
+    if (amountIn < maxAmountIn) {
       IERC20(tokenIn).safeApprove(address(_uniswapRouter), 0);
       premiumPaidToCaller = maxAmountIn - amountIn;
       // Transfer the difference between what the contract was willing to pay and
@@ -265,7 +265,7 @@ contract UnboundTokenSeller {
   
     // Get the actual amount paid
     uint256 amountOut = amounts[amounts.length - 1];
-    if (amountOut != minAmountOut) {
+    if (amountOut > minAmountOut) {
       // Transfer any tokens received beyond the minimum acceptable payment
       // to the caller as a reward.
       premiumPaidToCaller = amountOut - minAmountOut;
