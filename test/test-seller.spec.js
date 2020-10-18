@@ -6,7 +6,7 @@ describe('UnboundTokenSeller.sol', () => {
   let testContract;
 
   before(async () => {
-    await deployments.fixture();
+    await deployments.fixture('Core');
     const SellerTest = await ethers.getContractFactory('SellerTest');
     testContract = await SellerTest.deploy(
       (await ethers.getContract("weth")).address,
