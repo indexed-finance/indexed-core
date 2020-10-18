@@ -1,0 +1,13 @@
+{
+  "name": "Governance",
+  "symbol": "GOV",
+  "description": "Governance tokens.",
+  "tokens": [
+    "BAL",
+    "UNI",
+    "COMP",
+    "YFI",
+    "CRV",
+    "KNC"
+  ]
+}

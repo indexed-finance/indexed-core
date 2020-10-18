@@ -1,0 +1,62 @@
+[
+  {
+    "name": "Balancer",
+    "symbol": "BAL",
+    "price": 0.0427069,
+    "marketcap": 348923
+  },
+  {
+    "name": "Basic Attention Token",
+    "symbol": "BAT",
+    "price": 0.000627697,
+    "marketcap": 1000000
+  },
+  {
+    "name": "Chainlink",
+    "symbol": "LINK",
+    "price": 0.0273435,
+    "marketcap": 10227710
+  },
+  {
+    "name": "Compound",
+    "symbol": "COMP",
+    "price": 0.315988,
+    "marketcap": 1038912
+  },
+  {
+    "name": "Curve DAO Token",
+    "symbol": "CRV",
+    "price": 0.00155092,
+    "marketcap": 122915
+  },
+  {
+    "name": "Kyber Network",
+    "symbol": "KNC",
+    "price": 0.0026834,
+    "marketcap": 528258
+  },
+  {
+    "name": "Maker",
+    "symbol": "MKR",
+    "price": 1.50254,
+    "marketcap": 1361065
+  },
+  {
+    "name": "Uniswap",
+    "symbol": "UNI",
+    "price": 0.00942854,
+    "marketcap": 1703946
+  },
+  {
+    "name": "Wrapped Bitcoin",
+    "symbol": "WBTC",
+    "price": 31.2332,
+    "marketcap": 2944571
+  },
+  {
+    "name": "yearn.finance",
+    "symbol": "YFI",
+    "price": 45.2714,
+    "marketcap": 1367010
+  }
+]

@@ -1,0 +1,13 @@
+{
+  "name": "Decentralized Finance",
+  "symbol": "DFI",
+  "description": "DEFI protocol tokens.",
+  "tokens": [
+    "WBTC",
+    "BAT",
+    "UNI",
+    "COMP",
+    "MKR",
+    "LINK"
+  ]
+}
