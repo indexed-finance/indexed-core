@@ -6,7 +6,7 @@ describe('MarketCapSortedTokenCategories.sol', () => {
   let testContract;
 
   before(async () => {
-    await deployments.fixture();
+    await deployments.fixture('Core');
     const controller = await ethers.getContract('controller');
     const CategoriesTest = await ethers.getContractFactory('CategoriesTest');
     testContract = await CategoriesTest.deploy(

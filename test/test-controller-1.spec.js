@@ -13,7 +13,7 @@ const { nTokens, nTokensHex, toHex } = require('./lib/tokens');
 const { calcRelativeDiff } = require('./lib/calc_comparisons');
 const PoolHelper = require("./lib/pool-helper");
 const { deployTokenMarket, addLiquidity } = require("./lib/uniswap");
-
+const { wrappedTokensFixture } = require('./tokens-fixture');
 const { expect } = chai;
 const keccak256 = (data) => soliditySha3(data);
 
@@ -37,7 +37,7 @@ describe("MarketCapSqrtController.sol", () => {
   const toWei = (_bn) => web3.utils.toWei(toBN(_bn).toString(10));
 
   before(async () => {
-    await bre.deployments.fixture(['Core', 'Mocks']);
+    await bre.deployments.fixture(['Core']);
     marketOracle = await ethers.getContract('WeeklyTWAPUniSwapV2Oracle');
     shortOracle = await ethers.getContract('HourlyTWAPUniswapV2Oracle');
     poolController = await ethers.getContract('controller');
@@ -45,7 +45,8 @@ describe("MarketCapSqrtController.sol", () => {
     uniswapFactory = await ethers.getContract('uniswapFactory');
     uniswapRouter = await ethers.getContract('uniswapRouter');
     ([from] = await web3.eth.getAccounts());
-    wrappedTokens = [...bre.config.wrappedTokens];
+    wrappedTokens = await wrappedTokensFixture();
+    // wrappedTokens = [...bre.config.wrappedTokens];
     for (let token of wrappedTokens) {
       await token.token.getFreeTokens(from, nTokensHex(5000));
     }
