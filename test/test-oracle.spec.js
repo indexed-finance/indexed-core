@@ -7,6 +7,7 @@ const { deployments, ethers } = bre;
 
 const { nTokensHex } = require('./lib/tokens');
 const { addLiquidity } = require("./lib/uniswap");
+const { wrappedTokensFixture } = require("./tokens-fixture");
 
 chai.use(chaiAsPromised);
 const { expect } = chai;
@@ -20,8 +21,8 @@ describe("UniSwapV2PriceOracle.sol", () => {
 
   before(async () => {
     erc20Factory = await ethers.getContractFactory("MockERC20");
-    await deployments.fixture(['Core', 'Mocks']);
-    wrappedTokens = [...bre.config.wrappedTokens];
+    await deployments.fixture(['Core']);
+    wrappedTokens = await wrappedTokensFixture();
     uniswapFactory = await ethers.getContract('uniswapFactory');
     uniswapRouter = await ethers.getContract('uniswapRouter');
     weth = await ethers.getContract('weth');
