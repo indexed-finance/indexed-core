@@ -691,7 +691,7 @@ contract IPool is BToken, BMath {
     external
     _lock_
   {
-    Record memory record = _records[token];
+    Record storage record = _records[token];
     require(record.bound, "ERR_NOT_BOUND");
     uint256 balStart = IERC20(token).balanceOf(address(this));
     require(balStart >= amount, "ERR_INSUFFICIENT_BAL");
@@ -704,15 +704,15 @@ contract IPool is BToken, BMath {
       balEnd > balStart && fee >= gained,
       "ERR_INSUFFICIENT_PAYMENT"
     );
-    _records[token].balance = balEnd;
+    record.balance = balEnd;
     // If the payment brings the token above its minimum balance,
     // clear the minimum and mark the token as ready.
     if (!record.ready) {
       uint256 minimumBalance = _minimumBalances[token];
       if (balEnd >= minimumBalance) {
         _minimumBalances[token] = 0;
-        _records[token].ready = true;
-        _records[token].denorm = uint96(MIN_WEIGHT);
+        record.ready = true;
+        record.denorm = uint96(MIN_WEIGHT);
         _totalWeight = badd(_totalWeight, MIN_WEIGHT);
       }
     }
