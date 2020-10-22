@@ -696,12 +696,12 @@ contract IPool is BToken, BMath {
     uint256 balStart = IERC20(token).balanceOf(address(this));
     require(balStart >= amount, "ERR_INSUFFICIENT_BAL");
     _pushUnderlying(token, address(recipient), amount);
-    recipient.receiveFlashLoan(data);
-    uint256 balEnd = IERC20(token).balanceOf(address(this));
-    uint256 gained = bsub(balEnd, balStart);
     uint256 fee = bmul(balStart, _swapFee);
+    uint256 amountDue = badd(amount, fee);
+    recipient.receiveFlashLoan(token, amount, amountDue, data);
+    uint256 balEnd = IERC20(token).balanceOf(address(this));
     require(
-      balEnd > balStart && fee >= gained,
+      balEnd > balStart && balEnd >= amountDue,
       "ERR_INSUFFICIENT_PAYMENT"
     );
     record.balance = balEnd;
