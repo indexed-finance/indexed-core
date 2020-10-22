@@ -199,7 +199,7 @@ contract UnboundTokenSeller {
       maxAmountIn,
       path,
       address(_pool),
-      block.timestamp + 1
+      block.timestamp
     );
     // Get the actual amount paid
     uint256 amountIn = amounts[0];
@@ -260,7 +260,7 @@ contract UnboundTokenSeller {
       minAmountOut,
       path,
       address(this),
-      block.timestamp + 1
+      block.timestamp
     );
   
     // Get the actual amount paid
