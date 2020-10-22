@@ -354,7 +354,7 @@ contract IPool is BToken, BMath {
     external
     _control_
   {
-    Record memory record = _records[token];
+    Record storage record = _records[token];
     require(record.bound, "ERR_NOT_BOUND");
     require(!record.ready, "ERR_READY");
     _minimumBalances[token] = minimumBalance;
@@ -691,7 +691,7 @@ contract IPool is BToken, BMath {
     external
     _lock_
   {
-    Record memory record = _records[token];
+    Record storage record = _records[token];
     require(record.bound, "ERR_NOT_BOUND");
     uint256 balStart = IERC20(token).balanceOf(address(this));
     require(balStart >= amount, "ERR_INSUFFICIENT_BAL");
@@ -704,15 +704,15 @@ contract IPool is BToken, BMath {
       balEnd > balStart && fee >= gained,
       "ERR_INSUFFICIENT_PAYMENT"
     );
-    _records[token].balance = balEnd;
+    record.balance = balEnd;
     // If the payment brings the token above its minimum balance,
     // clear the minimum and mark the token as ready.
     if (!record.ready) {
       uint256 minimumBalance = _minimumBalances[token];
       if (balEnd >= minimumBalance) {
         _minimumBalances[token] = 0;
-        _records[token].ready = true;
-        _records[token].denorm = uint96(MIN_WEIGHT);
+        record.ready = true;
+        record.denorm = uint96(MIN_WEIGHT);
         _totalWeight = badd(_totalWeight, MIN_WEIGHT);
       }
     }
@@ -952,8 +952,7 @@ contract IPool is BToken, BMath {
     uint256 usedIndex = 0;
     for (uint256 i = 0; i < tokens.length; i++) {
       address token = tempTokens[i];
-      Record memory record = _records[token];
-      if (record.desiredDenorm > 0) {
+      if (_records[token].desiredDenorm > 0) {
         tokens[usedIndex++] = token;
       }
     }
@@ -1029,7 +1028,7 @@ contract IPool is BToken, BMath {
     view
     returns (uint256 balance)
   {
-    Record memory record = _records[token];
+    Record storage record = _records[token];
     require(record.bound, "ERR_NOT_BOUND");
     balance = record.balance;
   }
@@ -1225,7 +1224,7 @@ contract IPool is BToken, BMath {
   }
 
   function _setDesiredDenorm(address token, uint96 desiredDenorm) internal {
-    Record memory record = _records[token];
+    Record storage record = _records[token];
     require(record.bound, "ERR_NOT_BOUND");
     // If the desired weight is 0, this will trigger a gradual unbinding of the token.
     // Therefore the weight only needs to be above the minimum weight if it isn't 0.
@@ -1235,7 +1234,6 @@ contract IPool is BToken, BMath {
     );
     require(desiredDenorm <= MAX_WEIGHT, "ERR_MAX_WEIGHT");
     record.desiredDenorm = desiredDenorm;
-    _records[token].desiredDenorm = desiredDenorm;
     emit LOG_DESIRED_DENORM_SET(token, desiredDenorm);
   }
 
