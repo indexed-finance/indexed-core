@@ -712,8 +712,13 @@ contract IPool is BToken, BMath {
       if (balEnd >= minimumBalance) {
         _minimumBalances[token] = 0;
         record.ready = true;
-        record.denorm = uint96(MIN_WEIGHT);
-        _totalWeight = badd(_totalWeight, MIN_WEIGHT);
+        emit LOG_TOKEN_READY(token);
+        uint256 additionalBalance = bsub(balEnd, minimumBalance);
+        uint256 balRatio = bdiv(additionalBalance, minimumBalance);
+        uint96 newDenorm = uint96(badd(MIN_WEIGHT, bmul(MIN_WEIGHT, balRatio)));
+        record.denorm = newDenorm;
+        record.lastDenormUpdate = uint40(now);
+        _totalWeight = badd(_totalWeight, newDenorm);
       }
     }
   }
