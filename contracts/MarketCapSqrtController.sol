@@ -111,37 +111,48 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
 
 /* ---  Structs  --- */
 
-  struct IndexPoolMeta {
-    uint16 categoryID;
-    uint8 indexSize;
-    bool initialized;
-  }
-
   /**
-   * @dev Data structure with the number of times a pool has been
-   * either reweighed or re-indexed, as well as the timestamp of
-   * the last such action.
+   * @dev Data structure with metadata about an index pool.
+   *
+   * Includes the number of times a pool has been either reweighed
+   * or re-indexed, as well as the timestamp of the last such action.
+   *
+   * To reweigh or re-index, the last update must have occurred at
+   * least `POOL_REWEIGH_DELAY` seconds ago.
    *
    * If `++index % REWEIGHS_BEFORE_REINDEX + 1` is 0, the pool will
    * re-index, otherwise it will reweigh.
    *
-   * @param index Number of times the pool has either re-weighed or
-   * re-indexed.
-   * @param timestamp Timestamp of last pool re-weigh or re-index.
+   * @param initialized Whether the pool has been initialized with the
+   * starting balances.
+   * @param categoryID Category identifier for the pool.
+   * @param indexSize Number of tokens the pool should hold.
+   * @param reweighIndex Number of times the pool has either re-weighed
+   * or re-indexed.
+   * @param lastReweigh Timestamp of last pool re-weigh or re-index.
    */
-  struct PoolUpdateRecord {
-    uint128 index;
-    uint128 timestamp;
+  struct IndexPoolMeta {
+    bool initialized;
+    uint16 categoryID;
+    uint8 indexSize;
+    uint8 reweighIndex;
+    uint64 lastReweigh;
   }
 
 /* ---  Storage  --- */
 
   // Default slippage rate for token seller contracts.
   uint8 public defaultSellerPremium = 2;
+
   // Metadata about index pools
   mapping(address => IndexPoolMeta) internal _poolMeta;
-  // Records of pool update statuses.
-  mapping(address => PoolUpdateRecord) internal _poolUpdateRecords;
+
+/* --- Modifiers --- */
+
+  modifier _havePool(address pool) {
+    require(_poolMeta[pool].initialized, "ERR_POOL_NOT_FOUND");
+    _;
+  }
 
 /* ---  Constructor  --- */
 
@@ -193,9 +204,11 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
     );
 
     _poolMeta[poolAddress] = IndexPoolMeta({
-      categoryID: uint8(categoryID),
+      initialized: false,
+      categoryID: uint16(categoryID),
       indexSize: uint8(indexSize),
-      initialized: false
+      lastReweigh: 0,
+      reweighIndex: 0
     });
 
     initializerAddress = _proxyManager.deployProxyManyToOne(
@@ -237,6 +250,7 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
     );
     uint256 len = tokens.length;
     require(balances.length == len, "ERR_ARR_LEN");
+
     IndexPoolMeta memory meta = _poolMeta[poolAddress];
     require(!meta.initialized, "ERR_INITIALIZED");
     uint96[] memory denormalizedWeights = new uint96[](len);
@@ -252,10 +266,12 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
         FixedPoint.fraction(uint112(ethValues[i]), uint112(valueSum))
       );
     }
+
     address sellerAddress = _proxyManager.deployProxyManyToOne(
       SELLER_IMPLEMENTATION_ID,
       keccak256(abi.encodePacked(poolAddress))
     );
+
     IPool(poolAddress).initialize(
       tokens,
       balances,
@@ -263,16 +279,21 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
       msg.sender,
       sellerAddress
     );
-    _poolMeta[poolAddress].initialized = true;
+
+    UnboundTokenSeller(sellerAddress).initialize(
+      IPool(poolAddress),
+      defaultSellerPremium
+    );
+
+    meta.lastReweigh = uint64(now);
+    meta.initialized = true;
+    _poolMeta[poolAddress] = meta;
+
     emit PoolInitialized(
       poolAddress,
       sellerAddress,
       meta.categoryID,
       meta.indexSize
-    );
-    UnboundTokenSeller(sellerAddress).initialize(
-      IPool(poolAddress),
-      defaultSellerPremium
     );
   }
 
@@ -331,15 +352,14 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
   function setMaxPoolTokens(
     address poolAddress,
     uint256 maxPoolTokens
-  ) external _owner_ {
+  ) external _owner_ _havePool(poolAddress) {
     IPool(poolAddress).setMaxPoolTokens(maxPoolTokens);
   }
 
   /**
    * @dev Sets the swap fee on an index pool.
    */
-  function setSwapFee(address poolAddress, uint256 swapFee) external _owner_ {
-    require(_havePool(poolAddress), "ERR_POOL_NOT_FOUND");
+  function setSwapFee(address poolAddress, uint256 swapFee) external _owner_ _havePool(poolAddress) {
     IPool(poolAddress).setSwapFee(swapFee);
   }
 
@@ -348,8 +368,7 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
    * useful when the token's price on the pool is too low relative to
    * external prices for people to trade it in.
    */
-  function updateMinimumBalance(IPool pool, address tokenAddress) external {
-    require(_havePool(address(pool)), "ERR_POOL_NOT_FOUND");
+  function updateMinimumBalance(IPool pool, address tokenAddress) external _havePool(address(pool)) {
     IPool.Record memory record = pool.getTokenRecord(tokenAddress);
     require(!record.ready, "ERR_TOKEN_READY");
     uint256 poolValue = _estimatePoolValue(pool);
@@ -367,13 +386,12 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
   function reindexPool(address poolAddress) external {
     IndexPoolMeta memory meta = _poolMeta[poolAddress];
     require(meta.initialized, "ERR_POOL_NOT_FOUND");
-    PoolUpdateRecord memory record = _poolUpdateRecords[poolAddress];
     require(
-      now - record.timestamp >= POOL_REWEIGH_DELAY,
+      now - meta.lastReweigh >= POOL_REWEIGH_DELAY,
       "ERR_POOL_REWEIGH_DELAY"
     );
     require(
-      (++record.index % (REWEIGHS_BEFORE_REINDEX + 1)) == 0,
+      (++meta.reweighIndex % (REWEIGHS_BEFORE_REINDEX + 1)) == 0,
       "ERR_REWEIGH_INDEX"
     );
     uint256 size = meta.indexSize;
@@ -394,13 +412,15 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
       minimumBalances[i] = prices[i].computeAverageTokensForEth(totalValue) / 100;
       denormalizedWeights[i] = _denormalizeFractionalWeight(weights[i]);
     }
+
+    meta.lastReweigh = uint64(now);
+    _poolMeta[poolAddress] = meta;
+
     IPool(poolAddress).reindexTokens(
       tokens,
       denormalizedWeights,
       minimumBalances
     );
-    record.timestamp = uint128(now);
-    _poolUpdateRecords[poolAddress] = record;
   }
 
   /**
@@ -408,26 +428,31 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
    * desired new weights, which will be adjusted over time.
    */
   function reweighPool(address poolAddress) external {
-    require(_havePool(poolAddress), "ERR_POOL_NOT_FOUND");
-    PoolUpdateRecord memory record = _poolUpdateRecords[poolAddress];
+    IndexPoolMeta memory meta = _poolMeta[poolAddress];
+    require(meta.initialized, "ERR_POOL_NOT_FOUND");
+
     require(
-      now - record.timestamp >= POOL_REWEIGH_DELAY,
+      now - meta.lastReweigh >= POOL_REWEIGH_DELAY,
       "ERR_POOL_REWEIGH_DELAY"
     );
+
     require(
-      (++record.index % (REWEIGHS_BEFORE_REINDEX + 1)) != 0,
+      (++meta.reweighIndex % (REWEIGHS_BEFORE_REINDEX + 1)) != 0,
       "ERR_REWEIGH_INDEX"
     );
+
     address[] memory tokens = IPool(poolAddress).getCurrentDesiredTokens();
     Prices.TwoWayAveragePrice[] memory prices = oracle.computeTwoWayAveragePrices(tokens);
     FixedPoint.uq112x112[] memory weights = MCapSqrt.computeTokenWeights(tokens, prices);
     uint96[] memory denormalizedWeights = new uint96[](tokens.length);
+
     for (uint256 i = 0; i < tokens.length; i++) {
       denormalizedWeights[i] = _denormalizeFractionalWeight(weights[i]);
     }
+
+    meta.lastReweigh = uint64(now);
+    _poolMeta[poolAddress] = meta;
     IPool(poolAddress).reweighTokens(tokens, denormalizedWeights);
-    record.timestamp = uint128(now);
-    _poolUpdateRecords[poolAddress] = record;
   }
 
 /* ---  Pool Queries  --- */
@@ -510,10 +535,6 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
   }
 
 /* ---  Internal Pool Utility Functions  --- */
-
-  function _havePool(address pool) internal view returns (bool) {
-    return _poolMeta[pool].initialized;
-  }
 
   /**
    * @dev Estimate the total value of a pool by taking its first token's
