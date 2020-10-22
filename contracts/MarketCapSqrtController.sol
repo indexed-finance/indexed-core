@@ -123,6 +123,13 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
    * If `++index % REWEIGHS_BEFORE_REINDEX + 1` is 0, the pool will
    * re-index, otherwise it will reweigh.
    *
+   * The struct fields are assigned their respective integer sizes so
+   * that solc can pack the entire struct into a single storage slot.
+   * `reweighIndex` is intended to overflow, `categoryID` will never
+   * reach 2**16, `indexSize` is capped at 10 and it is unlikely that
+   * this protocol will be in use in the year 292277026596 (unix time
+   * for 2**64 - 1).
+   *
    * @param initialized Whether the pool has been initialized with the
    * starting balances.
    * @param categoryID Category identifier for the pool.
