@@ -420,31 +420,6 @@ contract UnboundTokenSeller {
 
 /* ---  Internal Functions  --- */
 
-  function _calcAmountToCallerAndPool(
-    address tokenPaid,
-    uint256 amountPaid,
-    address tokenReceived,
-    uint256 amountReceived
-  )
-    internal
-    view
-    returns (uint256 premiumAmount, uint256 poolAmount)
-  {
-    // Get the average weth value of the amounts received and paid
-    (uint144 avgReceivedValue, uint144 avgPaidValue) = _getAverageValues(
-      tokenReceived,
-      amountReceived,
-      tokenPaid,
-      amountPaid
-    );
-    // Compute the minimum acceptable received value
-    uint256 minReceivedValue = _minimumReceivedValue(avgPaidValue);
-    require(avgReceivedValue >= minReceivedValue, "ERR_MIN_RECEIVED");
-    // Compute the premium based on the value received above the minimum
-    premiumAmount = (amountReceived * (avgReceivedValue - minReceivedValue)) / avgReceivedValue;
-    poolAmount = amountPaid - premiumAmount;
-  }
-
   function _getAverageValues(
     address token1,
     uint256 amount1,
