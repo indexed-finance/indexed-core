@@ -202,7 +202,6 @@ contract IPool is BToken, BMath {
     require(balances.length == len && denorms.length == len, "ERR_ARR_LEN");
     uint256 totalWeight = 0;
     for (uint256 i = 0; i < len; i++) {
-      // _bind(tokens[i], balances[i], denorms[i]);
       address token = tokens[i];
       uint96 denorm = denorms[i];
       uint256 balance = balances[i];
