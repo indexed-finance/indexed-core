@@ -103,6 +103,11 @@ contract IPool is BToken, BMath {
     _mutex = false;
   }
 
+  modifier _viewlock_() {
+    require(!_mutex, "ERR_REENTRY");
+    _;
+  }
+
   modifier _control_ {
     require(msg.sender == _controller, "ERR_NOT_CONTROLLER");
     _;
@@ -890,7 +895,7 @@ contract IPool is BToken, BMath {
     isPublic = _publicSwap;
   }
 
-  function getSwapFee() external view returns (uint256 swapFee) {
+  function getSwapFee() external view _viewlock_ returns (uint256 swapFee) {
     swapFee = _swapFee;
   }
 
@@ -933,6 +938,7 @@ contract IPool is BToken, BMath {
   function getCurrentTokens()
     external
     view
+    _viewlock_
     returns (address[] memory tokens)
   {
     return _tokens;
@@ -945,6 +951,7 @@ contract IPool is BToken, BMath {
   function getCurrentDesiredTokens()
     external
     view
+    _viewlock_
     returns (address[] memory tokens)
   {
     address[] memory tempTokens = _tokens;
@@ -965,6 +972,7 @@ contract IPool is BToken, BMath {
   function getDenormalizedWeight(address token)
     external
     view
+    _viewlock_
     returns (uint256 denorm)
   {
     require(_records[token].bound, "ERR_NOT_BOUND");
@@ -977,6 +985,7 @@ contract IPool is BToken, BMath {
   function getTokenRecord(address token)
     external
     view
+    _viewlock_
     returns (Record memory record)
   {
     record = _records[token];
@@ -994,6 +1003,7 @@ contract IPool is BToken, BMath {
   function extrapolatePoolValueFromToken()
     external
     view
+    _viewlock_
     returns (address token, uint256 extrapolatedValue)
   {
     uint256 len = _tokens.length;
@@ -1015,6 +1025,7 @@ contract IPool is BToken, BMath {
   function getTotalDenormalizedWeight()
     external
     view
+    _viewlock_
     returns (uint256 totalDenorm)
   {
     totalDenorm = _totalWeight;
@@ -1026,6 +1037,7 @@ contract IPool is BToken, BMath {
   function getBalance(address token)
     external
     view
+    _viewlock_
     returns (uint256 balance)
   {
     Record storage record = _records[token];
@@ -1040,6 +1052,7 @@ contract IPool is BToken, BMath {
   function getMinimumBalance(address token)
     external
     view
+    _viewlock_
     returns (uint256 minimumBalance)
   {
     Record memory record = _records[token];
@@ -1056,6 +1069,7 @@ contract IPool is BToken, BMath {
   function getUsedBalance(address token)
     external
     view
+    _viewlock_
     returns (uint256 usedBalance)
   {
     Record memory record = _records[token];
@@ -1074,6 +1088,7 @@ contract IPool is BToken, BMath {
   function getSpotPrice(address tokenIn, address tokenOut)
     external
     view
+    _viewlock_
     returns (uint256 spotPrice)
   {
     (Record memory inRecord,) = _getInputToken(tokenIn);
