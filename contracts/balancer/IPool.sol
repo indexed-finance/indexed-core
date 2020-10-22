@@ -1028,7 +1028,7 @@ contract IPool is BToken, BMath {
     view
     returns (uint256 balance)
   {
-    Record memory record = _records[token];
+    Record storage record = _records[token];
     require(record.bound, "ERR_NOT_BOUND");
     balance = record.balance;
   }
