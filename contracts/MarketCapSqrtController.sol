@@ -320,27 +320,10 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
   }
 
   /**
-   * @dev Update the premium rate on `sellerAddress` with the current
-   * default rate.
+   * @dev Set the premium rate on `sellerAddress` to the given rate.
    */
-  function updateSellerPremiumToDefault(
-    address sellerAddress
-  ) external {
-    UnboundTokenSeller(sellerAddress).setPremiumPercent(defaultSellerPremium);
-  }
-
-  /**
-   * @dev Update the premium rate on each unbound token seller in
-   * `sellerAddresses` with the current default rate.
-   */
-  function updateSellerPremiumToDefault(
-    address[] calldata sellerAddresses
-  ) external {
-    for (uint256 i = 0; i < sellerAddresses.length; i++) {
-      UnboundTokenSeller(
-        sellerAddresses[i]
-      ).setPremiumPercent(defaultSellerPremium);
-    }
+  function updateSellerPremium(address tokenSeller, uint8 premiumPercent) external _owner_ {
+    UnboundTokenSeller(tokenSeller).setPremiumPercent(premiumPercent);
   }
 
   /**
