@@ -387,7 +387,7 @@ contract IPool is BToken, BMath {
     uint256 maxPoolTokens = _maxPoolTokens;
     if (maxPoolTokens > 0) {
       require(
-        badd(poolTotal, poolAmountOut) <= _maxPoolTokens,
+        badd(poolTotal, poolAmountOut) <= maxPoolTokens,
         "ERR_MAX_POOL_TOKENS"
       );
     }
@@ -449,7 +449,7 @@ contract IPool is BToken, BMath {
     uint256 maxPoolTokens = _maxPoolTokens;
     if (maxPoolTokens > 0) {
       require(
-        badd(_totalSupply, poolAmountOut) <= _maxPoolTokens,
+        badd(_totalSupply, poolAmountOut) <= maxPoolTokens,
         "ERR_MAX_POOL_TOKENS"
       );
     }
@@ -491,7 +491,7 @@ contract IPool is BToken, BMath {
     uint256 maxPoolTokens = _maxPoolTokens;
     if (maxPoolTokens > 0) {
       require(
-        badd(_totalSupply, poolAmountOut) <= _maxPoolTokens,
+        badd(_totalSupply, poolAmountOut) <= maxPoolTokens,
         "ERR_MAX_POOL_TOKENS"
       );
     }
