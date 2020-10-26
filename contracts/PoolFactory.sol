@@ -2,7 +2,7 @@
 pragma solidity ^0.6.0;
 pragma experimental ABIEncoderV2;
 
-import "./Owned.sol";
+import { Ownable } from "@openzeppelin/contracts/access/Ownable.sol";
 import { IPool } from "./balancer/IPool.sol";
 import { IDelegateCallProxyManager } from "@indexed-finance/proxies/contracts/interfaces/IDelegateCallProxyManager.sol";
 import { SaltyLib as Salty } from "@indexed-finance/proxies/contracts/SaltyLib.sol";
@@ -12,7 +12,7 @@ import { SaltyLib as Salty } from "@indexed-finance/proxies/contracts/SaltyLib.s
  * @title PoolFactory
  * @author d1ll0n
  */
-contract PoolFactory is Owned {
+contract PoolFactory is Ownable {
 /* ---  Constants  --- */
 
   // Default pool implementation ID.
@@ -50,22 +50,19 @@ contract PoolFactory is Owned {
 
 /* ---  Constructor  --- */
 
-  constructor(
-    address owner,
-    IDelegateCallProxyManager proxyManager
-  ) public Owned(owner) {
+  constructor(IDelegateCallProxyManager proxyManager) public Ownable() {
     _proxyManager = proxyManager;
   }
 
 /* ---  Controller Approval  --- */
 
   /** @dev Approves `controller` to deploy index pools. */
-  function approvePoolController(address controller) external _owner_ {
+  function approvePoolController(address controller) external onlyOwner {
     _approvedControllers[controller] = true;
   }
 
   /** @dev Removes the ability of `controller` to deploy index pools. */
-  function disapprovePoolController(address controller) external _owner_ {
+  function disapprovePoolController(address controller) external onlyOwner {
     _approvedControllers[controller] = false;
   }
 
@@ -173,23 +170,6 @@ contract PoolFactory is Owned {
       POOL_IMPLEMENTATION_ID,
       suppliedSalt
     );
-  }
-
-/* ---  Internal Utility Functions  --- */
-
-  /**
-   * @dev Re-assigns a uint128 array to a uint256 array.
-   * This does not affect memory allocation as all Solidity
-   * uint arrays take 32 bytes per item.
-   */
-  function _to256Array(uint128[] memory arr)
-    internal
-    pure
-    returns (uint256[] memory outArr)
-  {
-    assembly {
-      outArr := arr
-    }
   }
 }
 

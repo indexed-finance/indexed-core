@@ -15,7 +15,7 @@ describe('MarketCapSortedTokenCategories.sol', () => {
       (await ethers.getContract('uniswapRouter')).address,
       controller.address
     );
-    await controller.setOwner(testContract.address);
+    await controller.transferOwnership(testContract.address);
   });
   
   it('init', async () => {
