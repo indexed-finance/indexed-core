@@ -85,8 +85,8 @@ contract IPool is BToken, BMath {
   /** @dev Emitted when a token reaches its minimum balance. */
   event LOG_TOKEN_READY(address indexed token);
 
-  /** @dev Emitted when public trades are enabled or disabled. */
-  event LOG_PUBLIC_SWAP_TOGGLED(bool publicSwap);
+  /** @dev Emitted when public trades are enabled. */
+  event LOG_PUBLIC_SWAP_ENABLED();
 
   /** @dev Emitted when the maximum tokens value is updated. */
   event LOG_MAX_TOKENS_UPDATED(uint256 maxPoolTokens);
@@ -225,7 +225,7 @@ contract IPool is BToken, BMath {
     require(totalWeight <= MAX_TOTAL_WEIGHT, "ERR_MAX_TOTAL_WEIGHT");
     _totalWeight = totalWeight;
     _publicSwap = true;
-    emit LOG_PUBLIC_SWAP_TOGGLED(true);
+    emit LOG_PUBLIC_SWAP_ENABLED();
     _mintPoolShare(INIT_POOL_SUPPLY);
     _pushPoolShare(tokenProvider, INIT_POOL_SUPPLY);
     _unbindHandler = TokenUnbindHandler(unbindHandler);
