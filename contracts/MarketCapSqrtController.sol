@@ -10,8 +10,8 @@ import { MCapSqrtLibrary as MCapSqrt } from "./lib/MCapSqrtLibrary.sol";
 import { PoolFactory } from "./PoolFactory.sol";
 import { PoolInitializer } from "./PoolInitializer.sol";
 import { UnboundTokenSeller } from "./UnboundTokenSeller.sol";
-import { DelegateCallProxyManager } from "./proxies/DelegateCallProxyManager.sol";
-import { SaltyLib as Salty } from "./proxies/SaltyLib.sol";
+import { IDelegateCallProxyManager } from "@indexed-finance/proxies/contracts/interfaces/IDelegateCallProxyManager.sol";
+import { SaltyLib as Salty } from "@indexed-finance/proxies/contracts/SaltyLib.sol";
 import {
   MarketCapSortedTokenCategories,
   UniSwapV2PriceOracle
@@ -76,7 +76,7 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
   PoolFactory internal immutable _factory;
 
   // Proxy manager & factory
-  DelegateCallProxyManager internal immutable _proxyManager;
+  IDelegateCallProxyManager internal immutable _proxyManager;
 
 /* ---  Events  --- */
 
@@ -171,7 +171,7 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
     UniSwapV2PriceOracle oracle,
     address owner,
     PoolFactory factory,
-    DelegateCallProxyManager proxyManager
+    IDelegateCallProxyManager proxyManager
   )
     public
     MarketCapSortedTokenCategories(oracle, owner)
