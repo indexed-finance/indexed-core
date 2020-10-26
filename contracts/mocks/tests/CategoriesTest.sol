@@ -139,6 +139,7 @@ contract CategoriesTest is TestTokenMarkets, Diff, TestOrder {
 
   function returnOwnership() external {
     categories.transferOwnership(msg.sender);
+    require(categories.owner() == msg.sender, "Error: Owner not set!");
   }
     
   /**
