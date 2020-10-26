@@ -30,12 +30,6 @@ This tests the `MarketCapSortedTokenCategories.sol` contract and its interaction
 
 The controller inherits this contract, but they are separated for clarity.
 
-### Test proxies
-
-`npm run test:proxies`
-
-This tests the proxy contracts using mock implementations.
-
 ### Test token seller
 
 `npm run test:seller`

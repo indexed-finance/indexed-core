@@ -58,8 +58,14 @@ module.exports = {
   external: {
     artifacts: [
       "node_modules/@uniswap/v2-core/build",
-      "node_modules/@uniswap/v2-periphery/build"
+      "node_modules/@uniswap/v2-periphery/build",
+      "node_modules/@indexed-finance/proxies/artifacts"
     ],
+    deployments: {
+      rinkeby: [
+        "node_modules/@indexed-finance/proxies/deployments/rinkeby"
+      ]
+    }
   },
   gasReporter: {
     currency: "USD",
@@ -106,7 +112,7 @@ module.exports = {
     deployments: path.join(__dirname, "deployments")
   },
   solc: {
-    version: "0.6.8",
+    version: "0.6.12",
     optimizer: {
       enabled: true,
       runs: 200

@@ -4,16 +4,8 @@ pragma experimental ABIEncoderV2;
 
 import "./Owned.sol";
 import { IPool } from "./balancer/IPool.sol";
-import {
-  DelegateCallProxyManager
-} from "./proxies/DelegateCallProxyManager.sol";
-import {
-  DelegateCallProxyManyToOne
-} from "./proxies/DelegateCallProxyManyToOne.sol";
-import { SaltyLib as Salty } from "./proxies/SaltyLib.sol";
-import { Create2 } from "@openzeppelin/contracts/utils/Create2.sol";
-import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
+import { IDelegateCallProxyManager } from "@indexed-finance/proxies/contracts/interfaces/IDelegateCallProxyManager.sol";
+import { SaltyLib as Salty } from "@indexed-finance/proxies/contracts/SaltyLib.sol";
 
 
 /**
@@ -27,7 +19,7 @@ contract PoolFactory is Owned {
   bytes32 internal constant POOL_IMPLEMENTATION_ID = keccak256("IPool.sol");
 
   // Address of the proxy manager contract.
-  DelegateCallProxyManager internal immutable _proxyManager;
+  IDelegateCallProxyManager internal immutable _proxyManager;
 
 /* ---  Events  --- */
 
@@ -60,7 +52,7 @@ contract PoolFactory is Owned {
 
   constructor(
     address owner,
-    DelegateCallProxyManager proxyManager
+    IDelegateCallProxyManager proxyManager
   ) public Owned(owner) {
     _proxyManager = proxyManager;
   }

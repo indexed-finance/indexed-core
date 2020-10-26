@@ -12,8 +12,7 @@
     "test:seller": "buidler test ./test/test-seller.spec.js",
     "test:categories": "buidler test ./test/test-categories.spec.js",
     "test:controller": "buidler test ./test/test-controller.spec.js",
-    "test:oracle": "buidler test ./test/test-oracle.spec.js",
-    "test:proxy": "buidler test ./test/test-proxy.spec.js"
+    "test:oracle": "buidler test ./test/test-oracle.spec.js"
   },
   "repository": {
     "type": "git",
@@ -57,6 +56,7 @@
     "web3": "^1.2.11"
   },
   "dependencies": {
+    "@indexed-finance/proxies": "^1.0.12",
     "@openzeppelin/contracts": "^3.2.0",
     "axios": "^0.20.0",
     "cids": "^1.0.0",
