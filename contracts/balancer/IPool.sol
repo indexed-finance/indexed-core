@@ -684,13 +684,24 @@ contract IPool is BToken, BMath {
    * token handler.
    */
   function gulp(address token) external _lock_ {
-    Record memory record = _records[token];
+    Record storage record = _records[token];
     uint256 balance = IERC20(token).balanceOf(address(this));
     if (record.bound) {
       if (!record.ready) {
-        record.denorm = uint96(MIN_WEIGHT);
-        _updateInputToken(token, record, balance);
+        uint256 minimumBalance = _minimumBalances[token];
+        if (balance >= minimumBalance) {
+          _minimumBalances[token] = 0;
+          record.ready = true;
+          emit LOG_TOKEN_READY(token);
+          uint256 additionalBalance = bsub(balance, minimumBalance);
+          uint256 balRatio = bdiv(additionalBalance, minimumBalance);
+          uint96 newDenorm = uint96(badd(MIN_WEIGHT, bmul(MIN_WEIGHT, balRatio)));
+          record.denorm = newDenorm;
+          record.lastDenormUpdate = uint40(now);
+          _totalWeight = badd(_totalWeight, newDenorm);
+        }
       }
+      _records[token].balance = balance;
     } else {
       _pushUnderlying(token, address(_unbindHandler), balance);
       _unbindHandler.handleUnbindToken(token, balance);
