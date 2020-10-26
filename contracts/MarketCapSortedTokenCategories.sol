@@ -2,9 +2,10 @@
 pragma solidity ^0.6.0;
 pragma experimental ABIEncoderV2;
 
-import "./Owned.sol";
+import { Ownable } from "@openzeppelin/contracts/access/Ownable.sol";
 import { UniSwapV2PriceOracle } from "./UniSwapV2PriceOracle.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+
 
 /**
  * @title MarketCapSortedCategories
@@ -31,7 +32,7 @@ import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
  * 5.a. The control model should be considered if the supply can be modified arbitrarily.
  * ===============
  */
-contract MarketCapSortedTokenCategories is Owned {
+contract MarketCapSortedTokenCategories is Ownable {
 /* ---  Constants  --- */
 
   // Maximum time between a category being sorted and a query for the top n tokens
@@ -79,10 +80,7 @@ contract MarketCapSortedTokenCategories is Owned {
    * @dev Deploy the controller and configure the addresses
    * of the related contracts.
    */
-  constructor(UniSwapV2PriceOracle _oracle, address owner)
-    public
-    Owned(owner)
-  {
+  constructor(UniSwapV2PriceOracle _oracle) public Ownable() {
     oracle = _oracle;
   }
 
@@ -102,7 +100,7 @@ contract MarketCapSortedTokenCategories is Owned {
    * @param metadataHash Hash of metadata about the token category
    * which can be distributed on IPFS.
    */
-  function createCategory(bytes32 metadataHash) external _owner_ {
+  function createCategory(bytes32 metadataHash) external onlyOwner {
     uint256 categoryID = ++categoryIndex;
     emit CategoryAdded(categoryID, metadataHash);
   }
@@ -111,7 +109,7 @@ contract MarketCapSortedTokenCategories is Owned {
    * @dev Adds a new token to a category.
    * Note: A token can only be assigned to one category at a time.
    */
-  function addToken(address token, uint256 categoryID) external _owner_ {
+  function addToken(address token, uint256 categoryID) external onlyOwner {
     require(
       categoryID <= categoryIndex && categoryID > 0,
       "ERR_CATEGORY_ID"
@@ -138,7 +136,7 @@ contract MarketCapSortedTokenCategories is Owned {
     address[] calldata tokens
   )
     external
-    _owner_
+    onlyOwner
   {
     require(
       categoryID <= categoryIndex && categoryID > 0,
