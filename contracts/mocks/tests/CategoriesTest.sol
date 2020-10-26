@@ -138,7 +138,7 @@ contract CategoriesTest is TestTokenMarkets, Diff, TestOrder {
   }
 
   function returnOwnership() external {
-    categories.setOwner(msg.sender);
+    categories.transferOwnership(msg.sender);
   }
     
   /**
