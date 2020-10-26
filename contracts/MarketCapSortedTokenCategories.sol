@@ -2,9 +2,15 @@
 pragma solidity ^0.6.0;
 pragma experimental ABIEncoderV2;
 
+/* --- External Inheritance --- */
 import { Ownable } from "@openzeppelin/contracts/access/Ownable.sol";
-import { UniSwapV2PriceOracle } from "./UniSwapV2PriceOracle.sol";
+
+/* --- External Interfaces --- */
+import { IIndexedUniswapV2Oracle } from "@indexed-finance/uniswap-v2-oracle/contracts/interfaces/IIndexedUniswapV2Oracle.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+
+/* --- External Libraries --- */
+import { PriceLibrary as Prices } from "@indexed-finance/uniswap-v2-oracle/contracts/lib/PriceLibrary.sol";
 
 
 /**
@@ -42,7 +48,7 @@ contract MarketCapSortedTokenCategories is Ownable {
   uint256 internal constant MAX_CATEGORY_TOKENS = 15;
 
   // Long term price oracle
-  UniSwapV2PriceOracle public immutable oracle;
+  IIndexedUniswapV2Oracle public immutable oracle;
 
 /* ---  Events  --- */
 
@@ -80,10 +86,9 @@ contract MarketCapSortedTokenCategories is Ownable {
    * @dev Deploy the controller and configure the addresses
    * of the related contracts.
    */
-  constructor(UniSwapV2PriceOracle _oracle) public Ownable() {
+  constructor(IIndexedUniswapV2Oracle _oracle) public Ownable() {
     oracle = _oracle;
   }
-
 
 /* ---  Category Management  --- */
 
@@ -209,7 +214,12 @@ contract MarketCapSortedTokenCategories is Ownable {
     returns (uint144 marketCap)
   {
     uint256 totalSupply = IERC20(token).totalSupply();
-    return oracle.computeAverageAmountOut(token, totalSupply);
+    return oracle.computeAverageEthForTokens(
+      token,
+      totalSupply,
+      3.5 days,
+      2 weeks
+    );
   }
 
   /**
@@ -225,8 +235,11 @@ contract MarketCapSortedTokenCategories is Ownable {
     for (uint256 i = 0; i < len; i++) {
       totalSupplies[i] = IERC20(tokens[i]).totalSupply();
     }
-    marketCaps = oracle.computeAverageAmountsOut(
-      tokens, totalSupplies
+    marketCaps = oracle.computeAverageEthForTokens(
+      tokens,
+      totalSupplies,
+      3.5 days,
+      2 weeks
     );
   }
 
