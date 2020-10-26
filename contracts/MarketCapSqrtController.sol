@@ -2,22 +2,28 @@
 pragma solidity ^0.6.0;
 pragma experimental ABIEncoderV2;
 
+/* --- External Interfaces --- */
+import { IIndexedUniswapV2Oracle } from "@indexed-finance/uniswap-v2-oracle/contracts/interfaces/IIndexedUniswapV2Oracle.sol";
+import { IDelegateCallProxyManager } from "@indexed-finance/proxies/contracts/interfaces/IDelegateCallProxyManager.sol";
+import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+
+/* --- External Libraries --- */
+import { PriceLibrary as Prices } from "@indexed-finance/uniswap-v2-oracle/contracts/lib/PriceLibrary.sol";
+import { FixedPoint } from "@indexed-finance/uniswap-v2-oracle/contracts/lib/FixedPoint.sol";
+import { SaltyLib as Salty } from "@indexed-finance/proxies/contracts/SaltyLib.sol";
+import { SafeMath } from "@openzeppelin/contracts/math/SafeMath.sol";
+
+/* --- Internal Interfaces --- */
 import { IPool } from "./balancer/IPool.sol";
-import { PriceLibrary as Prices } from "./lib/PriceLibrary.sol";
-import "./lib/FixedPoint.sol";
-import "./lib/Babylonian.sol";
-import { MCapSqrtLibrary as MCapSqrt } from "./lib/MCapSqrtLibrary.sol";
 import { PoolFactory } from "./PoolFactory.sol";
 import { PoolInitializer } from "./PoolInitializer.sol";
+
+/* --- Internal Libraries --- */
+import { MCapSqrtLibrary as MCapSqrt } from "./lib/MCapSqrtLibrary.sol";
 import { UnboundTokenSeller } from "./UnboundTokenSeller.sol";
-import { IDelegateCallProxyManager } from "@indexed-finance/proxies/contracts/interfaces/IDelegateCallProxyManager.sol";
-import { SaltyLib as Salty } from "@indexed-finance/proxies/contracts/SaltyLib.sol";
-import {
-  MarketCapSortedTokenCategories,
-  UniSwapV2PriceOracle
-} from "./MarketCapSortedTokenCategories.sol";
-import { SafeMath } from "@openzeppelin/contracts/math/SafeMath.sol";
-import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+
+/* --- Internal Inheritance --- */
+import { MarketCapSortedTokenCategories } from "./MarketCapSortedTokenCategories.sol";
 
 
 /**
@@ -43,7 +49,6 @@ import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 contract MarketCapSqrtController is MarketCapSortedTokenCategories {
   using FixedPoint for FixedPoint.uq112x112;
   using FixedPoint for FixedPoint.uq144x112;
-  using Babylonian for uint144;
   using SafeMath for uint256;
   using Prices for Prices.TwoWayAveragePrice;
 
@@ -168,7 +173,7 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
    * of the related contracts.
    */
   constructor(
-    UniSwapV2PriceOracle oracle,
+    IIndexedUniswapV2Oracle oracle,
     PoolFactory factory,
     IDelegateCallProxyManager proxyManager
   )
@@ -261,8 +266,11 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
     require(!meta.initialized, "ERR_INITIALIZED");
     uint96[] memory denormalizedWeights = new uint96[](len);
     uint256 valueSum;
-    uint144[] memory ethValues = oracle.computeAverageAmountsOut(
-      tokens, balances
+    uint144[] memory ethValues = oracle.computeAverageEthForTokens(
+      tokens,
+      balances,
+      30 minutes,
+      12 hours
     );
     for (uint256 i = 0; i < len; i++) {
       valueSum = valueSum.add(ethValues[i]);
@@ -361,7 +369,11 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
     IPool.Record memory record = pool.getTokenRecord(tokenAddress);
     require(!record.ready, "ERR_TOKEN_READY");
     uint256 poolValue = _estimatePoolValue(pool);
-    Prices.TwoWayAveragePrice memory price = oracle.computeTwoWayAveragePrice(tokenAddress);
+    Prices.TwoWayAveragePrice memory price = oracle.computeTwoWayAveragePrice(
+      tokenAddress,
+      30 minutes,
+      12 hours
+    );
     uint256 minimumBalance = price.computeAverageTokensForEth(poolValue) / 100;
     pool.setMinimumBalance(tokenAddress, minimumBalance);
   }
@@ -386,7 +398,11 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
     uint256 size = meta.indexSize;
     address[] memory tokens = getTopCategoryTokens(meta.categoryID, size);
   
-    Prices.TwoWayAveragePrice[] memory prices = oracle.computeTwoWayAveragePrices(tokens);
+    Prices.TwoWayAveragePrice[] memory prices = oracle.computeTwoWayAveragePrices(
+      tokens,
+      3.5 days,
+      2 weeks
+    );
     FixedPoint.uq112x112[] memory weights = MCapSqrt.computeTokenWeights(tokens, prices);
 
     uint256[] memory minimumBalances = new uint256[](size);
@@ -431,7 +447,11 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
     );
 
     address[] memory tokens = IPool(poolAddress).getCurrentDesiredTokens();
-    Prices.TwoWayAveragePrice[] memory prices = oracle.computeTwoWayAveragePrices(tokens);
+    Prices.TwoWayAveragePrice[] memory prices = oracle.computeTwoWayAveragePrices(
+      tokens,
+      3.5 days,
+      2 weeks
+    );
     FixedPoint.uq112x112[] memory weights = MCapSqrt.computeTokenWeights(tokens, prices);
     uint96[] memory denormalizedWeights = new uint96[](tokens.length);
 
@@ -515,7 +535,11 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
     )
   {
     tokens = getTopCategoryTokens(categoryID, indexSize);
-    Prices.TwoWayAveragePrice[] memory prices = oracle.computeTwoWayAveragePrices(tokens);
+    Prices.TwoWayAveragePrice[] memory prices = oracle.computeTwoWayAveragePrices(
+      tokens,
+      3.5 days,
+      2 weeks
+    );
     FixedPoint.uq112x112[] memory weights = MCapSqrt.computeTokenWeights(tokens, prices);
     balances = new uint256[](indexSize);
     for (uint256 i = 0; i < indexSize; i++) {
@@ -532,8 +556,12 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
    */
   function _estimatePoolValue(IPool pool) internal view returns (uint144) {
     (address token, uint256 value) = pool.extrapolatePoolValueFromToken();
-    FixedPoint.uq112x112 memory price = oracle.computeAverageTokenPrice(token);
-    return price.mul(value).decode144();
+    return oracle.computeAverageEthForTokens(
+      token,
+      value,
+      3.5 days,
+      2 weeks
+    );
   }
 
 /* ---  General Utility Functions  --- */
