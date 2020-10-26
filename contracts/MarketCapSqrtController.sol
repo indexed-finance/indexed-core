@@ -169,12 +169,11 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
    */
   constructor(
     UniSwapV2PriceOracle oracle,
-    address owner,
     PoolFactory factory,
     IDelegateCallProxyManager proxyManager
   )
     public
-    MarketCapSortedTokenCategories(oracle, owner)
+    MarketCapSortedTokenCategories(oracle)
   {
     _factory = factory;
     _proxyManager = proxyManager;
@@ -197,7 +196,7 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
     string calldata symbol
   )
     external
-    _owner_
+    onlyOwner
     returns (address poolAddress, address initializerAddress)
   {
     require(indexSize >= MIN_INDEX_SIZE, "ERR_MIN_INDEX_SIZE");
@@ -311,7 +310,7 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
    */
   function setDefaultSellerPremium(
     uint8 _defaultSellerPremium
-  ) external _owner_ {
+  ) external onlyOwner {
     require(
       _defaultSellerPremium > 0 && _defaultSellerPremium < 20,
       "ERR_PREMIUM"
@@ -322,7 +321,7 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
   /**
    * @dev Set the premium rate on `sellerAddress` to the given rate.
    */
-  function updateSellerPremium(address tokenSeller, uint8 premiumPercent) external _owner_ {
+  function updateSellerPremium(address tokenSeller, uint8 premiumPercent) external onlyOwner {
     UnboundTokenSeller(tokenSeller).setPremiumPercent(premiumPercent);
   }
 
@@ -342,14 +341,14 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
   function setMaxPoolTokens(
     address poolAddress,
     uint256 maxPoolTokens
-  ) external _owner_ _havePool(poolAddress) {
+  ) external onlyOwner _havePool(poolAddress) {
     IPool(poolAddress).setMaxPoolTokens(maxPoolTokens);
   }
 
   /**
    * @dev Sets the swap fee on an index pool.
    */
-  function setSwapFee(address poolAddress, uint256 swapFee) external _owner_ _havePool(poolAddress) {
+  function setSwapFee(address poolAddress, uint256 swapFee) external onlyOwner _havePool(poolAddress) {
     IPool(poolAddress).setSwapFee(swapFee);
   }
 
