@@ -171,23 +171,6 @@ contract PoolFactory is Ownable {
       suppliedSalt
     );
   }
-
-/* ---  Internal Utility Functions  --- */
-
-  /**
-   * @dev Re-assigns a uint128 array to a uint256 array.
-   * This does not affect memory allocation as all Solidity
-   * uint arrays take 32 bytes per item.
-   */
-  function _to256Array(uint128[] memory arr)
-    internal
-    pure
-    returns (uint256[] memory outArr)
-  {
-    assembly {
-      outArr := arr
-    }
-  }
 }
 
 /**
