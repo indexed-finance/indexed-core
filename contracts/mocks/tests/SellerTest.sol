@@ -10,7 +10,7 @@ import {
 import {
   IUniswapV2Router02
 } from "@uniswap/v2-periphery/contracts/interfaces/IUniswapV2Router02.sol";
-import { UniSwapV2PriceOracle } from "../../UniSwapV2PriceOracle.sol";
+import { IIndexedUniswapV2Oracle } from "@indexed-finance/uniswap-v2-oracle/contracts/interfaces/IIndexedUniswapV2Oracle.sol";
 import { MockERC20, TestTokenMarkets } from "./util/TestTokenMarkets.sol";
 import "./util/Diff.sol";
 import "./util/TestOrder.sol";
@@ -21,20 +21,20 @@ import { UniswapV2Library } from "../../lib/UniswapV2Library.sol";
 
 contract SellerTest is TestTokenMarkets, Diff, TestOrder {
   UnboundTokenSeller public seller;
-  UniSwapV2PriceOracle public shortOracle;
+  IIndexedUniswapV2Oracle public oracle;
   MockUnbindSourcePool public pool;
 
   constructor(
     MockERC20 _weth,
     IUniswapV2Factory _factory,
     IUniswapV2Router02 _router,
-    UniSwapV2PriceOracle _shortOracle
+    IIndexedUniswapV2Oracle _oracle
   )
     public
     TestTokenMarkets(_weth, _factory, _router)
   {
-    shortOracle = _shortOracle;
-    seller = new UnboundTokenSeller(_router, _shortOracle, address(this));
+    oracle = _oracle;
+    seller = new UnboundTokenSeller(_router, _oracle, address(this));
     pool = new MockUnbindSourcePool(address(seller));
     seller.initialize(IPool(address(pool)), 2);
   }
@@ -48,7 +48,7 @@ contract SellerTest is TestTokenMarkets, Diff, TestOrder {
   }
 
   function init3() public {
-    shortOracle.updatePrices(tokensOrderedByPrice());
+    oracle.updatePrices(tokensOrderedByPrice());
     pool.addToken(address(token1), 1.5e18, 5e21 / price1);
     pool.addToken(address(token2), 1.5e18, 5e21 / price2);
     pool.addToken(address(token3), 1.5e18, 5e21 / price3);
