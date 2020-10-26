@@ -14,7 +14,7 @@ describe('MarketCapSqrtController.sol', () => {
       (await ethers.getContract('uniswapFactory')).address,
       (await ethers.getContract('uniswapRouter')).address,
       controller.address,
-      (await ethers.getContract('HourlyTWAPUniswapV2Oracle')).address
+      (await ethers.getContract('uniswapOracle')).address
     );
     await controller.transferOwnership(testContract.address);
   });

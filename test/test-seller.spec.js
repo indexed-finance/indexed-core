@@ -12,7 +12,7 @@ describe('UnboundTokenSeller.sol', () => {
       (await ethers.getContract("weth")).address,
       (await ethers.getContract('uniswapFactory')).address,
       (await ethers.getContract('uniswapRouter')).address,
-      (await ethers.getContract('HourlyTWAPUniswapV2Oracle')).address
+      (await ethers.getContract('uniswapOracle')).address
     );
   });
   
