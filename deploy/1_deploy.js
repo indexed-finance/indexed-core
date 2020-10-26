@@ -101,7 +101,7 @@ module.exports = async ({
     contractName: 'poolFactory',
     from: deployer,
     gas: 4000000,
-    args: [deployer, proxyManager.address]
+    args: [proxyManager.address]
   });
   const poolFactory = await ethers.getContractAt(
     poolFactoryDeployment.abi, poolFactoryDeployment.address, signer
@@ -113,7 +113,6 @@ module.exports = async ({
     gas: 4000000,
     args: [
       longTermUniSwapOracle.address,
-      deployer,
       poolFactory.address,
       proxyManager.address
     ]
