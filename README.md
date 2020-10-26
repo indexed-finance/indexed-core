@@ -35,9 +35,3 @@ The controller inherits this contract, but they are separated for clarity.
 `npm run test:seller`
 
 Tests the `UnboundTokenSeller.sol` contract using a mock pool.
-
-### Test oracle
-
-`npm run test:oracle`
-
-Tests the `UniSwapV2PriceOracle.sol` contract using mock tokens and markets.
