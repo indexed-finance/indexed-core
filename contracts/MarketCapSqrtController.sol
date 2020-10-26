@@ -550,17 +550,4 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
   {
     return uint96(fraction.mul(WEIGHT_MULTIPLIER).decode144());
   }
-  
-  /**
-   * @dev Re-assigns a uint128 array to a uint256 array.
-   * This does not affect memory allocation as all Solidity
-   * uint arrays take 32 bytes per item.
-   */
-  function _to256Array(uint128[] memory arr)
-    internal
-    pure
-    returns (uint256[] memory outArr)
-  {
-    assembly { outArr := arr }
-  }
 }
