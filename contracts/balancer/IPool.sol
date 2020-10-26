@@ -103,6 +103,11 @@ contract IPool is BToken, BMath {
     _mutex = false;
   }
 
+  modifier _viewlock_() {
+    require(!_mutex, "ERR_REENTRY");
+    _;
+  }
+
   modifier _control_ {
     require(msg.sender == _controller, "ERR_NOT_CONTROLLER");
     _;
@@ -948,7 +953,7 @@ contract IPool is BToken, BMath {
     return _publicSwap;
   }
 
-  function getSwapFee() external view returns (uint256) {
+  function getSwapFee() external view _viewlock_ returns (uint256/* swapFee */) {
     return _swapFee;
   }
 
@@ -982,7 +987,12 @@ contract IPool is BToken, BMath {
   /**
    * @dev Get all bound tokens.
    */
-  function getCurrentTokens() external view returns (address[] memory tokens) {
+  function getCurrentTokens()
+    external
+    view
+    _viewlock_
+    returns (address[] memory tokens)
+  {
     tokens = _tokens;
   }
 
@@ -993,6 +1003,7 @@ contract IPool is BToken, BMath {
   function getCurrentDesiredTokens()
     external
     view
+    _viewlock_
     returns (address[] memory tokens)
   {
     address[] memory tempTokens = _tokens;
@@ -1010,7 +1021,12 @@ contract IPool is BToken, BMath {
   /**
    * @dev Returns the denormalized weight of a bound token.
    */
-  function getDenormalizedWeight(address token) external view returns (uint256) {
+  function getDenormalizedWeight(address token)
+    external
+    view
+    _viewlock_
+    returns (uint256/* denorm */)
+  {
     require(_records[token].bound, "ERR_NOT_BOUND");
     return _records[token].denorm;
   }
@@ -1018,7 +1034,12 @@ contract IPool is BToken, BMath {
   /**
    * @dev Returns the record for a token bound to the pool.
    */
-  function getTokenRecord(address token) external view returns (Record memory record) {
+  function getTokenRecord(address token)
+    external
+    view
+    _viewlock_
+    returns (Record memory record)
+  {
     record = _records[token];
     require(record.bound, "ERR_NOT_BOUND");
   }
@@ -1035,6 +1056,7 @@ contract IPool is BToken, BMath {
   function extrapolatePoolValueFromToken()
     external
     view
+    _viewlock_
     returns (address/* token */, uint256/* extrapolatedValue */)
   {
     address token;
@@ -1056,14 +1078,19 @@ contract IPool is BToken, BMath {
   /**
    * @dev Get the total denormalized weight of the pool.
    */
-  function getTotalDenormalizedWeight() external view returns (uint256) {
+  function getTotalDenormalizedWeight()
+    external
+    view
+    _viewlock_
+    returns (uint256)
+  {
     return _totalWeight;
   }
 
   /**
    * @dev Returns the stored balance of a bound token.
    */
-  function getBalance(address token) external view returns (uint256) {
+  function getBalance(address token) external view _viewlock_ returns (uint256) {
     Record storage record = _records[token];
     require(record.bound, "ERR_NOT_BOUND");
     return record.balance;
@@ -1073,7 +1100,7 @@ contract IPool is BToken, BMath {
    * @dev Get the minimum balance of an uninitialized token.
    * Note: Throws if the token is initialized.
    */
-  function getMinimumBalance(address token) external view returns (uint256) {
+  function getMinimumBalance(address token) external view _viewlock_ returns (uint256) {
     Record memory record = _records[token];
     require(record.bound, "ERR_NOT_BOUND");
     require(!record.ready, "ERR_READY");
@@ -1085,7 +1112,7 @@ contract IPool is BToken, BMath {
    * calculations. If the token is initialized, this is the
    * stored balance; if not, this is the minimum balance.
    */
-  function getUsedBalance(address token) external view returns (uint256) {
+  function getUsedBalance(address token) external view _viewlock_ returns (uint256) {
     Record memory record = _records[token];
     require(record.bound, "ERR_NOT_BOUND");
     if (!record.ready) {
@@ -1101,6 +1128,7 @@ contract IPool is BToken, BMath {
   function getSpotPrice(address tokenIn, address tokenOut)
     external
     view
+    _viewlock_
     returns (uint256)
   {
     (Record memory inRecord,) = _getInputToken(tokenIn);

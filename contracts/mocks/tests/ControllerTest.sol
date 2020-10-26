@@ -209,9 +209,9 @@ contract ControllerTest is TestTokenMarkets, Diff, TestOrder {
     require(premium == 1, "Error: default premium not set.");
   }
 
-  function test_updateSellerPremiumToDefault() external testIndex(6) {
+  function test_updateSellerPremium() external testIndex(6) {
     address sellerAddress = controller.computeSellerAddress(address(_pool));
-    controller.updateSellerPremiumToDefault(sellerAddress);
+    controller.updateSellerPremium(sellerAddress, 1);
     require(
       UnboundTokenSeller(sellerAddress).getPremiumPercent() == 1,
       "Error: Token seller premium not set."
