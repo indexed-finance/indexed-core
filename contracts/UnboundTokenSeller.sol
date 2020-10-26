@@ -2,20 +2,17 @@
 pragma solidity ^0.6.0;
 pragma experimental ABIEncoderV2;
 
-import "./lib/FixedPoint.sol";
-import { IPool } from "./balancer/IPool.sol";
-import { UniSwapV2PriceOracle } from "./UniSwapV2PriceOracle.sol";
-import { SafeMath } from "@openzeppelin/contracts/math/SafeMath.sol";
+/* --- External Interfaces --- */
+import { IIndexedUniswapV2Oracle } from "@indexed-finance/uniswap-v2-oracle/contracts/interfaces/IIndexedUniswapV2Oracle.sol";
+import { IUniswapV2Router02 as UniV2Router } from "@uniswap/v2-periphery/contracts/interfaces/IUniswapV2Router02.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
-import {
-  IUniswapV2Pair as Pair
-} from "@uniswap/v2-core/contracts/interfaces/IUniswapV2Pair.sol";
-import {
-  IUniswapV2Router02 as UniV2Router
-} from "@uniswap/v2-periphery/contracts/interfaces/IUniswapV2Router02.sol";
 
-import { PriceLibrary as Prices } from "./lib/PriceLibrary.sol";
+/* --- External Libraries --- */
+import { PriceLibrary as Prices } from "@indexed-finance/uniswap-v2-oracle/contracts/lib/PriceLibrary.sol";
+import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
+
+/* --- Internal Interfaces --- */
+import { IPool } from "./balancer/IPool.sol";
 
 
 /**
@@ -41,10 +38,6 @@ import { PriceLibrary as Prices } from "./lib/PriceLibrary.sol";
  * contracts.
  */
 contract UnboundTokenSeller {
-  using FixedPoint for FixedPoint.uq112x112;
-  using FixedPoint for FixedPoint.uq144x112;
-  using SafeMath for uint256;
-  using SafeMath for uint144;
   using SafeERC20 for IERC20;
   using Prices for Prices.TwoWayAveragePrice;
 
@@ -52,7 +45,7 @@ contract UnboundTokenSeller {
 
   UniV2Router internal immutable _uniswapRouter;
   address internal immutable _controller;
-  UniSwapV2PriceOracle internal immutable _oracle;
+  IIndexedUniswapV2Oracle internal immutable _oracle;
 
 /* ---  Events  --- */
 
@@ -109,7 +102,7 @@ contract UnboundTokenSeller {
 
   constructor(
     UniV2Router uniswapRouter,
-    UniSwapV2PriceOracle oracle,
+    IIndexedUniswapV2Oracle oracle,
     address controller
   ) public {
     _uniswapRouter = uniswapRouter;
@@ -436,7 +429,12 @@ contract UnboundTokenSeller {
     uint256[] memory amounts = new uint256[](2);
     amounts[0] = amount1;
     amounts[1] = amount2;
-    uint144[] memory avgValues = _oracle.computeAverageAmountsOut(tokens, amounts);
+    uint144[] memory avgValues = _oracle.computeAverageEthForTokens(
+      tokens,
+      amounts,
+      30 minutes,
+      12 hours
+    );
     avgValue1 = avgValues[0];
     avgValue2 = avgValues[1];
   }
@@ -452,7 +450,11 @@ contract UnboundTokenSeller {
     address[] memory tokens = new address[](2);
     tokens[0] = token1;
     tokens[1] = token2;
-    Prices.TwoWayAveragePrice[] memory prices = _oracle.computeTwoWayAveragePrices(tokens);
+    Prices.TwoWayAveragePrice[] memory prices = _oracle.computeTwoWayAveragePrices(
+      tokens,
+      10 minutes,
+      12 hours
+    );
     avgPrice1 = prices[0];
     avgPrice2 = prices[1];
   }
