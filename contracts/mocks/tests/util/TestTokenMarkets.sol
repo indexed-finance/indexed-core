@@ -9,7 +9,6 @@ import {
 import {
   IUniswapV2Router02
 } from "@uniswap/v2-periphery/contracts/interfaces/IUniswapV2Router02.sol";
-import { UniSwapV2PriceOracle } from "../../../UniSwapV2PriceOracle.sol";
 import "./TestTokens.sol";
 
 
