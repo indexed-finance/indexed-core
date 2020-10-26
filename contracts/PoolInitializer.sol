@@ -2,11 +2,16 @@
 pragma solidity ^0.6.0;
 pragma experimental ABIEncoderV2;
 
-import { IPool } from "./balancer/IPool.sol";
-import { UniSwapV2PriceOracle } from "./UniSwapV2PriceOracle.sol";
-import "@openzeppelin/contracts/math/SafeMath.sol";
+/* --- External Interfaces --- */
+import { IIndexedUniswapV2Oracle } from "@indexed-finance/uniswap-v2-oracle/contracts/interfaces/IIndexedUniswapV2Oracle.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+
+/* --- External Libraries --- */
+import "@openzeppelin/contracts/math/SafeMath.sol";
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
+
+/* --- Internal Interfaces --- */
+import { IPool } from "./balancer/IPool.sol";
 
 
 /**
@@ -30,7 +35,7 @@ contract PoolInitializer {
 /* ---  Constants  --- */
 
   address internal immutable _controller;
-  UniSwapV2PriceOracle internal immutable _oracle;
+  IIndexedUniswapV2Oracle internal immutable _oracle;
 
 /* ---  Events  --- */
 
@@ -83,7 +88,7 @@ contract PoolInitializer {
 /* ---  Constructor  --- */
 
   constructor(
-    UniSwapV2PriceOracle oracle,
+    IIndexedUniswapV2Oracle oracle,
     address controller
   ) public {
     _oracle = oracle;
@@ -205,7 +210,12 @@ contract PoolInitializer {
     if (amountIn > desiredAmount) {
       amountIn = desiredAmount;
     }
-    credit = _oracle.computeAverageAmountOut(token, amountIn);
+    credit = _oracle.computeAverageEthForTokens(
+      token,
+      amountIn,
+      30 minutes,
+      12 hours
+    );
     require(credit > 0 && amountIn > 0, "ERR_ZERO_AMOUNT");
     require(credit >= minimumCredit, "ERR_MIN_CREDIT");
     IERC20(token).safeTransferFrom(msg.sender, address(this), amountIn);
@@ -248,7 +258,12 @@ contract PoolInitializer {
       if (amountIn > desiredAmount) {
         amountIn = desiredAmount;
       }
-      uint256 creditOut = _oracle.computeAverageAmountOut(token, amountIn);
+      uint256 creditOut = _oracle.computeAverageEthForTokens(
+        token,
+        amountIn,
+        30 minutes,
+        12 hours
+      );
       require(creditOut > 0 && amountIn > 0, "ERR_ZERO_AMOUNT");
       IERC20(token).safeTransferFrom(msg.sender, address(this), amountIn);
       _remainingDesiredAmounts[token] = desiredAmount.sub(amountIn);
@@ -346,7 +361,12 @@ contract PoolInitializer {
     if (amountIn > desiredAmount) {
       amountIn = desiredAmount;
     }
-    uint144 averageWethValue = _oracle.computeAverageAmountOut(token, amountIn);
+    uint144 averageWethValue = _oracle.computeAverageEthForTokens(
+      token,
+      amountIn,
+      30 minutes,
+      12 hours
+    );
     amountOut = averageWethValue;
   }
 
