@@ -59,11 +59,13 @@ module.exports = {
     artifacts: [
       "node_modules/@uniswap/v2-core/build",
       "node_modules/@uniswap/v2-periphery/build",
-      "node_modules/@indexed-finance/proxies/artifacts"
+      "node_modules/@indexed-finance/proxies/artifacts",
+      "node_modules/@indexed-finance/uniswap-v2-oracle/artifacts"
     ],
     deployments: {
       rinkeby: [
-        "node_modules/@indexed-finance/proxies/deployments/rinkeby"
+        "node_modules/@indexed-finance/proxies/deployments/rinkeby",
+        "node_modules/@indexed-finance/uniswap-v2-oracle/deployments/rinkeby"
       ]
     }
   },

@@ -10,13 +10,16 @@ import {
 import {
   IUniswapV2Router02
 } from "@uniswap/v2-periphery/contracts/interfaces/IUniswapV2Router02.sol";
-import { UniSwapV2PriceOracle } from "../../UniSwapV2PriceOracle.sol";
+
+import { IIndexedUniswapV2Oracle } from "@indexed-finance/uniswap-v2-oracle/contracts/interfaces/IIndexedUniswapV2Oracle.sol";
+
 import {
   MarketCapSqrtController,
   PoolInitializer,
   IPool,
   UnboundTokenSeller
 } from "../../MarketCapSqrtController.sol";
+
 import { MockERC20, TestTokenMarkets } from "./util/TestTokenMarkets.sol";
 import "./util/Diff.sol";
 import "./util/TestOrder.sol";
@@ -26,7 +29,7 @@ import "../../lib/Babylonian.sol";
 contract ControllerTest is TestTokenMarkets, Diff, TestOrder {
   MarketCapSqrtController public controller;
   PoolInitializer internal _initializer;
-  UniSwapV2PriceOracle internal _shortOracle;
+  IIndexedUniswapV2Oracle internal _oracle;
   IPool internal _pool;
   using Babylonian for uint;
 
@@ -35,10 +38,10 @@ contract ControllerTest is TestTokenMarkets, Diff, TestOrder {
     IUniswapV2Factory _factory,
     IUniswapV2Router02 _router,
     MarketCapSqrtController _controller,
-    UniSwapV2PriceOracle _shortTermOracle
+    IIndexedUniswapV2Oracle oracle_
   ) public TestTokenMarkets(_weth, _factory, _router) {
     controller = _controller;
-    _shortOracle = _shortTermOracle;
+    _oracle = oracle_;
   }
 
   function init() public {
@@ -65,7 +68,7 @@ contract ControllerTest is TestTokenMarkets, Diff, TestOrder {
     _addLiquidityAll();
     address[] memory sortedTokens = tokensOrderedByPrice();
     controller.orderCategoryTokensByMarketCap(1, sortedTokens);
-    _shortOracle.updatePrices(tokensOrderedByPrice());
+    _oracle.updatePrices(tokensOrderedByPrice());
   }
 
   function _getExpectedTokensAndBalances(uint256 wethValue)

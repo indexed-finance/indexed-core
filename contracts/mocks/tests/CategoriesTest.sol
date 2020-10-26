@@ -11,12 +11,12 @@ import {
 import {
   IUniswapV2Router02
 } from "@uniswap/v2-periphery/contracts/interfaces/IUniswapV2Router02.sol";
-import { UniSwapV2PriceOracle } from "../../UniSwapV2PriceOracle.sol";
+import { IIndexedUniswapV2Oracle } from "@indexed-finance/uniswap-v2-oracle/contracts/interfaces/IIndexedUniswapV2Oracle.sol";
 import "../../MarketCapSortedTokenCategories.sol";
 import "./util/TestTokenMarkets.sol";
 import "./util/Diff.sol";
 import "./util/TestOrder.sol";
-import { PriceLibrary as Prices } from "../../lib/PriceLibrary.sol";
+import { PriceLibrary as Prices } from "@indexed-finance/uniswap-v2-oracle/contracts/lib/PriceLibrary.sol";
 
 
 contract CategoriesTest is TestTokenMarkets, Diff, TestOrder {
@@ -58,10 +58,10 @@ contract CategoriesTest is TestTokenMarkets, Diff, TestOrder {
       tokens.length == 1 && tokens[0] == address(token1),
       "Error: token not added"
     );
-    UniSwapV2PriceOracle oracle = categories.oracle();
-    Prices.PriceObservation memory observation = oracle.getPriceObservation(
+    IIndexedUniswapV2Oracle oracle = categories.oracle();
+    Prices.PriceObservation memory observation = oracle.getPriceObservationInWindow(
       address(token1),
-      oracle.observationIndexOf(block.timestamp)
+      block.timestamp / 3600
     );
     require(
       observation.timestamp == uint32(block.timestamp),
