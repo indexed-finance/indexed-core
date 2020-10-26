@@ -36,7 +36,7 @@ import { MarketCapSortedTokenCategories } from "./MarketCapSortedTokenCategories
  *
  * REBALANCING
  * ===============
- * Every 2 weeks, pools are either re-weighed or re-indexed.
+ * Every 1 weeks, pools are either re-weighed or re-indexed.
  * They are re-indexed once for every three re-weighs.
  *
  * Re-indexing involves selecting the top tokens from the pool's category and weighing them
@@ -72,7 +72,7 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
   uint256 internal constant WEIGHT_MULTIPLIER = 25e18;
 
   // Time between reweigh/reindex calls.
-  uint256 internal constant POOL_REWEIGH_DELAY = 2 weeks;
+  uint256 internal constant POOL_REWEIGH_DELAY = 1 weeks;
 
   // The number of reweighs which occur before a pool is re-indexed.
   uint256 internal constant REWEIGHS_BEFORE_REINDEX = 3;
@@ -400,8 +400,8 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
   
     Prices.TwoWayAveragePrice[] memory prices = oracle.computeTwoWayAveragePrices(
       tokens,
-      3.5 days,
-      2 weeks
+      1.75 days,
+      1 weeks
     );
     FixedPoint.uq112x112[] memory weights = MCapSqrt.computeTokenWeights(tokens, prices);
 
@@ -449,8 +449,8 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
     address[] memory tokens = IPool(poolAddress).getCurrentDesiredTokens();
     Prices.TwoWayAveragePrice[] memory prices = oracle.computeTwoWayAveragePrices(
       tokens,
-      3.5 days,
-      2 weeks
+      1.75 days,
+      1 weeks
     );
     FixedPoint.uq112x112[] memory weights = MCapSqrt.computeTokenWeights(tokens, prices);
     uint96[] memory denormalizedWeights = new uint96[](tokens.length);
@@ -537,8 +537,8 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
     tokens = getTopCategoryTokens(categoryID, indexSize);
     Prices.TwoWayAveragePrice[] memory prices = oracle.computeTwoWayAveragePrices(
       tokens,
-      3.5 days,
-      2 weeks
+      1.75 days,
+      1 weeks
     );
     FixedPoint.uq112x112[] memory weights = MCapSqrt.computeTokenWeights(tokens, prices);
     balances = new uint256[](indexSize);
@@ -559,8 +559,8 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
     return oracle.computeAverageEthForTokens(
       token,
       value,
-      3.5 days,
-      2 weeks
+      1.75 days,
+      1 weeks
     );
   }
 

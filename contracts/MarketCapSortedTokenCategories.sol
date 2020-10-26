@@ -217,8 +217,8 @@ contract MarketCapSortedTokenCategories is Ownable {
     return oracle.computeAverageEthForTokens(
       token,
       totalSupply,
-      3.5 days,
-      2 weeks
+      1.75 days,
+      1 weeks
     );
   }
 
@@ -238,8 +238,8 @@ contract MarketCapSortedTokenCategories is Ownable {
     marketCaps = oracle.computeAverageEthForTokens(
       tokens,
       totalSupplies,
-      3.5 days,
-      2 weeks
+      1.75 days,
+      1 weeks
     );
   }
 
