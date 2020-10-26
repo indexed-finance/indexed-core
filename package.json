@@ -12,8 +12,7 @@
     "test:seller": "buidler test ./test/test-seller.spec.js",
     "test:categories": "buidler test ./test/test-categories.spec.js",
     "test:controller": "buidler test ./test/test-controller.spec.js",
-    "test:oracle": "buidler test ./test/test-oracle.spec.js",
-    "test:proxy": "buidler test ./test/test-proxy.spec.js"
+    "test:oracle": "buidler test ./test/test-oracle.spec.js"
   },
   "repository": {
     "type": "git",
