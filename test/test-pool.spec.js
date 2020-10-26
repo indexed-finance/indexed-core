@@ -8,7 +8,7 @@ const { ethers } = bre;
 const BN = require('bn.js');
 const Decimal = require('decimal.js');
 
-const { nTokensHex } = require('./lib/tokens');
+const { nTokensHex, nTokens, oneToken } = require('./lib/tokens');
 const { wrapped_tokens: wrappedTokens } = require('./testData/categories.json');
 const { calcRelativeDiff } = require('./lib/calc_comparisons');
 
@@ -141,6 +141,78 @@ describe('IPool.sol', async () => {
       poolHelper.records[tokenAddress].totalSupply
     ).add(amountDec);
   }
+
+  describe('gulp()', async () => {
+    let pool, handler, tokenA, tokenB, tokenC;
+
+    before(async () => {
+      tokenA = await erc20Factory.deploy('TokenA', 'A');
+      tokenB = await erc20Factory.deploy('TokenB', 'B');
+      tokenC = await erc20Factory.deploy('TokenC', 'C');
+      await tokenA.getFreeTokens(from, nTokensHex(100));
+      await tokenB.getFreeTokens(from, nTokensHex(100));
+      const IPool = await ethers.getContractFactory('IPool');
+      pool = await IPool.deploy();
+      await tokenA.approve(pool.address, nTokensHex(100));
+      await tokenB.approve(pool.address, nTokensHex(100));
+      await pool.configure(from, "Gulper Pool", "GLPL");
+      const MockUnbindTokenHandler = await ethers.getContractFactory('MockUnbindTokenHandler');
+      handler = await MockUnbindTokenHandler.deploy();
+      await pool.initialize(
+        [tokenA.address, tokenB.address],
+        [nTokensHex(100), nTokensHex(100)],
+        [nTokensHex(12.5), nTokensHex(12.5)],
+        from,
+        handler.address
+      );
+    });
+
+    it('Sends unbound tokens to handler', async () => {
+      // const randToken = await erc20Factory.deploy('GulpToken', 'GLP');
+      await tokenC.getFreeTokens(pool.address, nTokensHex(100));
+      await pool.gulp(tokenC.address);
+      const unbindPoolBal = toBN(await handler.getReceivedTokens(tokenC.address));
+      expect(toBN(unbindPoolBal).eq(nTokens(100))).to.be.true;
+    });
+
+    it('Updates balance for bound tokens', async () => {
+      await tokenA.getFreeTokens(pool.address, nTokensHex(1));
+      const balPre = await pool.getBalance(tokenA.address);
+      await pool.gulp(tokenA.address);
+      const balPost = await pool.getBalance(tokenA.address);
+      expect(balPost.gt(balPre)).to.be.true;
+      const diff = balPost.sub(balPre);
+      expect(toBN(diff).eq(nTokens(1))).to.be.true;
+    });
+
+    it('Updates balance for uninitialized tokens', async () => {
+      await pool.reindexTokens(
+        [tokenA.address, tokenC.address],
+        [nTokensHex(20), nTokensHex(5)],
+        [0, nTokensHex(10)]
+      );
+      await tokenC.getFreeTokens(pool.address, nTokensHex(1));
+      const balPre = await pool.getBalance(tokenC.address);
+      await pool.gulp(tokenC.address);
+      const balPost = await pool.getBalance(tokenC.address);
+      expect(balPost.gt(balPre)).to.be.true;
+      const diff = balPost.sub(balPre);
+      expect(toBN(diff).eq(nTokens(1))).to.be.true;
+
+    });
+
+    it('Initializes token if minimumm balance is hit', async () => {
+      const denormPre = await pool.getDenormalizedWeight(tokenC.address);
+      expect(denormPre.eq(0)).to.be.true;
+      await tokenC.getFreeTokens(pool.address, nTokensHex(9));
+      await pool.gulp(tokenC.address);
+      const balPost = await pool.getBalance(tokenC.address);
+      expect(toBN(balPost).eq(nTokens(10))).to.be.true;
+      const denormPost = await pool.getDenormalizedWeight(tokenC.address);
+      const minWeight = oneToken.mul(new BN(25)).div(new BN(100));
+      expect(toBN(denormPost).eq(minWeight)).to.be.true;
+    });
+  });
 
   describe('Swap, Mint, Burn', async () => {
     let tokens, balances, normalizedWeights;

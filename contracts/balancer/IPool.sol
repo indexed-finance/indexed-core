@@ -85,8 +85,8 @@ contract IPool is BToken, BMath {
   /** @dev Emitted when a token reaches its minimum balance. */
   event LOG_TOKEN_READY(address indexed token);
 
-  /** @dev Emitted when public trades are enabled or disabled. */
-  event LOG_PUBLIC_SWAP_TOGGLED(bool publicSwap);
+  /** @dev Emitted when public trades are enabled. */
+  event LOG_PUBLIC_SWAP_ENABLED();
 
   /** @dev Emitted when the maximum tokens value is updated. */
   event LOG_MAX_TOKENS_UPDATED(uint256 maxPoolTokens);
@@ -207,7 +207,6 @@ contract IPool is BToken, BMath {
     require(balances.length == len && denorms.length == len, "ERR_ARR_LEN");
     uint256 totalWeight = 0;
     for (uint256 i = 0; i < len; i++) {
-      // _bind(tokens[i], balances[i], denorms[i]);
       address token = tokens[i];
       uint96 denorm = denorms[i];
       uint256 balance = balances[i];
@@ -230,7 +229,7 @@ contract IPool is BToken, BMath {
     require(totalWeight <= MAX_TOTAL_WEIGHT, "ERR_MAX_TOTAL_WEIGHT");
     _totalWeight = totalWeight;
     _publicSwap = true;
-    emit LOG_PUBLIC_SWAP_TOGGLED(true);
+    emit LOG_PUBLIC_SWAP_ENABLED();
     _mintPoolShare(INIT_POOL_SUPPLY);
     _pushPoolShare(tokenProvider, INIT_POOL_SUPPLY);
     _unbindHandler = TokenUnbindHandler(unbindHandler);
@@ -375,6 +374,10 @@ contract IPool is BToken, BMath {
    * For any underlying tokens which are not initialized, the caller must provide
    * the proportional share of the minimum balance for the token rather than the
    * actual balance.
+   *
+   * @param poolAmountOut Amount of pool tokens to mint
+   * @param maxAmountsIn Maximum amount of each token to pay in the same
+   * order as the pool's _tokens list.
    */
   function joinPool(uint256 poolAmountOut, uint256[] calldata maxAmountsIn)
     external
@@ -386,11 +389,10 @@ contract IPool is BToken, BMath {
     require(ratio != 0, "ERR_MATH_APPROX");
     require(maxAmountsIn.length == _tokens.length, "ERR_ARR_LEN");
 
-
     uint256 maxPoolTokens = _maxPoolTokens;
     if (maxPoolTokens > 0) {
       require(
-        badd(poolTotal, poolAmountOut) <= _maxPoolTokens,
+        badd(poolTotal, poolAmountOut) <= maxPoolTokens,
         "ERR_MAX_POOL_TOKENS"
       );
     }
@@ -415,6 +417,11 @@ contract IPool is BToken, BMath {
    *
    * The pool implicitly swaps `(1- weightTokenIn) * tokenAmountIn` to the other
    * underlying tokens. Thus a swap fee is charged against the input tokens.
+   *
+   * @param tokenIn Token to send the pool
+   * @param tokenAmountIn Exact amount of `tokenIn` to pay
+   * @param minPoolAmountOut Minimum amount of pool tokens to mint
+   * @return poolAmountOut - Amount of pool tokens minted
    */
   function joinswapExternAmountIn(
     address tokenIn,
@@ -424,7 +431,7 @@ contract IPool is BToken, BMath {
     external
     _lock_
     _public_
-    returns (uint256 poolAmountOut)
+    returns (uint256/* poolAmountOut */)
   {
     (Record memory inRecord, uint256 realInBalance) = _getInputToken(tokenIn);
 
@@ -435,7 +442,7 @@ contract IPool is BToken, BMath {
       "ERR_MAX_IN_RATIO"
     );
 
-    poolAmountOut = calcPoolOutGivenSingleIn(
+    uint256 poolAmountOut = calcPoolOutGivenSingleIn(
       inRecord.balance,
       inRecord.denorm,
       _totalSupply,
@@ -447,7 +454,7 @@ contract IPool is BToken, BMath {
     uint256 maxPoolTokens = _maxPoolTokens;
     if (maxPoolTokens > 0) {
       require(
-        badd(_totalSupply, poolAmountOut) <= _maxPoolTokens,
+        badd(_totalSupply, poolAmountOut) <= maxPoolTokens,
         "ERR_MAX_POOL_TOKENS"
       );
     }
@@ -470,6 +477,11 @@ contract IPool is BToken, BMath {
    *
    * The pool implicitly swaps `(1- weightTokenIn) * tokenAmountIn` to the other
    * underlying tokens. Thus a swap fee is charged against the input tokens.
+   *
+   * @param tokenIn Token to send the pool
+   * @param poolAmountOut Exact amount of pool tokens to mint
+   * @param maxAmountIn Maximum amount of `tokenIn` to pay
+   * @return tokenAmountIn - Amount of `tokenIn` paid
    */
   function joinswapPoolAmountOut(
     address tokenIn,
@@ -479,19 +491,19 @@ contract IPool is BToken, BMath {
     external
     _lock_
     _public_
-    returns (uint256 tokenAmountIn)
+    returns (uint256/* tokenAmountIn */)
   {
     uint256 maxPoolTokens = _maxPoolTokens;
     if (maxPoolTokens > 0) {
       require(
-        badd(_totalSupply, poolAmountOut) <= _maxPoolTokens,
+        badd(_totalSupply, poolAmountOut) <= maxPoolTokens,
         "ERR_MAX_POOL_TOKENS"
       );
     }
 
     (Record memory inRecord, uint256 realInBalance) = _getInputToken(tokenIn);
 
-    tokenAmountIn = calcSingleInGivenPoolOut(
+    uint256 tokenAmountIn = calcSingleInGivenPoolOut(
       inRecord.balance,
       inRecord.denorm,
       _totalSupply,
@@ -525,11 +537,16 @@ contract IPool is BToken, BMath {
    * total pool supply. The amount of each token transferred to the caller must
    * be greater than or equal to the associated minimum output amount from the
    * `minAmountsOut` array.
+   *
+   * @param poolAmountIn Exact amount of pool tokens to burn
+   * @param minAmountsOut Minimum amount of each token to receive, in the same
+   * order as the pool's _tokens list.
    */
   function exitPool(uint256 poolAmountIn, uint256[] calldata minAmountsOut)
     external
     _lock_
   {
+    require(minAmountsOut.length == _tokens.length, "ERR_ARR_LEN");
     uint256 poolTotal = totalSupply();
     uint256 exitFee = bmul(poolAmountIn, EXIT_FEE);
     uint256 pAiAfterExitFee = bsub(poolAmountIn, exitFee);
@@ -539,7 +556,6 @@ contract IPool is BToken, BMath {
     _pullPoolShare(msg.sender, poolAmountIn);
     _pushPoolShare(_controller, exitFee);
     _burnPoolShare(pAiAfterExitFee);
-    require(minAmountsOut.length == _tokens.length, "ERR_ARR_LEN");
     for (uint256 i = 0; i < minAmountsOut.length; i++) {
       address t = _tokens[i];
       Record memory record = _records[t];
@@ -564,6 +580,11 @@ contract IPool is BToken, BMath {
    *
    * The pool implicitly burns the tokens for all underlying tokens and swaps them
    * to the desired output token. A swap fee is charged against the output tokens.
+   *
+   * @param tokenOut Token to receive
+   * @param poolAmountIn Exact amount of pool tokens to burn
+   * @param minAmountOut Minimum amount of `tokenOut` to receive
+   * @return tokenAmountOut - Amount of `tokenOut` received
    */
   function exitswapPoolAmountIn(
     address tokenOut,
@@ -572,11 +593,11 @@ contract IPool is BToken, BMath {
   )
     external
     _lock_
-    returns (uint256 tokenAmountOut)
+    returns (uint256/* tokenAmountOut */)
   {
     Record memory outRecord = _getOutputToken(tokenOut);
 
-    tokenAmountOut = calcSingleOutGivenPoolIn(
+    uint256 tokenAmountOut = calcSingleOutGivenPoolIn(
       outRecord.balance,
       outRecord.denorm,
       _totalSupply,
@@ -612,6 +633,11 @@ contract IPool is BToken, BMath {
    *
    * The pool implicitly burns the tokens for all underlying tokens and swaps them
    * to the desired output token. A swap fee is charged against the output tokens.
+   *
+   * @param tokenOut Token to receive
+   * @param tokenAmountOut Exact amount of `tokenOut` to receive
+   * @param maxPoolAmountIn Maximum amount of pool tokens to burn
+   * @return poolAmountIn - Amount of pool tokens burned
    */
   function exitswapExternAmountOut(
     address tokenOut,
@@ -620,7 +646,7 @@ contract IPool is BToken, BMath {
   )
     external
     _lock_
-    returns (uint256 poolAmountIn)
+    returns (uint256/* poolAmountIn */)
   {
     Record memory outRecord = _getOutputToken(tokenOut);
     require(
@@ -628,7 +654,7 @@ contract IPool is BToken, BMath {
       "ERR_MAX_OUT_RATIO"
     );
 
-    poolAmountIn = calcPoolInGivenSingleOut(
+    uint256 poolAmountIn = calcPoolInGivenSingleOut(
       outRecord.balance,
       outRecord.denorm,
       _totalSupply,
@@ -663,13 +689,24 @@ contract IPool is BToken, BMath {
    * token handler.
    */
   function gulp(address token) external _lock_ {
-    Record memory record = _records[token];
+    Record storage record = _records[token];
     uint256 balance = IERC20(token).balanceOf(address(this));
     if (record.bound) {
       if (!record.ready) {
-        record.denorm = uint96(MIN_WEIGHT);
-        _updateInputToken(token, record, balance);
+        uint256 minimumBalance = _minimumBalances[token];
+        if (balance >= minimumBalance) {
+          _minimumBalances[token] = 0;
+          record.ready = true;
+          emit LOG_TOKEN_READY(token);
+          uint256 additionalBalance = bsub(balance, minimumBalance);
+          uint256 balRatio = bdiv(additionalBalance, minimumBalance);
+          uint96 newDenorm = uint96(badd(MIN_WEIGHT, bmul(MIN_WEIGHT, balRatio)));
+          record.denorm = newDenorm;
+          record.lastDenormUpdate = uint40(now);
+          _totalWeight = badd(_totalWeight, newDenorm);
+        }
       }
+      _records[token].balance = balance;
     } else {
       _pushUnderlying(token, address(_unbindHandler), balance);
       _unbindHandler.handleUnbindToken(token, balance);
@@ -701,12 +738,12 @@ contract IPool is BToken, BMath {
     uint256 balStart = IERC20(token).balanceOf(address(this));
     require(balStart >= amount, "ERR_INSUFFICIENT_BAL");
     _pushUnderlying(token, address(recipient), amount);
-    recipient.receiveFlashLoan(data);
-    uint256 balEnd = IERC20(token).balanceOf(address(this));
-    uint256 gained = bsub(balEnd, balStart);
     uint256 fee = bmul(balStart, _swapFee);
+    uint256 amountDue = badd(amount, fee);
+    recipient.receiveFlashLoan(token, amount, amountDue, data);
+    uint256 balEnd = IERC20(token).balanceOf(address(this));
     require(
-      balEnd > balStart && fee >= gained,
+      balEnd > balStart && balEnd >= amountDue,
       "ERR_INSUFFICIENT_PAYMENT"
     );
     record.balance = balEnd;
@@ -717,8 +754,13 @@ contract IPool is BToken, BMath {
       if (balEnd >= minimumBalance) {
         _minimumBalances[token] = 0;
         record.ready = true;
-        record.denorm = uint96(MIN_WEIGHT);
-        _totalWeight = badd(_totalWeight, MIN_WEIGHT);
+        emit LOG_TOKEN_READY(token);
+        uint256 additionalBalance = bsub(balEnd, minimumBalance);
+        uint256 balRatio = bdiv(additionalBalance, minimumBalance);
+        uint96 newDenorm = uint96(badd(MIN_WEIGHT, bmul(MIN_WEIGHT, balRatio)));
+        record.denorm = newDenorm;
+        record.lastDenormUpdate = uint40(now);
+        _totalWeight = badd(_totalWeight, newDenorm);
       }
     }
   }
@@ -728,7 +770,15 @@ contract IPool is BToken, BMath {
   /**
    * @dev Execute a token swap with a specified amount of input
    * tokens and a minimum amount of output tokens.
-   * Note: Will throw if `tokenOut` is uninitialized.
+   *
+   * Note: Will revert if `tokenOut` is uninitialized.
+   *
+   * @param tokenIn Token to swap in
+   * @param tokenAmountIn Exact amount of `tokenIn` to swap in
+   * @param tokenOut Token to swap out
+   * @param minAmountOut Minimum amount of `tokenOut` to receive
+   * @param maxPrice Maximum ratio of input to output tokens
+   * @return (tokenAmountOut, spotPriceAfter)
    */
   function swapExactAmountIn(
     address tokenIn,
@@ -740,7 +790,7 @@ contract IPool is BToken, BMath {
     external
     _lock_
     _public_
-    returns (uint256 tokenAmountOut, uint256 spotPriceAfter)
+    returns (uint256/* tokenAmountOut */, uint256/* spotPriceAfter */)
   {
     (Record memory inRecord, uint256 realInBalance) = _getInputToken(tokenIn);
     Record memory outRecord = _getOutputToken(tokenOut);
@@ -759,7 +809,7 @@ contract IPool is BToken, BMath {
     );
     require(spotPriceBefore <= maxPrice, "ERR_BAD_LIMIT_PRICE");
 
-    tokenAmountOut = calcOutGivenIn(
+    uint256 tokenAmountOut = calcOutGivenIn(
       inRecord.balance,
       inRecord.denorm,
       outRecord.balance,
@@ -785,7 +835,7 @@ contract IPool is BToken, BMath {
     // If needed, update the output token's weight.
     _decreaseDenorm(outRecord, tokenOut);
 
-    spotPriceAfter = calcSpotPrice(
+    uint256 spotPriceAfter = calcSpotPrice(
       inRecord.balance,
       inRecord.denorm,
       outRecord.balance,
@@ -808,8 +858,16 @@ contract IPool is BToken, BMath {
   /**
    * @dev Trades at most `maxAmountIn` of `tokenIn` for exactly `tokenAmountOut`
    * of `tokenOut`.
+   *
    * Returns the actual input amount and the new spot price after the swap,
    * which can not exceed `maxPrice`.
+   *
+   * @param tokenIn Token to swap in
+   * @param maxAmountIn Maximum amount of `tokenIn` to pay
+   * @param tokenOut Token to swap out
+   * @param tokenAmountOut Exact amount of `tokenOut` to receive
+   * @param maxPrice Maximum ratio of input to output tokens
+   * @return (tokenAmountIn, spotPriceAfter)
    */
   function swapExactAmountOut(
     address tokenIn,
@@ -821,7 +879,7 @@ contract IPool is BToken, BMath {
     external
     _lock_
     _public_
-    returns (uint256 tokenAmountIn, uint256 spotPriceAfter)
+    returns (uint256 /* tokenAmountIn */, uint256 /* spotPriceAfter */)
   {
     (Record memory inRecord, uint256 realInBalance) = _getInputToken(tokenIn);
     Record memory outRecord = _getOutputToken(tokenOut);
@@ -840,7 +898,7 @@ contract IPool is BToken, BMath {
     );
     require(spotPriceBefore <= maxPrice, "ERR_BAD_LIMIT_PRICE");
 
-    tokenAmountIn = calcInGivenOut(
+    uint256 tokenAmountIn = calcInGivenOut(
       inRecord.balance,
       inRecord.denorm,
       outRecord.balance,
@@ -867,7 +925,7 @@ contract IPool is BToken, BMath {
     // If needed, update the output token's weight.
     _decreaseDenorm(outRecord, tokenOut);
 
-    spotPriceAfter = calcSpotPrice(
+    uint256 spotPriceAfter = calcSpotPrice(
       inRecord.balance,
       inRecord.denorm,
       outRecord.balance,
@@ -891,23 +949,20 @@ contract IPool is BToken, BMath {
   /**
    * @dev Check if swapping tokens and joining the pool is allowed.
    */
-  function isPublicSwap() external view returns (bool isPublic) {
-    isPublic = _publicSwap;
+  function isPublicSwap() external view returns (bool) {
+    return _publicSwap;
   }
 
-  function getSwapFee() external view _viewlock_ returns (uint256 swapFee) {
-    swapFee = _swapFee;
+  function getSwapFee() external view _viewlock_ returns (uint256/* swapFee */) {
+    return _swapFee;
   }
 
   /**
    * @dev Returns the controller address.
    */
-  function getController()
-    external
-    view
-    returns (address controller)
+  function getController() external view returns (address)
   {
-    controller = _controller;
+    return _controller;
   }
 
 /* ---  Token Queries  --- */
@@ -925,11 +980,8 @@ contract IPool is BToken, BMath {
   /**
    * @dev Get the number of tokens bound to the pool.
    */
-  function getNumTokens() external
-    view
-    returns (uint256 num)
-  {
-    num = _tokens.length;
+  function getNumTokens() external view returns (uint256) {
+    return _tokens.length;
   }
 
   /**
@@ -941,7 +993,7 @@ contract IPool is BToken, BMath {
     _viewlock_
     returns (address[] memory tokens)
   {
-    return _tokens;
+    tokens = _tokens;
   }
 
   /**
@@ -967,20 +1019,20 @@ contract IPool is BToken, BMath {
   }
 
   /**
-   * @dev Get the denormalized weight of a bound token.
+   * @dev Returns the denormalized weight of a bound token.
    */
   function getDenormalizedWeight(address token)
     external
     view
     _viewlock_
-    returns (uint256 denorm)
+    returns (uint256/* denorm */)
   {
     require(_records[token].bound, "ERR_NOT_BOUND");
-    denorm = _records[token].denorm;
+    return _records[token].denorm;
   }
 
   /**
-   * @dev Get the record for a token bound to the pool.
+   * @dev Returns the record for a token bound to the pool.
    */
   function getTokenRecord(address token)
     external
@@ -999,13 +1051,16 @@ contract IPool is BToken, BMath {
    *
    * The value is extrapolated by multiplying the token's
    * balance by the reciprocal of its normalized weight.
+   * @return (token, extrapolatedValue)
    */
   function extrapolatePoolValueFromToken()
     external
     view
     _viewlock_
-    returns (address token, uint256 extrapolatedValue)
+    returns (address/* token */, uint256/* extrapolatedValue */)
   {
+    address token;
+    uint256 extrapolatedValue;
     uint256 len = _tokens.length;
     for (uint256 i = 0; i < len; i++) {
       token = _tokens[i];
@@ -1017,6 +1072,7 @@ contract IPool is BToken, BMath {
       break;
     }
     require(extrapolatedValue > 0, "ERR_NONE_READY");
+    return (token, extrapolatedValue);
   }
 
   /**
@@ -1026,70 +1082,54 @@ contract IPool is BToken, BMath {
     external
     view
     _viewlock_
-    returns (uint256 totalDenorm)
+    returns (uint256)
   {
-    totalDenorm = _totalWeight;
+    return _totalWeight;
   }
 
   /**
-   * @dev Get the stored balance of a bound token.
+   * @dev Returns the stored balance of a bound token.
    */
-  function getBalance(address token)
-    external
-    view
-    _viewlock_
-    returns (uint256 balance)
-  {
+  function getBalance(address token) external view _viewlock_ returns (uint256) {
     Record storage record = _records[token];
     require(record.bound, "ERR_NOT_BOUND");
-    balance = record.balance;
+    return record.balance;
   }
 
   /**
    * @dev Get the minimum balance of an uninitialized token.
    * Note: Throws if the token is initialized.
    */
-  function getMinimumBalance(address token)
-    external
-    view
-    _viewlock_
-    returns (uint256 minimumBalance)
-  {
+  function getMinimumBalance(address token) external view _viewlock_ returns (uint256) {
     Record memory record = _records[token];
     require(record.bound, "ERR_NOT_BOUND");
     require(!record.ready, "ERR_READY");
-    minimumBalance = _minimumBalances[token];
+    return _minimumBalances[token];
   }
 
   /**
-   * @dev Get the balance of a token which is used in price
+   * @dev Returns the balance of a token which is used in price
    * calculations. If the token is initialized, this is the
    * stored balance; if not, this is the minimum balance.
    */
-  function getUsedBalance(address token)
-    external
-    view
-    _viewlock_
-    returns (uint256 usedBalance)
-  {
+  function getUsedBalance(address token) external view _viewlock_ returns (uint256) {
     Record memory record = _records[token];
     require(record.bound, "ERR_NOT_BOUND");
     if (!record.ready) {
-      usedBalance = _minimumBalances[token];
-    } else {
-      usedBalance = record.balance;
+      return _minimumBalances[token];
     }
+    return record.balance;
   }
 
 /* ---  Price Queries  --- */
   /**
-   * @dev Get the spot price for `tokenOut` in terms of `tokenIn`.
+   * @dev Returns the spot price for `tokenOut` in terms of `tokenIn`.
    */
   function getSpotPrice(address tokenIn, address tokenOut)
     external
     view
     _viewlock_
-    returns (uint256 spotPrice)
+    returns (uint256)
   {
     (Record memory inRecord,) = _getInputToken(tokenIn);
     Record memory outRecord = _getOutputToken(tokenOut);
