@@ -48,8 +48,8 @@ describe('MarketCapSqrtController.sol', () => {
     await testContract.test_setDefaultSellerPremium();
   });
   
-  it('updateSellerPremiumToDefault', async () => {
-    await testContract.test_updateSellerPremiumToDefault();
+  it('updateSellerPremium', async () => {
+    await testContract.test_updateSellerPremium();
   });
   
   it('setSwapFee', async () => {
