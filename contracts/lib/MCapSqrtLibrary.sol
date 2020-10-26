@@ -2,10 +2,15 @@
 pragma solidity ^0.6.0;
 pragma experimental ABIEncoderV2;
 
-import "./FixedPoint.sol";
-import "./Babylonian.sol";
+/* --- External Interfaces --- */
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import { PriceLibrary as Prices } from "./PriceLibrary.sol";
+
+/* --- External Libraries --- */
+import { PriceLibrary as Prices } from "@indexed-finance/uniswap-v2-oracle/contracts/lib/PriceLibrary.sol";
+import "@indexed-finance/uniswap-v2-oracle/contracts/lib/FixedPoint.sol";
+
+/* --- Internal Libraries --- */
+import "./Babylonian.sol";
 
 
 library MCapSqrtLibrary {
@@ -26,7 +31,7 @@ library MCapSqrtLibrary {
     Prices.TwoWayAveragePrice memory averagePrice
   ) internal view returns (uint144) {
     uint256 totalSupply = IERC20(token).totalSupply();
-    return averagePrice.priceAverage.mul(totalSupply).decode144();
+    return averagePrice.computeAverageEthForTokens(totalSupply);
   }
 
   /**
