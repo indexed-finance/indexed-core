@@ -74,16 +74,10 @@ module.exports = async ({
   }
 
   // Deploy UniSwap oracles
-  const longTermUniSwapOracle = await deploy("UniSwapV2PriceOracle", 'WeeklyTWAPUniSwapV2Oracle', {
+  const uniswapOracle = await deploy("IndexedUniswapV2Oracle", 'uniswapOracle', {
     from: deployer,
     gas: 4000000,
-    args: [uniswapFactory, weth, 3.5*24*60*60]
-  });
-
-  const shortTermUniswapOracle = await deploy("UniSwapV2PriceOracle", 'HourlyTWAPUniswapV2Oracle', {
-    from: deployer,
-    gas: 4000000,
-    args: [uniswapFactory, weth, 60*60]
+    args: [uniswapFactory, weth]
   });
 
   // Deploy proxy manager
@@ -112,7 +106,7 @@ module.exports = async ({
     from: deployer,
     gas: 4000000,
     args: [
-      longTermUniSwapOracle.address,
+      uniswapOracle.address,
       poolFactory.address,
       proxyManager.address
     ]
@@ -125,7 +119,7 @@ module.exports = async ({
   const tokenSellerImplementation = await deploy('UnboundTokenSeller', 'tokenSellerImplementation', {
     from: deployer,
     gas: 4000000,
-    args: [uniswapRouter, shortTermUniswapOracle.address, controller.address]
+    args: [uniswapRouter, uniswapOracle.address, controller.address]
   });
 
   if (tokenSellerImplementation.newlyDeployed) {
@@ -153,7 +147,7 @@ module.exports = async ({
   const poolInitializerImplementation = await deploy('PoolInitializer', 'poolInitializerImplementation', {
     from: deployer,
     gas: 4000000,
-    args: [shortTermUniswapOracle.address, controller.address]
+    args: [uniswapOracle.address, controller.address]
   });
   
   if (poolInitializerImplementation.newlyDeployed) {
