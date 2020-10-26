@@ -722,12 +722,12 @@ contract IPool is BToken, BMath {
     uint256 balStart = IERC20(token).balanceOf(address(this));
     require(balStart >= amount, "ERR_INSUFFICIENT_BAL");
     _pushUnderlying(token, address(recipient), amount);
-    recipient.receiveFlashLoan(data);
-    uint256 balEnd = IERC20(token).balanceOf(address(this));
-    uint256 gained = bsub(balEnd, balStart);
     uint256 fee = bmul(balStart, _swapFee);
+    uint256 amountDue = badd(amount, fee);
+    recipient.receiveFlashLoan(token, amount, amountDue, data);
+    uint256 balEnd = IERC20(token).balanceOf(address(this));
     require(
-      balEnd > balStart && fee >= gained,
+      balEnd > balStart && balEnd >= amountDue,
       "ERR_INSUFFICIENT_PAYMENT"
     );
     record.balance = balEnd;
@@ -738,8 +738,13 @@ contract IPool is BToken, BMath {
       if (balEnd >= minimumBalance) {
         _minimumBalances[token] = 0;
         record.ready = true;
-        record.denorm = uint96(MIN_WEIGHT);
-        _totalWeight = badd(_totalWeight, MIN_WEIGHT);
+        emit LOG_TOKEN_READY(token);
+        uint256 additionalBalance = bsub(balEnd, minimumBalance);
+        uint256 balRatio = bdiv(additionalBalance, minimumBalance);
+        uint96 newDenorm = uint96(badd(MIN_WEIGHT, bmul(MIN_WEIGHT, balRatio)));
+        record.denorm = newDenorm;
+        record.lastDenormUpdate = uint40(now);
+        _totalWeight = badd(_totalWeight, newDenorm);
       }
     }
   }
