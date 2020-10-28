@@ -102,7 +102,7 @@ contract MarketCapSortedTokenCategories is Ownable {
   /**
    * @dev Updates the prices on the oracle for all the tokens in a category.
    */
-  function updateCategoryPrices(uint256 categoryID) external {
+  function updateCategoryPrices(uint256 categoryID) external validCategory(categoryID) {
     address[] memory tokens = _categoryTokens[categoryID];
     oracle.updatePrices(tokens);
   }
@@ -278,6 +278,7 @@ contract MarketCapSortedTokenCategories is Ownable {
   function getCategoryMarketCaps(uint256 categoryID)
     external
     view
+    validCategory(categoryID)
     returns (uint144[] memory marketCaps)
   {
     return computeAverageMarketCaps(_categoryTokens[categoryID]);
@@ -296,10 +297,7 @@ contract MarketCapSortedTokenCategories is Ownable {
     returns (address[] memory tokens)
   {
     address[] storage categoryTokens = _categoryTokens[categoryID];
-    require(
-      num <= categoryTokens.length,
-      "ERR_CATEGORY_SIZE"
-    );
+    require(num <= categoryTokens.length, "ERR_CATEGORY_SIZE");
     require(
       now - _lastCategoryUpdate[categoryID] <= MAX_SORT_DELAY,
       "ERR_CATEGORY_NOT_READY"
