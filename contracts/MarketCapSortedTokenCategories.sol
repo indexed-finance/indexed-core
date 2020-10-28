@@ -80,6 +80,13 @@ contract MarketCapSortedTokenCategories is Ownable {
   // Last time a category was sorted
   mapping(uint256 => uint256) internal _lastCategoryUpdate;
 
+/* --- Modifiers --- */
+
+  modifier validCategory(uint256 categoryID) {
+    require(categoryID <= categoryIndex && categoryID > 0, "ERR_CATEGORY_ID");
+    _;
+  }
+
 /* ---  Constructor  --- */
 
   /**
@@ -114,11 +121,7 @@ contract MarketCapSortedTokenCategories is Ownable {
    * @dev Adds a new token to a category.
    * Note: A token can only be assigned to one category at a time.
    */
-  function addToken(address token, uint256 categoryID) external onlyOwner {
-    require(
-      categoryID <= categoryIndex && categoryID > 0,
-      "ERR_CATEGORY_ID"
-    );
+  function addToken(address token, uint256 categoryID) external onlyOwner validCategory(categoryID) {
     require(
       _categoryTokens[categoryID].length < MAX_CATEGORY_TOKENS,
       "ERR_MAX_CATEGORY_TOKENS"
@@ -136,17 +139,11 @@ contract MarketCapSortedTokenCategories is Ownable {
    * @param categoryID Category identifier.
    * @param tokens Array of tokens to add to the category.
    */
-  function addTokens(
-    uint256 categoryID,
-    address[] calldata tokens
-  )
+  function addTokens(uint256 categoryID, address[] calldata tokens)
     external
     onlyOwner
+    validCategory(categoryID)
   {
-    require(
-      categoryID <= categoryIndex && categoryID > 0,
-      "ERR_CATEGORY_ID"
-    );
     require(
       _categoryTokens[categoryID].length + tokens.length <= MAX_CATEGORY_TOKENS,
       "ERR_MAX_CATEGORY_TOKENS"
@@ -258,12 +255,9 @@ contract MarketCapSortedTokenCategories is Ownable {
   function getCategoryTokens(uint256 categoryID)
     external
     view
+    validCategory(categoryID)
     returns (address[] memory tokens)
   {
-    require(
-      categoryID <= categoryIndex && categoryID > 0,
-      "ERR_CATEGORY_ID"
-    );
     address[] storage _tokens = _categoryTokens[categoryID];
     tokens = new address[](_tokens.length);
     for (uint256 i = 0; i < tokens.length; i++) {
@@ -291,12 +285,9 @@ contract MarketCapSortedTokenCategories is Ownable {
   function getTopCategoryTokens(uint256 categoryID, uint256 num)
     public
     view
+    validCategory(categoryID)
     returns (address[] memory tokens)
   {
-    require(
-      categoryID <= categoryIndex && categoryID > 0,
-      "ERR_CATEGORY_ID"
-    );
     address[] storage categoryTokens = _categoryTokens[categoryID];
     require(
       num <= categoryTokens.length,
