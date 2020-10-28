@@ -67,7 +67,7 @@ contract ControllerTest is TestTokenMarkets, Diff, TestOrder {
   function init4() public testIndex(0) forceDelay(2 days) {
     _addLiquidityAll();
     address[] memory sortedTokens = tokensOrderedByPrice();
-    controller.orderCategoryTokensByMarketCap(1, sortedTokens);
+    controller.orderCategoryTokensByMarketCap(1);
     _oracle.updatePrices(tokensOrderedByPrice());
   }
 

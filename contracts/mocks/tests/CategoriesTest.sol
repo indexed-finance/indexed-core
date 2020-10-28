@@ -92,7 +92,7 @@ contract CategoriesTest is TestTokenMarkets, Diff, TestOrder {
   function test_orderCategoryTokensByMarketCap() public testIndex(3) forceDelay(2 days) {
     _addLiquidityAll();
     address[] memory sortedTokens = tokensOrderedByPrice();
-    categories.orderCategoryTokensByMarketCap(1, sortedTokens);
+    categories.orderCategoryTokensByMarketCap(1);
     address[] memory curTokens = categories.getCategoryTokens(1);
     testArrayDeepEq(sortedTokens, curTokens, "Error: Sorted tokens not equal.");
     uint144[] memory actualCaps = categories.getCategoryMarketCaps(1);
