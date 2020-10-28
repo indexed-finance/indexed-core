@@ -250,6 +250,13 @@ contract MarketCapSortedTokenCategories is Ownable {
   }
 
   /**
+   * @dev Returns the timestamp of the last time the category was sorted.
+   */
+  function getLastCategoryUpdate(uint256 categoryID) external view returns (uint256) {
+    return _lastCategoryUpdate[categoryID];
+  }
+
+  /**
    * @dev Returns the array of tokens in a category.
    */
   function getCategoryTokens(uint256 categoryID)
