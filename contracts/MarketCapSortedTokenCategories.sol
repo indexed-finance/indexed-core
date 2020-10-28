@@ -61,22 +61,13 @@ contract MarketCapSortedTokenCategories is Ownable {
   /** @dev Emitted when a token is added to a category. */
   event TokenAdded(address token, uint256 categoryID);
 
-/* ---  Structs  --- */
-
-  struct CategoryTokenRecord {
-    bool bound;
-    uint8 index;
-  }
-
 /* ---  Storage  --- */
 
   // Number of categories that exist.
   uint256 public categoryIndex;
   // Array of tokens for each category.
   mapping(uint256 => address[]) internal _categoryTokens;
-  mapping(
-    uint256 => mapping(address => CategoryTokenRecord)
-  ) internal _categoryTokenRecords;
+  mapping(uint256 => mapping(address => bool)) internal _isCategoryToken;
   // Last time a category was sorted
   mapping(uint256 => uint256) internal _lastCategoryUpdate;
 
@@ -240,8 +231,25 @@ contract MarketCapSortedTokenCategories is Ownable {
   /**
    * @dev Returns the timestamp of the last time the category was sorted.
    */
-  function getLastCategoryUpdate(uint256 categoryID) external view returns (uint256) {
+  function getLastCategoryUpdate(uint256 categoryID)
+    external
+    view
+    validCategory(categoryID)
+    returns (uint256)
+  {
     return _lastCategoryUpdate[categoryID];
+  }
+
+  /**
+   * @dev Returns boolean stating whether `token` is a member of the category `categoryID`.
+   */
+  function isTokenInCategory(uint256 categoryID, address token)
+    external
+    view
+    validCategory(categoryID)
+    returns (bool)
+  {
+    return _isCategoryToken[categoryID][token];
   }
 
   /**
@@ -300,10 +308,8 @@ contract MarketCapSortedTokenCategories is Ownable {
    * @dev Adds a new token to a category.
    */
   function _addToken(address token, uint256 categoryID) internal {
-    CategoryTokenRecord storage record = _categoryTokenRecords[categoryID][token];
-    require(!record.bound, "ERR_TOKEN_BOUND");
-    record.bound = true;
-    record.index = uint8(_categoryTokens[categoryID].length);
+    require(!_isCategoryToken[categoryID][token], "ERR_TOKEN_BOUND");
+    _isCategoryToken[categoryID][token] = true;
     _categoryTokens[categoryID].push(token);
     emit TokenAdded(token, categoryID);
   }
