@@ -187,7 +187,7 @@ contract MarketCapSortedTokenCategories is Ownable {
   function computeAverageMarketCap(address token)
     public
     view
-    returns (uint144 marketCap)
+    returns (uint144)
   {
     uint256 totalSupply = IERC20(token).totalSupply();
     return oracle.computeAverageEthForTokens(
