@@ -160,40 +160,28 @@ contract MarketCapSortedTokenCategories is Ownable {
 
   /**
    * @dev Sorts a category's tokens in descending order by market cap.
-   *
-   * Verifies the order of the provided array by querying the market caps.
+   * Note: Uses in-memory insertion sort.
    *
    * @param categoryID Category to sort
-   * @param orderedTokens Array of category tokens ordered by market cap
    */
-  function orderCategoryTokensByMarketCap(
-    uint256 categoryID,
-    address[] calldata orderedTokens
-  ) external {
-    address[] storage categoryTokens = _categoryTokens[categoryID];
-    uint256 len = orderedTokens.length;
-    require(categoryTokens.length == len, "ERR_ARR_LEN");
-
-    // Verify there are no duplicate addresses and that all tokens are bound.
-    bool[] memory usedIndices = new bool[](len);
-    for (uint256 i = 0; i < len; i++) {
-      CategoryTokenRecord memory record = _categoryTokenRecords[categoryID][orderedTokens[i]];
-      require(record.bound, "ERR_NOT_IN_CATEGORY");
-      require(!usedIndices[record.index], "ERR_DUPLICATE_ADDRESS");
-      usedIndices[record.index] = true;
-    }
-
-    uint144[] memory marketCaps = computeAverageMarketCaps(orderedTokens);
-    // Verify that the tokens are ordered correctly and update their positions
-    // in the category.
-    for (uint256 i = 0; i < len; i++) {
-      address token = orderedTokens[i];
-      if (i != 0) {
-        require(marketCaps[i] <= marketCaps[i-1], "ERR_TOKEN_ORDER");
+  function orderCategoryTokensByMarketCap(uint256 categoryID) external validCategory(categoryID) {
+    address[] memory categoryTokens = _categoryTokens[categoryID];
+    uint256 len = categoryTokens.length;
+    uint144[] memory marketCaps = computeAverageMarketCaps(categoryTokens);
+    for (uint256 i = 1; i < len; i++) {
+      uint144 cap = marketCaps[i];
+      address token = categoryTokens[i];
+      uint256 j = i - 1;
+      while (int(j) >= 0 && marketCaps[j] < cap) {
+        marketCaps[j + 1] = marketCaps[j];
+        categoryTokens[j + 1] = categoryTokens[j];
+        j--;
       }
-      _categoryTokenRecords[categoryID][token].index = uint8(i);
-      categoryTokens[i] = token;
+      marketCaps[j + 1] = cap;
+      categoryTokens[j + 1] = token;
     }
+    _categoryTokens[categoryID] = categoryTokens;
+    
     _lastCategoryUpdate[categoryID] = now;
     emit CategorySorted(categoryID);
   }
