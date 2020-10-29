@@ -143,6 +143,13 @@ contract PoolFactory is Ownable {
 /* ---  Queries  --- */
 
   /**
+   * @dev Checks if an address is an approved pool controller.
+   */
+  function isApprovedController(address controller) external view returns (bool) {
+    return _approvedControllers[controller];
+  }
+
+  /**
    * @dev Checks if an address is an ipool.
    */
   function isIPool(address pool) external view returns (bool) {
