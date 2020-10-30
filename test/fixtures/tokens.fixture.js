@@ -18,8 +18,8 @@ const wrappedTokens = [
 
 const { uniswapFixture } = require('./uniswap.fixture');
 
-const wrappedTokensFixture = async () => {
-  const uniswapFixtures = await uniswapFixture();
+const wrappedTokensFixture = async ({deployments}) => {
+  const uniswapFixtures = await deployments.createFixture(uniswapFixture)();
 
   const tokens = [];
   for (let i = 0; i < wrappedTokens.length; i++) {

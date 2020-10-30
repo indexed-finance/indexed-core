@@ -1,12 +1,10 @@
-const { deployments, ethers } = require('@nomiclabs/buidler');
-
 const LiquidityManager = require('../lib/liquidity-manager');
 
 let _i = 1;
 
 const toAddress = (token) => typeof token == 'string' ? token : token.address;
 
-const uniswapFixture = async () => {
+const uniswapFixture = async ({ deployments, ethers }) => {
   await deployments.fixture();
   const [ signer ] = await ethers.getSigners();
 
@@ -42,7 +40,6 @@ const uniswapFixture = async () => {
       pair: await ethers.getContractAt('UniswapV2Pair', pair, signer)
     };
   }
-
   // expectedPrice1 = encodePrice(token1Amount, wethAmount, +timestamp, expectedPrice1);
 
   return {

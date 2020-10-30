@@ -18,10 +18,10 @@ const toLiquidityAmounts = ({ price, marketcap }, init = false) => {
   return { amountToken, amountWeth };
 }
 
-const controllerFixture = async () => {
+const controllerFixture = async ({ deployments, getNamedAccounts, ethers }) => {
   const { deployer } = await getNamedAccounts();
   const [ signer, signer2 ] = await ethers.getSigners();
-  const uniswapResult = await uniswapFixture();
+  const uniswapResult = await deployments.createFixture(uniswapFixture)();
   const { uniswapRouter, uniswapOracle, deployTokenAndMarket, addLiquidity, updatePrices } = uniswapResult;
 
   const deploy = async (name, ...args) => (await ethers.getContractFactory(name, signer)).deploy(...args);

@@ -14,7 +14,7 @@ const toLiquidityAmounts = ({ price, marketcap }, init = false) => {
 }
 
 const categoriesFixture = async () => {
-  const uniswapResult = await uniswapFixture();
+  const uniswapResult = await deployments.createFixture(uniswapFixture)();
   const { deployTokenAndMarket, addLiquidity, updatePrices } = uniswapResult;
 
   const tokens = [];

@@ -5,13 +5,11 @@ const { wrappedTokensFixture } = require("./tokens.fixture");
 
 const swapFee = 0.025;
 
-const { getNamedAccounts, ethers } = require('@nomiclabs/buidler')
-
-const poolFixture = async () => {
+const poolFixture = async ({ deployments, getNamedAccounts, ethers }) => {
   const { deployer } = await getNamedAccounts();
 
   // Set up tokens
-  const {tokens: _wrappedTokens} = await wrappedTokensFixture();
+  const {tokens: _wrappedTokens} = await deployments.createFixture(wrappedTokensFixture)();
 
   // Deploy contracts
   const IPoolFactory = await ethers.getContractFactory("IPool");
