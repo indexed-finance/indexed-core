@@ -356,8 +356,8 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
     uint256 poolValue = _estimatePoolValue(pool);
     Prices.TwoWayAveragePrice memory price = oracle.computeTwoWayAveragePrice(
       tokenAddress,
-      30 minutes,
-      12 hours
+      1.75 days,
+      1 weeks
     );
     uint256 minimumBalance = price.computeAverageTokensForEth(poolValue) / 100;
     pool.setMinimumBalance(tokenAddress, minimumBalance);
