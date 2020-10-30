@@ -3,7 +3,6 @@ pragma solidity ^0.6.0;
 pragma experimental ABIEncoderV2;
 
 import { Ownable } from "@openzeppelin/contracts/access/Ownable.sol";
-import { IPool } from "./balancer/IPool.sol";
 import { IDelegateCallProxyManager } from "@indexed-finance/proxies/contracts/interfaces/IDelegateCallProxyManager.sol";
 import { SaltyLib as Salty } from "@indexed-finance/proxies/contracts/SaltyLib.sol";
 
@@ -15,99 +14,48 @@ import { SaltyLib as Salty } from "@indexed-finance/proxies/contracts/SaltyLib.s
 contract PoolFactory is Ownable {
 /* ---  Constants  --- */
 
-  // Default pool implementation ID.
-  bytes32 internal constant POOL_IMPLEMENTATION_ID = keccak256("IPool.sol");
-
   // Address of the proxy manager contract.
-  IDelegateCallProxyManager internal immutable _proxyManager;
+  IDelegateCallProxyManager public immutable proxyManager;
 
 /* ---  Events  --- */
 
-  /** @dev Emitted when a pool using the default implementation is deployed. */
-  event NewDefaultPool(
-    address pool,
-    address controller
-  );
-
-  /** @dev Emitted when a pool using a non-default implementation is deployed. */
-  event NewNonDefaultPool(
-    address pool,
-    address controller,
-    bytes32 implementationID
-  );
+  /** @dev Emitted when a pool is deployed. */
+  event NewPool(address pool, address controller, bytes32 implementationID);
 
 /* ---  Storage  --- */
 
-  mapping(address => bool) internal _approvedControllers;
-  mapping(address => bool) internal _isIPool;
+  mapping(address => bool) public isApprovedController;
+  mapping(address => bytes32) public getPoolImplementationID;
 
 /* ---  Modifiers  --- */
 
-  modifier _approved_ {
-    require(_approvedControllers[msg.sender], "ERR_NOT_APPROVED");
+  modifier onlyApproved {
+    require(isApprovedController[msg.sender], "ERR_NOT_APPROVED");
     _;
   }
 
 /* ---  Constructor  --- */
 
-  constructor(IDelegateCallProxyManager proxyManager) public Ownable() {
-    _proxyManager = proxyManager;
+  constructor(IDelegateCallProxyManager proxyManager_) public Ownable() {
+    proxyManager = proxyManager_;
   }
 
 /* ---  Controller Approval  --- */
 
   /** @dev Approves `controller` to deploy index pools. */
   function approvePoolController(address controller) external onlyOwner {
-    _approvedControllers[controller] = true;
+    isApprovedController[controller] = true;
   }
 
   /** @dev Removes the ability of `controller` to deploy index pools. */
   function disapprovePoolController(address controller) external onlyOwner {
-    _approvedControllers[controller] = false;
+    isApprovedController[controller] = false;
   }
 
 /* ---  Pool Deployment  --- */
 
   /**
-   * @dev Deploys an index pool and returns the address.
-   *
-   * Note: Does not initialize the pool, this must be executed
-   * by the controller.
-   *
-   * Note: Must be called by an approved controller.
-   *
-   * @param controllerSalt Create2 salt provided by the deployer
-   * @param name Name of the index token - should indicate the category and size
-   * @param symbol Symbol for the index token
-   */
-  function deployIndexPool(
-    bytes32 controllerSalt,
-    string calldata name,
-    string calldata symbol
-  )
-    external
-    _approved_
-    returns (address poolAddress)
-  {
-    bytes32 suppliedSalt = keccak256(abi.encodePacked(
-      msg.sender, controllerSalt
-    ));
-    poolAddress = _proxyManager.deployProxyManyToOne(
-      POOL_IMPLEMENTATION_ID,
-      suppliedSalt
-    );
-    _isIPool[poolAddress] = true;
-    IPool(poolAddress).configure(
-      msg.sender,
-      name,
-      symbol
-    );
-    emit NewDefaultPool(poolAddress, msg.sender);
-  }
-
-  /**
-   * @dev Deploys an index pool using an implementation ID other than
-   * the default (keccak256("IPool.sol")) and returns the address.
+   * @dev Deploys a pool using an implementation ID provided by the controller.
    *
    * Note: To support future interfaces, this does not initialize or
    * configure the pool, this must be executed by the controller.
@@ -117,81 +65,41 @@ contract PoolFactory is Ownable {
    * @param implementationID Implementation ID for the pool
    * @param controllerSalt Create2 salt provided by the deployer
    */
-  function deployIndexPool(
-    bytes32 implementationID,
-    bytes32 controllerSalt
-  )
+  function deployPool(bytes32 implementationID, bytes32 controllerSalt)
     external
-    _approved_
+    onlyApproved
     returns (address poolAddress)
   {
-    bytes32 suppliedSalt = keccak256(abi.encodePacked(
-      msg.sender, controllerSalt
-    ));
-    poolAddress = _proxyManager.deployProxyManyToOne(
-      implementationID,
-      suppliedSalt
-    );
-    _isIPool[poolAddress] = true;
-    emit NewNonDefaultPool(
-      poolAddress,
-      msg.sender,
-      implementationID
-    );
+    bytes32 suppliedSalt = keccak256(abi.encodePacked(msg.sender, controllerSalt));
+    poolAddress = proxyManager.deployProxyManyToOne(implementationID, suppliedSalt);
+    getPoolImplementationID[poolAddress] = implementationID;
+    emit NewPool(poolAddress, msg.sender, implementationID);
   }
 
 /* ---  Queries  --- */
 
   /**
-   * @dev Checks if an address is an approved pool controller.
+   * @dev Checks if an address is a pool that was deployed by the factory.
    */
-  function isApprovedController(address controller) external view returns (bool) {
-    return _approvedControllers[controller];
-  }
-
-  /**
-   * @dev Checks if an address is an ipool.
-   */
-  function isIPool(address pool) external view returns (bool) {
-    return _isIPool[pool];
+  function isRecognizedPool(address pool) external view returns (bool) {
+    return getPoolImplementationID[pool] != bytes32(0);
   }
 
   /**
    * @dev Compute the create2 address for a pool deployed by an approved
    * indexed controller.
    */
-  function computePoolAddress(
-    address controller,
-    bytes32 controllerSalt
-  )
+  function computePoolAddress(bytes32 implementationID, address controller, bytes32 controllerSalt)
     public
     view
-    returns (address poolAddress)
+    returns (address)
   {
-    bytes32 suppliedSalt = keccak256(abi.encodePacked(
-      controller, controllerSalt
-    ));
-    poolAddress = Salty.computeProxyAddressManyToOne(
-      address(_proxyManager),
+    bytes32 suppliedSalt = keccak256(abi.encodePacked(controller, controllerSalt));
+    return Salty.computeProxyAddressManyToOne(
+      address(proxyManager),
       address(this),
-      POOL_IMPLEMENTATION_ID,
+      implementationID,
       suppliedSalt
     );
   }
-}
-
-/**
- * @dev Interface of the public pool implementation contract,
- * if the governance dao decides to make one available.
- */
-interface PublicPoolImplementation {
-  function initialize(
-    address controller,
-    string calldata name,
-    string calldata symbol,
-    address[] calldata tokens,
-    uint256[] calldata balances,
-    uint96[] calldata denorms,
-    address tokenProvider
-  ) external;
 }
