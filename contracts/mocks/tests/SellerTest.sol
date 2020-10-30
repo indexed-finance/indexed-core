@@ -17,7 +17,6 @@ import "./util/TestOrder.sol";
 import { UnboundTokenSeller, IPool } from "../../UnboundTokenSeller.sol";
 import { MockUnbindSourcePool } from "../MockUnbindSourcePool.sol";
 import { UniswapV2Library } from "../../lib/UniswapV2Library.sol";
-import "@nomiclabs/buidler/console.sol";
 
 
 contract SellerTest is TestTokenMarkets, Diff, TestOrder {
