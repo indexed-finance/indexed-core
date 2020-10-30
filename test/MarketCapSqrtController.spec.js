@@ -32,7 +32,7 @@ describe('MarketCapSqrtController.sol', async () => {
         ownerFaker,
         initializerImplementation,
         liquidityManager
-      } = await controllerFixture());
+      } = await deployments.createFixture(controllerFixture)());
       tokens = wrappedTokens.map(t => t.address);
       sortedWrappedTokens = [...wrappedTokens].sort((a, b) => {
         if (a.marketcap < b.marketcap) return 1;

@@ -26,7 +26,7 @@ describe('MarketCapSortedTokenCategories.sol', () => {
         deployTokenAndMarket,
         addLiquidityAll,
         addLiquidity
-      } = await categoriesFixture());
+      } = await deployments.createFixture(categoriesFixture)());
       tokens = wrappedTokens.map(t => t.address);
       
       const MarketCapSortedTokenCategories = await ethers.getContractFactory('MarketCapSortedTokenCategories');
