@@ -14,7 +14,7 @@ async function fastForward(seconds) {
 }
 
 async function fastForwardToHourStart() {
-  const timestamp = await bre.run('getTimestamp');
+  const { timestamp } = await bre.ethers.provider.getBlock('latest');
   const seconds = 3600 - ((+timestamp) % 3600);
   await fastForward(seconds);
 }
