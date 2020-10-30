@@ -9,7 +9,6 @@ const { randomBytes } = require('crypto');
 
 const { types, internalTask } = require("@nomiclabs/buidler/config")
 
-usePlugin("@nomiclabs/buidler-web3");
 usePlugin("buidler-ethers-v5");
 usePlugin("buidler-deploy");
 usePlugin("solidity-coverage");
@@ -20,21 +19,6 @@ const keys = {
       ? Buffer.from(process.env.RINKEBY_PVT_KEY.slice(2), 'hex')
       : randomBytes(32)).getPrivateKeyString()
 };
-
-internalTask('getTimestamp', () => {
-  return web3.eth.getBlock('latest').then(b => b.timestamp);
-});
-
-internalTask('increaseTime', 'Increases the node timestamp')
-  .setAction(async ({ days, hours, seconds }) => {
-    const amount = days ? days * 86400 : hours ? hours * 3600 : seconds;
-    await web3.currentProvider._sendJsonRpcRequest({
-      method: "evm_increaseTime",
-      params: [amount],
-      jsonrpc: "2.0",
-      id: new Date().getTime()
-    });
-  });
 
 module.exports = {
   etherscan: {
@@ -51,7 +35,8 @@ module.exports = {
     deployments: {
       rinkeby: [
         "node_modules/@indexed-finance/proxies/deployments/rinkeby",
-        "node_modules/@indexed-finance/uniswap-v2-oracle/deployments/rinkeby"
+        "node_modules/@indexed-finance/uniswap-v2-oracle/deployments/rinkeby",
+        "node_modules/@indexed-finance/uniswap-deployments/rinkeby"
       ]
     }
   },
