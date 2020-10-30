@@ -61,24 +61,22 @@ contract MarketCapSortedTokenCategories is Ownable {
   /** @dev Emitted when a token is added to a category. */
   event TokenAdded(address token, uint256 categoryID);
 
-/* ---  Structs  --- */
-
-  struct CategoryTokenRecord {
-    bool bound;
-    uint8 index;
-  }
-
 /* ---  Storage  --- */
 
   // Number of categories that exist.
   uint256 public categoryIndex;
   // Array of tokens for each category.
   mapping(uint256 => address[]) internal _categoryTokens;
-  mapping(
-    uint256 => mapping(address => CategoryTokenRecord)
-  ) internal _categoryTokenRecords;
+  mapping(uint256 => mapping(address => bool)) internal _isCategoryToken;
   // Last time a category was sorted
   mapping(uint256 => uint256) internal _lastCategoryUpdate;
+
+/* --- Modifiers --- */
+
+  modifier validCategory(uint256 categoryID) {
+    require(categoryID <= categoryIndex && categoryID > 0, "ERR_CATEGORY_ID");
+    _;
+  }
 
 /* ---  Constructor  --- */
 
@@ -95,7 +93,7 @@ contract MarketCapSortedTokenCategories is Ownable {
   /**
    * @dev Updates the prices on the oracle for all the tokens in a category.
    */
-  function updateCategoryPrices(uint256 categoryID) external {
+  function updateCategoryPrices(uint256 categoryID) external validCategory(categoryID) {
     address[] memory tokens = _categoryTokens[categoryID];
     oracle.updatePrices(tokens);
   }
@@ -114,11 +112,7 @@ contract MarketCapSortedTokenCategories is Ownable {
    * @dev Adds a new token to a category.
    * Note: A token can only be assigned to one category at a time.
    */
-  function addToken(address token, uint256 categoryID) external onlyOwner {
-    require(
-      categoryID <= categoryIndex && categoryID > 0,
-      "ERR_CATEGORY_ID"
-    );
+  function addToken(address token, uint256 categoryID) external onlyOwner validCategory(categoryID) {
     require(
       _categoryTokens[categoryID].length < MAX_CATEGORY_TOKENS,
       "ERR_MAX_CATEGORY_TOKENS"
@@ -136,17 +130,11 @@ contract MarketCapSortedTokenCategories is Ownable {
    * @param categoryID Category identifier.
    * @param tokens Array of tokens to add to the category.
    */
-  function addTokens(
-    uint256 categoryID,
-    address[] calldata tokens
-  )
+  function addTokens(uint256 categoryID, address[] calldata tokens)
     external
     onlyOwner
+    validCategory(categoryID)
   {
-    require(
-      categoryID <= categoryIndex && categoryID > 0,
-      "ERR_CATEGORY_ID"
-    );
     require(
       _categoryTokens[categoryID].length + tokens.length <= MAX_CATEGORY_TOKENS,
       "ERR_MAX_CATEGORY_TOKENS"
@@ -163,40 +151,28 @@ contract MarketCapSortedTokenCategories is Ownable {
 
   /**
    * @dev Sorts a category's tokens in descending order by market cap.
-   *
-   * Verifies the order of the provided array by querying the market caps.
+   * Note: Uses in-memory insertion sort.
    *
    * @param categoryID Category to sort
-   * @param orderedTokens Array of category tokens ordered by market cap
    */
-  function orderCategoryTokensByMarketCap(
-    uint256 categoryID,
-    address[] calldata orderedTokens
-  ) external {
-    address[] storage categoryTokens = _categoryTokens[categoryID];
-    uint256 len = orderedTokens.length;
-    require(categoryTokens.length == len, "ERR_ARR_LEN");
-
-    // Verify there are no duplicate addresses and that all tokens are bound.
-    bool[] memory usedIndices = new bool[](len);
-    for (uint256 i = 0; i < len; i++) {
-      CategoryTokenRecord memory record = _categoryTokenRecords[categoryID][orderedTokens[i]];
-      require(record.bound, "ERR_NOT_IN_CATEGORY");
-      require(!usedIndices[record.index], "ERR_DUPLICATE_ADDRESS");
-      usedIndices[record.index] = true;
-    }
-
-    uint144[] memory marketCaps = computeAverageMarketCaps(orderedTokens);
-    // Verify that the tokens are ordered correctly and update their positions
-    // in the category.
-    for (uint256 i = 0; i < len; i++) {
-      address token = orderedTokens[i];
-      if (i != 0) {
-        require(marketCaps[i] <= marketCaps[i-1], "ERR_TOKEN_ORDER");
+  function orderCategoryTokensByMarketCap(uint256 categoryID) external validCategory(categoryID) {
+    address[] memory categoryTokens = _categoryTokens[categoryID];
+    uint256 len = categoryTokens.length;
+    uint144[] memory marketCaps = computeAverageMarketCaps(categoryTokens);
+    for (uint256 i = 1; i < len; i++) {
+      uint144 cap = marketCaps[i];
+      address token = categoryTokens[i];
+      uint256 j = i - 1;
+      while (int(j) >= 0 && marketCaps[j] < cap) {
+        marketCaps[j + 1] = marketCaps[j];
+        categoryTokens[j + 1] = categoryTokens[j];
+        j--;
       }
-      _categoryTokenRecords[categoryID][token].index = uint8(i);
-      categoryTokens[i] = token;
+      marketCaps[j + 1] = cap;
+      categoryTokens[j + 1] = token;
     }
+    _categoryTokens[categoryID] = categoryTokens;
+    
     _lastCategoryUpdate[categoryID] = now;
     emit CategorySorted(categoryID);
   }
@@ -211,7 +187,7 @@ contract MarketCapSortedTokenCategories is Ownable {
   function computeAverageMarketCap(address token)
     public
     view
-    returns (uint144 marketCap)
+    returns (uint144)
   {
     uint256 totalSupply = IERC20(token).totalSupply();
     return oracle.computeAverageEthForTokens(
@@ -253,17 +229,38 @@ contract MarketCapSortedTokenCategories is Ownable {
   }
 
   /**
+   * @dev Returns the timestamp of the last time the category was sorted.
+   */
+  function getLastCategoryUpdate(uint256 categoryID)
+    external
+    view
+    validCategory(categoryID)
+    returns (uint256)
+  {
+    return _lastCategoryUpdate[categoryID];
+  }
+
+  /**
+   * @dev Returns boolean stating whether `token` is a member of the category `categoryID`.
+   */
+  function isTokenInCategory(uint256 categoryID, address token)
+    external
+    view
+    validCategory(categoryID)
+    returns (bool)
+  {
+    return _isCategoryToken[categoryID][token];
+  }
+
+  /**
    * @dev Returns the array of tokens in a category.
    */
   function getCategoryTokens(uint256 categoryID)
     external
     view
+    validCategory(categoryID)
     returns (address[] memory tokens)
   {
-    require(
-      categoryID <= categoryIndex && categoryID > 0,
-      "ERR_CATEGORY_ID"
-    );
     address[] storage _tokens = _categoryTokens[categoryID];
     tokens = new address[](_tokens.length);
     for (uint256 i = 0; i < tokens.length; i++) {
@@ -277,6 +274,7 @@ contract MarketCapSortedTokenCategories is Ownable {
   function getCategoryMarketCaps(uint256 categoryID)
     external
     view
+    validCategory(categoryID)
     returns (uint144[] memory marketCaps)
   {
     return computeAverageMarketCaps(_categoryTokens[categoryID]);
@@ -291,17 +289,11 @@ contract MarketCapSortedTokenCategories is Ownable {
   function getTopCategoryTokens(uint256 categoryID, uint256 num)
     public
     view
+    validCategory(categoryID)
     returns (address[] memory tokens)
   {
-    require(
-      categoryID <= categoryIndex && categoryID > 0,
-      "ERR_CATEGORY_ID"
-    );
     address[] storage categoryTokens = _categoryTokens[categoryID];
-    require(
-      num <= categoryTokens.length,
-      "ERR_CATEGORY_SIZE"
-    );
+    require(num <= categoryTokens.length, "ERR_CATEGORY_SIZE");
     require(
       now - _lastCategoryUpdate[categoryID] <= MAX_SORT_DELAY,
       "ERR_CATEGORY_NOT_READY"
@@ -316,10 +308,8 @@ contract MarketCapSortedTokenCategories is Ownable {
    * @dev Adds a new token to a category.
    */
   function _addToken(address token, uint256 categoryID) internal {
-    CategoryTokenRecord storage record = _categoryTokenRecords[categoryID][token];
-    require(!record.bound, "ERR_TOKEN_BOUND");
-    record.bound = true;
-    record.index = uint8(_categoryTokens[categoryID].length);
+    require(!_isCategoryToken[categoryID][token], "ERR_TOKEN_BOUND");
+    _isCategoryToken[categoryID][token] = true;
     _categoryTokens[categoryID].push(token);
     emit TokenAdded(token, categoryID);
   }

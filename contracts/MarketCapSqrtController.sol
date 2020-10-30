@@ -319,10 +319,7 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
   function setDefaultSellerPremium(
     uint8 _defaultSellerPremium
   ) external onlyOwner {
-    require(
-      _defaultSellerPremium > 0 && _defaultSellerPremium < 20,
-      "ERR_PREMIUM"
-    );
+    require(_defaultSellerPremium > 0 && _defaultSellerPremium < 20, "ERR_PREMIUM");
     defaultSellerPremium = _defaultSellerPremium;
   }
 
@@ -330,6 +327,7 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
    * @dev Set the premium rate on `sellerAddress` to the given rate.
    */
   function updateSellerPremium(address tokenSeller, uint8 premiumPercent) external onlyOwner {
+    require(premiumPercent > 0 && premiumPercent < 20, "ERR_PREMIUM");
     UnboundTokenSeller(tokenSeller).setPremiumPercent(premiumPercent);
   }
 

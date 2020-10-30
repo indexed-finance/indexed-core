@@ -413,32 +413,6 @@ contract UnboundTokenSeller {
 
 /* ---  Internal Functions  --- */
 
-  function _getAverageValues(
-    address token1,
-    uint256 amount1,
-    address token2,
-    uint256 amount2
-  )
-    internal
-    view
-    returns (uint144 avgValue1, uint144 avgValue2)
-  {
-    address[] memory tokens = new address[](2);
-    tokens[0] = token1;
-    tokens[1] = token2;
-    uint256[] memory amounts = new uint256[](2);
-    amounts[0] = amount1;
-    amounts[1] = amount2;
-    uint144[] memory avgValues = _oracle.computeAverageEthForTokens(
-      tokens,
-      amounts,
-      30 minutes,
-      12 hours
-    );
-    avgValue1 = avgValues[0];
-    avgValue2 = avgValues[1];
-  }
-
   function _getAveragePrices(address token1, address token2)
     internal
     view

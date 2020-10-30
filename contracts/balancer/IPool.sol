@@ -321,9 +321,8 @@ contract IPool is BToken, BMath {
     // Read all the records from storage and mark which of the existing tokens
     // were represented in the reindex call.
     for (uint256 i = 0; i < len; i++) {
-      Record memory record = _records[tokens[i]];
-      if (record.bound) receivedIndices[record.index] = true;
-      records[i] = record;
+      records[i] = _records[tokens[i]];
+      if (records[i].bound) receivedIndices[records[i].index] = true;
     }
     // If any bound tokens were not sent in this call, set their desired weights to 0.
     for (uint256 i = 0; i < tLen; i++) {
