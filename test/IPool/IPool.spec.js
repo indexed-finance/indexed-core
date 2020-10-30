@@ -1,10 +1,9 @@
 const Decimal = require('decimal.js');
-
 const { calcRelativeDiff } = require('../lib/calc_comparisons');
-
 const { poolFixture } = require("../fixtures/pool.fixture");
 const { toWei, fromWei, zero, zeroAddress, expect, maxUint256: maxPrice, getTransactionTimestamp, verifyRejection, getFakerContract } = require('../utils');
 const { BigNumber } = require('ethers');
+const { defaultAbiCoder } = require('ethers/lib/utils');
 
 const errorDelta = 10 ** -8;
 
@@ -282,7 +281,7 @@ describe('IPool.sol', async () => {
     const denorm = BigNumber.from(8).mul(BigNumber.from(10).pow(18));
   
     before(async () => {
-      [from] = await web3.eth.getAccounts();
+      ({ deployer: from } = await getNamedAccounts());
       const MockERC20 = await ethers.getContractFactory('MockERC20');
       unboundToken = await MockERC20.deploy('Unbound', 'UB');
       tokenA = await MockERC20.deploy('TokenA', 'A');
@@ -324,21 +323,22 @@ describe('IPool.sol', async () => {
     });
   
     it('Reverts when the fee is not paid', async () => {
-      const testScenarioBytes = web3.eth.abi.encodeParameter('uint256', '1');
+      
+      const testScenarioBytes = defaultAbiCoder.encode(['uint256'], [1]);
       await expect(
         pool.flashBorrow(mockBorrower.address, tokenA.address, borrowAmount, testScenarioBytes)
       ).to.be.rejectedWith(/ERR_INSUFFICIENT_PAYMENT/g);
     });
   
     it('Reverts if reentry is attempted', async () => {
-      const testScenarioBytes = web3.eth.abi.encodeParameter('uint256', '2');
+      const testScenarioBytes = defaultAbiCoder.encode(['uint256'], [2]);
       await expect(
         pool.flashBorrow(mockBorrower.address, tokenA.address, borrowAmount, testScenarioBytes)
       ).to.be.rejectedWith(/ERR_REENTRY/g);
     });
   
     it('Succeeds when the full amount due is paid, and sets the correct balance in the token record', async () => {
-      const testScenarioBytes = web3.eth.abi.encodeParameter('uint256', '0');
+      const testScenarioBytes = defaultAbiCoder.encode(['uint256'], [0]);
       const amountDue = borrowAmount.mul(1025).div(1000);
       await pool.flashBorrow(mockBorrower.address, tokenA.address, borrowAmount, testScenarioBytes);
       const newBalance = await pool.getBalance(tokenA.address);
@@ -353,7 +353,7 @@ describe('IPool.sol', async () => {
       );
       const amountDue = borrowAmount.mul(1025).div(1000);
       await unboundToken.getFreeTokens(pool.address, borrowAmount);
-      const testScenarioBytes = web3.eth.abi.encodeParameter('uint256', '0');
+      const testScenarioBytes = defaultAbiCoder.encode(['uint256'], [0]);
       await pool.flashBorrow(mockBorrower.address, unboundToken.address, borrowAmount, testScenarioBytes);
       const newBalance = await pool.getBalance(tokenA.address);
       expect(newBalance.eq(amountDue)).to.be.true;
@@ -369,7 +369,7 @@ describe('IPool.sol', async () => {
         [denorm, denorm, denorm],
         [borrowAmount, borrowAmount, borrowAmount]
       );
-      const testScenarioBytes = web3.eth.abi.encodeParameter('uint256', '0');
+      const testScenarioBytes = defaultAbiCoder.encode(['uint256'], [0]);
       const amountDue = borrowAmount.mul(1025).div(1000);
       await pool.flashBorrow(mockBorrower.address, unboundToken.address, borrowAmount, testScenarioBytes);
       const newBalance = await pool.getBalance(tokenA.address);
