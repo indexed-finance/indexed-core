@@ -1,6 +1,5 @@
 const [...testTokens] = require('../testData/test-tokens.json');
 
-const { getNamedAccounts, ethers } = require('@nomiclabs/buidler');
 const { verifyRejection, getFakerContract, toWei, oneE18, sha3 } = require('../utils');
 const { uniswapFixture } = require('./uniswap.fixture');
 
