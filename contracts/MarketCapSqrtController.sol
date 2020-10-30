@@ -101,19 +101,6 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
     uint256 indexSize
   );
 
-  /** @dev Emitted when a pool using the default implementation is deployed. */
-  event NewDefaultPool(
-    address pool,
-    address controller
-  );
-
-  /** @dev Emitted when a pool using a non-default implementation is deployed. */
-  event NewNonDefaultPool(
-    address pool,
-    address controller,
-    bytes32 implementationID
-  );
-
 /* ---  Structs  --- */
 
   /**
@@ -208,11 +195,11 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
     require(indexSize <= MAX_INDEX_SIZE, "ERR_MAX_INDEX_SIZE");
     require(initialWethValue < uint144(-1), "ERR_MAX_UINT144");
 
-    poolAddress = _factory.deployIndexPool(
-      keccak256(abi.encodePacked(categoryID, indexSize)),
-      name,
-      symbol
+    poolAddress = _factory.deployPool(
+      POOL_IMPLEMENTATION_ID,
+      keccak256(abi.encodePacked(categoryID, indexSize))
     );
+    IPool(poolAddress).configure(address(this), name, symbol);
 
     _poolMeta[poolAddress] = IndexPoolMeta({
       initialized: false,
