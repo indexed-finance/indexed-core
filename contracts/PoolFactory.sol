@@ -42,12 +42,12 @@ contract PoolFactory is Ownable {
 
 /* ---  Controller Approval  --- */
 
-  /** @dev Approves `controller` to deploy index pools. */
+  /** @dev Approves `controller` to deploy pools. */
   function approvePoolController(address controller) external onlyOwner {
     isApprovedController[controller] = true;
   }
 
-  /** @dev Removes the ability of `controller` to deploy index pools. */
+  /** @dev Removes the ability of `controller` to deploy pools. */
   function disapprovePoolController(address controller) external onlyOwner {
     isApprovedController[controller] = false;
   }
@@ -86,8 +86,7 @@ contract PoolFactory is Ownable {
   }
 
   /**
-   * @dev Compute the create2 address for a pool deployed by an approved
-   * indexed controller.
+   * @dev Compute the create2 address for a pool deployed by an approved controller.
    */
   function computePoolAddress(bytes32 implementationID, address controller, bytes32 controllerSalt)
     public
