@@ -1,14 +1,12 @@
-const { soliditySha3 } = require('web3-utils');
-
-const poolInitializerID = soliditySha3('PoolInitializer.sol')
-const poolImplementationID = soliditySha3('IPool.sol');
-const sellerImplementationID = soliditySha3('UnboundTokenSeller.sol');
-
 const [...testTokens] = require('../testData/test-tokens.json');
 
 const { getNamedAccounts, ethers } = require('@nomiclabs/buidler');
-const { verifyRejection, getFakerContract, toWei, oneE18 } = require('../utils');
+const { verifyRejection, getFakerContract, toWei, oneE18, sha3 } = require('../utils');
 const { uniswapFixture } = require('./uniswap.fixture');
+
+const poolInitializerID = sha3('PoolInitializer.sol')
+const poolImplementationID = sha3('IPool.sol');
+const sellerImplementationID = sha3('UnboundTokenSeller.sol');
 
 const toLiquidityAmounts = ({ price, marketcap }, init = false) => {
   let amountWeth = toWei(marketcap);
