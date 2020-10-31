@@ -56,7 +56,8 @@
   },
   "dependencies": {
     "@indexed-finance/proxies": "^1.0.12",
-    "@indexed-finance/uniswap-v2-oracle": "^1.0.1",
+    "@indexed-finance/uniswap-deployments": "^1.0.2",
+    "@indexed-finance/uniswap-v2-oracle": "^1.0.2",
     "@openzeppelin/contracts": "^3.2.0",
     "axios": "^0.20.0",
     "cids": "^1.0.0",
