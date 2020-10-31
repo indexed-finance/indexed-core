@@ -1,6 +1,6 @@
 const Logger = require('../lib/logger');
 const Deployer = require('../lib/deployer');
-const { uploadFile } = require('../lib/upload');
+const uploadFile = require('../lib/upload');
 
 const categories = require('../test/testData/rinkeby-categories.json');
 const testTokens = require('../test/testData/test-tokens.json');
@@ -28,7 +28,7 @@ module.exports = async (bre) => {
 
   const controller = await ethers.getContract('controller', signer);
 
-  const weth = await ethers.getContract('weth');
+  const weth = await ethers.getContractAt('MockERC20', '0x72710B0b93c8F86aEf4ec8bd832868A15df50375');
   const uniswapFactory = await ethers.getContract('UniswapV2Factory');
   const uniswapRouter = await ethers.getContract('UniswapV2Router02');
   const uniswapOracle = await ethers.getContract('IndexedUniswapV2Oracle');
@@ -37,7 +37,7 @@ module.exports = async (bre) => {
     from: deployer,
     gas: 4000000,
     args: [weth.address, uniswapFactory.address, uniswapRouter.address]
-  });
+  }, true);
 
   const categoryIndex = await controller.categoryIndex();
   if (!categoryIndex.eq(0)) {
@@ -56,8 +56,8 @@ module.exports = async (bre) => {
       args: [name, symbol]
     });
     tokenAddresses[symbol.toLowerCase()] = erc20.address;
-    await uniswapFactory.createPair(erc20.address, weth.address);
-    await liquidityAdder.addLiquiditySingle(erc20.address, amountToken, amountWeth);
+    await uniswapFactory.createPair(erc20.address, weth.address, { gasLimit: 250000 });
+    await liquidityAdder.addLiquiditySingle(erc20.address, amountToken, amountWeth, { gasLimit: 250000 });
   }
 
   for (let category of categories) {
@@ -67,8 +67,16 @@ module.exports = async (bre) => {
     const { events } = await controller.createCategory(sha3Hash, { gasLimit: 250000 }).then(tx => tx.wait());
     const { args: { categoryID } } = events.filter(e => e.event == 'CategoryAdded')[0];
     logger.success(`Created category ${name} with ID ${categoryID}`);
+    category.categoryID = categoryID;
     const addresses = tokens.map(symbol => tokenAddresses[symbol.toLowerCase()]);
-    await controller.addTokens(categoryID, addresses);
+    await controller.addTokens(categoryID, addresses, { gasLimit: 250000 });
+  }
+
+  for (let token of testTokens) {
+    const { amountToken, amountWeth } = toLiquidityAmounts(token);
+    const { symbol } = token;
+    const address = tokenAddresses[symbol.toLowerCase()];
+    await liquidityAdder.addLiquiditySingle(address, amountToken, amountWeth, { gasLimit: 250000 });
   }
 };
 

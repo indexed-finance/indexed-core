@@ -11,11 +11,11 @@ module.exports = async (bre) => {
 
   if (chainID == 1) return;
 
-  const weth = await deploy('MockERC20', 'weth', {
-    from: deployer,
-    gas: 4000000,
-    args: ["Wrapped Ether V9", "WETH9"]
-  });
+  // const weth = await deploy('MockERC20', 'weth', {
+  //   from: deployer,
+  //   gas: 4000000,
+  //   args: ["Wrapped Ether V9", "WETH9"]
+  // });
 
   if (chainID == 4) return;
 

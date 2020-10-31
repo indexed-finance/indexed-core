@@ -29,18 +29,26 @@ module.exports = async (bre) => {
   const { deployer } = await getNamedAccounts();
   const [ signer ] = await ethers.getSigners();
 
-  const chainID = await getChainId();
+  const chainID = +(await getChainId());
   const logger = Logger(chainID)
   const deploy = await Deployer(bre, logger);
 
   // ------- External Contracts -------
-  const weth = (await deployments.get('weth')).address;
+  const weth = '0x72710B0b93c8F86aEf4ec8bd832868A15df50375';//(await deployments.get('weth')).address;
   const uniswapRouter = (await deployments.get('uniswapRouter')).address;
   const uniswapFactory = (await deployments.get('uniswapFactory')).address;
 
   let uniswapOracle;
-  if (chainID == 1 || chainID == 4) {
-    uniswapOracle = await ethers.getContract('uniswapOracle', signer);
+  if (chainID == 1) {
+    uniswapOracle = await ethers.getContract('IndexedUniswapV2Oracle', signer);
+  } else if (chainID == 4) {
+    uniswapOracle = await ethers.getContract('IndexedUniswapV2Oracle', signer);
+    const oracleFallthrough = await deploy('OracleFallthrough', 'OracleFallthrough', {
+      from: deployer,
+      gas: 4000000,
+      args: [uniswapOracle.address]
+    });
+    uniswapOracle = oracleFallthrough;
   } else {
     uniswapOracle = await deploy("IndexedUniswapV2Oracle", 'uniswapOracle', {
       from: deployer,
@@ -86,7 +94,7 @@ module.exports = async (bre) => {
     if (!deployment.newlyDeployed) return;
     const address = deployment.address;
     if (chainID == 1 || chainID == 4) {
-      const existing = await proxyManager.getImplementationHolder(id);
+      const existing = await proxyManager['getImplementationHolder(bytes32)'](id);
       if (!existing || existing == nullAddress) {
         await proxyManager.createManyToOneProxyRelationship(id, address).then(r => r.wait());
         logger.success(`Created implementation for ${deployment.contractName}`);
