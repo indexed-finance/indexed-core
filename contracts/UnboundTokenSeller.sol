@@ -2,16 +2,16 @@
 pragma solidity ^0.6.0;
 pragma experimental ABIEncoderV2;
 
-/* --- External Interfaces --- */
-import { IIndexedUniswapV2Oracle } from "@indexed-finance/uniswap-v2-oracle/contracts/interfaces/IIndexedUniswapV2Oracle.sol";
-import { IUniswapV2Router02 as UniV2Router } from "@uniswap/v2-periphery/contracts/interfaces/IUniswapV2Router02.sol";
-import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+/* ========== External Interfaces ========== */
+import "@indexed-finance/uniswap-v2-oracle/contracts/interfaces/IIndexedUniswapV2Oracle.sol";
+import "@uniswap/v2-periphery/contracts/interfaces/IUniswapV2Router02.sol";
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
-/* --- External Libraries --- */
-import { PriceLibrary as Prices } from "@indexed-finance/uniswap-v2-oracle/contracts/lib/PriceLibrary.sol";
-import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
+/* ========== External Libraries ========== */
+import "@indexed-finance/uniswap-v2-oracle/contracts/lib/PriceLibrary.sol";
+import "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
 
-/* --- Internal Interfaces --- */
+/* ========== Internal Interfaces ========== */
 import { IPool } from "./balancer/IPool.sol";
 
 
@@ -39,15 +39,15 @@ import { IPool } from "./balancer/IPool.sol";
  */
 contract UnboundTokenSeller {
   using SafeERC20 for IERC20;
-  using Prices for Prices.TwoWayAveragePrice;
+  using PriceLibrary for PriceLibrary.TwoWayAveragePrice;
 
-/* ---  Constants  --- */
+/* ==========  Constants  ========== */
 
-  UniV2Router internal immutable _uniswapRouter;
+  IUniswapV2Router02 internal immutable _uniswapRouter;
   address internal immutable _controller;
   IIndexedUniswapV2Oracle internal immutable _oracle;
 
-/* ---  Events  --- */
+/* ==========  Events  ========== */
 
   event PremiumPercentSet(uint8 premium);
 
@@ -69,7 +69,7 @@ contract UnboundTokenSeller {
     uint256 boughtAmount
   );
 
-/* ---  Storage  --- */
+/* ==========  Storage  ========== */
   // Pool the contract is selling tokens for.
   IPool internal _pool;
   // Premium on the amount paid in swaps.
@@ -78,7 +78,7 @@ contract UnboundTokenSeller {
   // Reentrance lock
   bool internal _mutex;
 
-/* ---  Modifiers  --- */
+/* ==========  Modifiers  ========== */
 
   modifier _control_ {
     require(msg.sender == _controller, "ERR_NOT_CONTROLLER");
@@ -98,10 +98,10 @@ contract UnboundTokenSeller {
     _;
   }
 
-/* ---  Constructor  --- */
+/* ==========  Constructor  ========== */
 
   constructor(
-    UniV2Router uniswapRouter,
+    IUniswapV2Router02 uniswapRouter,
     IIndexedUniswapV2Oracle oracle,
     address controller
   ) public {
@@ -128,7 +128,7 @@ contract UnboundTokenSeller {
     _pool = pool;
   }
 
-/* ---  Controls  --- */
+/* ==========  Controls  ========== */
 
   /**
    * @dev Receive `amount` of `token` from the pool.
@@ -152,7 +152,7 @@ contract UnboundTokenSeller {
     emit PremiumPercentSet(premiumPercent);
   }
 
-/* ---  Token Swaps  --- */
+/* ==========  Token Swaps  ========== */
 
   /**
    * @dev Execute a trade with UniSwap to sell some tokens held by the contract
@@ -345,7 +345,7 @@ contract UnboundTokenSeller {
     );
   }
 
-/* ---  Swap Queries  --- */
+/* ==========  Swap Queries  ========== */
 
   function getPremiumPercent() external view returns (uint8) {
     return _premiumPercent;
@@ -370,8 +370,8 @@ contract UnboundTokenSeller {
       "ERR_INSUFFICIENT_BALANCE"
     );
     (
-      Prices.TwoWayAveragePrice memory avgPriceIn,
-      Prices.TwoWayAveragePrice memory avgPriceOut
+      PriceLibrary.TwoWayAveragePrice memory avgPriceIn,
+      PriceLibrary.TwoWayAveragePrice memory avgPriceOut
     ) = _getAveragePrices(tokenIn, tokenOut);
     // Compute the average weth value for `amountOut` of `tokenOut`
     uint144 avgOutValue = avgPriceOut.computeAverageEthForTokens(amountOut);
@@ -396,8 +396,8 @@ contract UnboundTokenSeller {
     returns (uint256 amountOut)
   {
     (
-      Prices.TwoWayAveragePrice memory avgPriceIn,
-      Prices.TwoWayAveragePrice memory avgPriceOut
+      PriceLibrary.TwoWayAveragePrice memory avgPriceIn,
+      PriceLibrary.TwoWayAveragePrice memory avgPriceOut
     ) = _getAveragePrices(tokenIn, tokenOut);
     // Compute the average weth value for `amountIn` of `tokenIn`
     uint144 avgInValue = avgPriceIn.computeAverageEthForTokens(amountIn);
@@ -411,20 +411,20 @@ contract UnboundTokenSeller {
     );
   }
 
-/* ---  Internal Functions  --- */
+/* ==========  Internal Functions  ========== */
 
   function _getAveragePrices(address token1, address token2)
     internal
     view
     returns (
-      Prices.TwoWayAveragePrice memory avgPrice1,
-      Prices.TwoWayAveragePrice memory avgPrice2
+      PriceLibrary.TwoWayAveragePrice memory avgPrice1,
+      PriceLibrary.TwoWayAveragePrice memory avgPrice2
     )
   {
     address[] memory tokens = new address[](2);
     tokens[0] = token1;
     tokens[1] = token2;
-    Prices.TwoWayAveragePrice[] memory prices = _oracle.computeTwoWayAveragePrices(
+    PriceLibrary.TwoWayAveragePrice[] memory prices = _oracle.computeTwoWayAveragePrices(
       tokens,
       10 minutes,
       12 hours

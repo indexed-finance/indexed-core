@@ -2,10 +2,12 @@
 pragma solidity ^0.6.0;
 pragma experimental ABIEncoderV2;
 
+/* ========== Internal Inheritance ========== */
 import "./BToken.sol";
 import "./BMath.sol";
-import "../interfaces/IFlashLoanRecipient.sol";
 
+/* ========== Internal Interfaces ========== */
+import "../interfaces/IFlashLoanRecipient.sol";
 
 /************************************************************************************************
 Originally from https://github.com/balancer-labs/balancer-core/blob/master/contracts/BPool.sol
@@ -38,7 +40,7 @@ contract IPool is BToken, BMath {
     uint256 balance;
   }
 
-/* ---  EVENTS  --- */
+/* ==========  EVENTS  ========== */
 
   /** @dev Emitted when tokens are swapped. */
   event LOG_SWAP(
@@ -94,7 +96,7 @@ contract IPool is BToken, BMath {
   /** @dev Emitted when the swap fee is updated. */
   event LOG_SWAP_FEE_UPDATED(uint256 swapFee);
 
-/* ---  Modifiers  --- */
+/* ==========  Modifiers  ========== */
 
   modifier _lock_ {
     require(!_mutex, "ERR_REENTRY");
@@ -118,7 +120,7 @@ contract IPool is BToken, BMath {
     _;
   }
 
-/* ---  Storage  --- */
+/* ==========  Storage  ========== */
 
   bool internal _mutex;
 
@@ -155,7 +157,7 @@ contract IPool is BToken, BMath {
   // not be exploited.
   uint256 internal _maxPoolTokens;
 
-/* ---  Controls  --- */
+/* ==========  Controls  ========== */
 
   /**
    * @dev Sets the controller address and the token name & symbol.
@@ -249,7 +251,7 @@ contract IPool is BToken, BMath {
     emit LOG_MAX_TOKENS_UPDATED(maxPoolTokens);
   }
 
-/* ---  Configuration Actions  --- */
+/* ==========  Configuration Actions  ========== */
 
   /**
    * @dev Set the swap fee.
@@ -262,7 +264,7 @@ contract IPool is BToken, BMath {
     emit LOG_SWAP_FEE_UPDATED(swapFee);
   }
 
-/* ---  Token Management Actions  --- */
+/* ==========  Token Management Actions  ========== */
 
   /**
    * @dev Sets the desired weights for the pool tokens, which
@@ -364,7 +366,7 @@ contract IPool is BToken, BMath {
     emit LOG_MINIMUM_BALANCE_UPDATED(token, minimumBalance);
   }
 
-/* ---  Liquidity Provider Actions  --- */
+/* ==========  Liquidity Provider Actions  ========== */
 
   /**
    * @dev Mint new pool tokens by providing the proportional amount of each
@@ -680,7 +682,7 @@ contract IPool is BToken, BMath {
     return poolAmountIn;
   }
 
-/* ---  Other  --- */
+/* ==========  Other  ========== */
 
   /**
    * @dev Absorb any tokens that have been sent to the pool.
@@ -712,7 +714,7 @@ contract IPool is BToken, BMath {
     }
   }
 
-/* ---  Flash Loan  --- */
+/* ==========  Flash Loan  ========== */
 
   /**
    * @dev Execute a flash loan, transferring `amount` of `token` to `recipient`.
@@ -764,7 +766,7 @@ contract IPool is BToken, BMath {
     }
   }
 
-/* ---  Token Swaps  --- */
+/* ==========  Token Swaps  ========== */
 
   /**
    * @dev Execute a token swap with a specified amount of input
@@ -944,7 +946,7 @@ contract IPool is BToken, BMath {
     return (tokenAmountIn, spotPriceAfter);
   }
 
-/* ---  Config Queries  --- */
+/* ==========  Config Queries  ========== */
   /**
    * @dev Check if swapping tokens and joining the pool is allowed.
    */
@@ -964,7 +966,7 @@ contract IPool is BToken, BMath {
     return _controller;
   }
 
-/* ---  Token Queries  --- */
+/* ==========  Token Queries  ========== */
   function getMaxPoolTokens() external view returns (uint256) {
     return _maxPoolTokens;
   }
@@ -1122,7 +1124,7 @@ contract IPool is BToken, BMath {
     return record.balance;
   }
 
-/* ---  Price Queries  --- */
+/* ==========  Price Queries  ========== */
   /**
    * @dev Returns the spot price for `tokenOut` in terms of `tokenIn`.
    */
@@ -1144,7 +1146,7 @@ contract IPool is BToken, BMath {
       );
   }
 
-/* ---  Pool Share Internal Functions  --- */
+/* ==========  Pool Share Internal Functions  ========== */
 
   function _pullPoolShare(address from, uint256 amount) internal {
     _pull(from, amount);
@@ -1162,7 +1164,7 @@ contract IPool is BToken, BMath {
     _burn(amount);
   }
 
-/* ---  Underlying Token Internal Functions  --- */
+/* ==========  Underlying Token Internal Functions  ========== */
   // 'Underlying' token-manipulation functions make external calls but are NOT locked
   // You must `_lock_` or otherwise ensure reentry-safety
 
@@ -1203,7 +1205,7 @@ contract IPool is BToken, BMath {
     );
   }
 
-/* ---  Token Management Internal Functions  --- */
+/* ==========  Token Management Internal Functions  ========== */
 
   /**
    * @dev Bind a token by address without actually depositing a balance.
@@ -1415,7 +1417,7 @@ contract IPool is BToken, BMath {
     _records[token].balance = realBalance;
   }
 
-/* ---  Token Query Internal Functions  --- */
+/* ==========  Token Query Internal Functions  ========== */
 
   /**
    * @dev Get the record for a token which is being swapped in.

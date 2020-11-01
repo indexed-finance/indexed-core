@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0
 pragma solidity ^0.6.0;
 
-import { IDelegateCallProxyManager } from "@indexed-finance/proxies/contracts/interfaces/IDelegateCallProxyManager.sol";
+import "@indexed-finance/proxies/contracts/interfaces/IDelegateCallProxyManager.sol";
 
 
 interface IPoolFactory {
@@ -16,7 +16,6 @@ interface IPoolFactory {
   function disapprovePoolController(address controller) external;
 
   function deployPool(bytes32 implementationID, bytes32 controllerSalt) external returns (address);
-
 
 /* ========== Views ========== */
 

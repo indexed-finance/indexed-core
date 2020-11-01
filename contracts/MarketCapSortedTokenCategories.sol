@@ -2,15 +2,12 @@
 pragma solidity ^0.6.0;
 pragma experimental ABIEncoderV2;
 
-/* --- External Inheritance --- */
-import { Ownable } from "@openzeppelin/contracts/access/Ownable.sol";
+/* ========== External Inheritance ========== */
+import "@openzeppelin/contracts/access/Ownable.sol";
 
-/* --- External Interfaces --- */
-import { IIndexedUniswapV2Oracle } from "@indexed-finance/uniswap-v2-oracle/contracts/interfaces/IIndexedUniswapV2Oracle.sol";
-import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-
-/* --- External Libraries --- */
-import { PriceLibrary as Prices } from "@indexed-finance/uniswap-v2-oracle/contracts/lib/PriceLibrary.sol";
+/* ========== External Interfaces ========== */
+import "@indexed-finance/uniswap-v2-oracle/contracts/interfaces/IIndexedUniswapV2Oracle.sol";
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 
 /**
@@ -39,7 +36,7 @@ import { PriceLibrary as Prices } from "@indexed-finance/uniswap-v2-oracle/contr
  * ===============
  */
 contract MarketCapSortedTokenCategories is Ownable {
-/* ---  Constants  --- */
+/* ==========  Constants  ========== */
 
   // Maximum time between a category being sorted and a query for the top n tokens
   uint256 internal constant MAX_SORT_DELAY = 1 days;
@@ -50,7 +47,7 @@ contract MarketCapSortedTokenCategories is Ownable {
   // Long term price oracle
   IIndexedUniswapV2Oracle public immutable oracle;
 
-/* ---  Events  --- */
+/* ==========  Events  ========== */
 
   /** @dev Emitted when a new category is created. */
   event CategoryAdded(uint256 categoryID, bytes32 metadataHash);
@@ -61,7 +58,7 @@ contract MarketCapSortedTokenCategories is Ownable {
   /** @dev Emitted when a token is added to a category. */
   event TokenAdded(address token, uint256 categoryID);
 
-/* ---  Storage  --- */
+/* ==========  Storage  ========== */
 
   // Number of categories that exist.
   uint256 public categoryIndex;
@@ -71,14 +68,14 @@ contract MarketCapSortedTokenCategories is Ownable {
   // Last time a category was sorted
   mapping(uint256 => uint256) internal _lastCategoryUpdate;
 
-/* --- Modifiers --- */
+/* ========== Modifiers ========== */
 
   modifier validCategory(uint256 categoryID) {
     require(categoryID <= categoryIndex && categoryID > 0, "ERR_CATEGORY_ID");
     _;
   }
 
-/* ---  Constructor  --- */
+/* ==========  Constructor  ========== */
 
   /**
    * @dev Deploy the controller and configure the addresses
@@ -88,7 +85,7 @@ contract MarketCapSortedTokenCategories is Ownable {
     oracle = _oracle;
   }
 
-/* ---  Category Management  --- */
+/* ==========  Category Management  ========== */
 
   /**
    * @dev Updates the prices on the oracle for all the tokens in a category.
@@ -177,7 +174,7 @@ contract MarketCapSortedTokenCategories is Ownable {
     emit CategorySorted(categoryID);
   }
 
-/* ---  Market Cap Queries  --- */
+/* ==========  Market Cap Queries  ========== */
 
   /**
    * @dev Compute the average market cap of a token in weth.
@@ -219,7 +216,7 @@ contract MarketCapSortedTokenCategories is Ownable {
     );
   }
 
-/* ---  Category Queries  --- */
+/* ==========  Category Queries  ========== */
 
   /**
    * @dev Returns a boolean stating whether a category exists.
@@ -302,7 +299,7 @@ contract MarketCapSortedTokenCategories is Ownable {
     for (uint256 i = 0; i < num; i++) tokens[i] = categoryTokens[i];
   }
 
-/* ---  Category Utility Functions  --- */
+/* ==========  Category Utility Functions  ========== */
 
   /**
    * @dev Adds a new token to a category.

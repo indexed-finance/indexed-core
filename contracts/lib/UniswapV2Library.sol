@@ -1,7 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0
 pragma solidity >=0.6.0;
 
+/* ========== External Interfaces ========== */
 import "@uniswap/v2-core/contracts/interfaces/IUniswapV2Pair.sol";
+
+/* ========== External Libraries ========== */
 import "@openzeppelin/contracts/math/SafeMath.sol";
 
 /************************************************************************************************

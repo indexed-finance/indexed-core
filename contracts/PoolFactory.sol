@@ -2,9 +2,14 @@
 pragma solidity ^0.6.0;
 pragma experimental ABIEncoderV2;
 
-import { Ownable } from "@openzeppelin/contracts/access/Ownable.sol";
-import { IDelegateCallProxyManager } from "@indexed-finance/proxies/contracts/interfaces/IDelegateCallProxyManager.sol";
-import { SaltyLib as Salty } from "@indexed-finance/proxies/contracts/SaltyLib.sol";
+/* ========== External Inheritance ========== */
+import "@openzeppelin/contracts/access/Ownable.sol";
+
+/* ========== External Interfaces ========== */
+import "@indexed-finance/proxies/contracts/interfaces/IDelegateCallProxyManager.sol";
+
+/* ========== External Libraries ========== */
+import "@indexed-finance/proxies/contracts/SaltyLib.sol";
 
 
 /**
@@ -12,35 +17,35 @@ import { SaltyLib as Salty } from "@indexed-finance/proxies/contracts/SaltyLib.s
  * @author d1ll0n
  */
 contract PoolFactory is Ownable {
-/* ---  Constants  --- */
+/* ==========  Constants  ========== */
 
   // Address of the proxy manager contract.
   IDelegateCallProxyManager public immutable proxyManager;
 
-/* ---  Events  --- */
+/* ==========  Events  ========== */
 
   /** @dev Emitted when a pool is deployed. */
   event NewPool(address pool, address controller, bytes32 implementationID);
 
-/* ---  Storage  --- */
+/* ==========  Storage  ========== */
 
   mapping(address => bool) public isApprovedController;
   mapping(address => bytes32) public getPoolImplementationID;
 
-/* ---  Modifiers  --- */
+/* ==========  Modifiers  ========== */
 
   modifier onlyApproved {
     require(isApprovedController[msg.sender], "ERR_NOT_APPROVED");
     _;
   }
 
-/* ---  Constructor  --- */
+/* ==========  Constructor  ========== */
 
   constructor(IDelegateCallProxyManager proxyManager_) public Ownable() {
     proxyManager = proxyManager_;
   }
 
-/* ---  Controller Approval  --- */
+/* ==========  Controller Approval  ========== */
 
   /** @dev Approves `controller` to deploy pools. */
   function approvePoolController(address controller) external onlyOwner {
@@ -52,7 +57,7 @@ contract PoolFactory is Ownable {
     isApprovedController[controller] = false;
   }
 
-/* ---  Pool Deployment  --- */
+/* ==========  Pool Deployment  ========== */
 
   /**
    * @dev Deploys a pool using an implementation ID provided by the controller.
@@ -76,7 +81,7 @@ contract PoolFactory is Ownable {
     emit NewPool(poolAddress, msg.sender, implementationID);
   }
 
-/* ---  Queries  --- */
+/* ==========  Queries  ========== */
 
   /**
    * @dev Checks if an address is a pool that was deployed by the factory.
@@ -94,7 +99,7 @@ contract PoolFactory is Ownable {
     returns (address)
   {
     bytes32 suppliedSalt = keccak256(abi.encodePacked(controller, controllerSalt));
-    return Salty.computeProxyAddressManyToOne(
+    return SaltyLib.computeProxyAddressManyToOne(
       address(proxyManager),
       address(this),
       implementationID,

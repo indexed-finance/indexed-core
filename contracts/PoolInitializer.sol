@@ -2,15 +2,15 @@
 pragma solidity ^0.6.0;
 pragma experimental ABIEncoderV2;
 
-/* --- External Interfaces --- */
-import { IIndexedUniswapV2Oracle } from "@indexed-finance/uniswap-v2-oracle/contracts/interfaces/IIndexedUniswapV2Oracle.sol";
-import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+/* ========== External Interfaces ========== */
+import "@indexed-finance/uniswap-v2-oracle/contracts/interfaces/IIndexedUniswapV2Oracle.sol";
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
-/* --- External Libraries --- */
+/* ========== External Libraries ========== */
 import "@openzeppelin/contracts/math/SafeMath.sol";
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
 
-/* --- Internal Interfaces --- */
+/* ========== Internal Interfaces ========== */
 import { IPool } from "./balancer/IPool.sol";
 
 
@@ -32,12 +32,12 @@ contract PoolInitializer {
   using SafeMath for uint256;
   using SafeERC20 for IERC20;
 
-/* ---  Constants  --- */
+/* ==========  Constants  ========== */
 
   address internal immutable _controller;
   IIndexedUniswapV2Oracle internal immutable _oracle;
 
-/* ---  Events  --- */
+/* ==========  Events  ========== */
 
   event TokensContributed(
     address from,
@@ -46,7 +46,7 @@ contract PoolInitializer {
     uint256 credit
   );
 
-/* ---  Storage  --- */
+/* ==========  Storage  ========== */
   // Token amounts to purchase
   mapping(address => uint256) internal _remainingDesiredAmounts;
   // Value contributed in ether
@@ -61,7 +61,7 @@ contract PoolInitializer {
   bool internal _mutex;
   uint256 internal constant TOKENS_MINTED = 1e20;
 
-/* ---  Modifiers  --- */
+/* ==========  Modifiers  ========== */
 
   modifier _lock_ {
     require(!_mutex, "ERR_REENTRY");
@@ -85,7 +85,7 @@ contract PoolInitializer {
     _;
   }
 
-/* ---  Constructor  --- */
+/* ==========  Constructor  ========== */
 
   constructor(
     IIndexedUniswapV2Oracle oracle,
@@ -95,7 +95,7 @@ contract PoolInitializer {
     _controller = controller;
   }
 
-/* ---  Start & Finish Functions  --- */
+/* ==========  Start & Finish Functions  ========== */
 
   /**
    * @dev Sets up the pre-deployment pool.
@@ -155,7 +155,7 @@ contract PoolInitializer {
     _finished = true;
   }
 
-/* ---  Pool Token Claims  --- */
+/* ==========  Pool Token Claims  ========== */
 
   /**
    * @dev Claims the tokens owed to `msg.sender` based on their proportion
@@ -183,7 +183,7 @@ contract PoolInitializer {
     }
   }
 
-/* ---  Contribution  --- */
+/* ==========  Contribution  ========== */
 
   /**
    * @dev Contribute up to `amountIn` of `token` to the pool for credit.
@@ -275,7 +275,7 @@ contract PoolInitializer {
     _totalCredit = _totalCredit.add(credit);
   }
 
-/* ---  Price Actions  --- */
+/* ==========  Price Actions  ========== */
 
   /**
    * @dev Updates the prices of all tokens.
@@ -284,7 +284,7 @@ contract PoolInitializer {
     _oracle.updatePrices(_tokens);
   }
 
-/* ---  Status Queries  --- */
+/* ==========  Status Queries  ========== */
 
   /**
    * @dev Returns whether the pool has been initialized.
@@ -293,7 +293,7 @@ contract PoolInitializer {
     return _finished;
   }
 
-/* ---  Status Queries  --- */
+/* ==========  Status Queries  ========== */
 
   /**
    * @dev Returns the total value credited for token contributions.
@@ -313,7 +313,7 @@ contract PoolInitializer {
     return _credits[account];
   }
 
-/* ---  Token Queries  --- */
+/* ==========  Token Queries  ========== */
 
   function getDesiredTokens()
     external
@@ -342,7 +342,7 @@ contract PoolInitializer {
     }
   }
 
-/* ---  External Price Queries --- */
+/* ==========  External Price Queries ========== */
   /**
    * @dev Get the amount of WETH the contract will credit a user
    * for providing `amountIn` of `token`.
@@ -370,7 +370,7 @@ contract PoolInitializer {
     amountOut = averageWethValue;
   }
 
-/* ---  Internal Claims Functions  --- */
+/* ==========  Internal Claims Functions  ========== */
 
   /**
    * @dev Claims pool tokens owed to `account` based on their
