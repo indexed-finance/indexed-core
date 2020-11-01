@@ -1,5 +1,6 @@
 const bre = require("@nomiclabs/buidler");
 const { fastForward } = require("./utils");
+const { uniswapFixture } = require('./fixtures/uniswap.fixture');
 
 const { deployments, ethers } = bre;
 
@@ -7,13 +8,18 @@ describe('UnboundTokenSeller.sol', () => {
   let testContract;
 
   before(async () => {
-    await deployments.fixture('Core');
     const SellerTest = await ethers.getContractFactory('SellerTest');
+    const {
+      weth,
+      uniswapFactory,
+      uniswapRouter,
+      uniswapOracle
+    } = await deployments.createFixture(uniswapFixture)();
     testContract = await SellerTest.deploy(
-      (await ethers.getContract("weth")).address,
-      (await ethers.getContract('uniswapFactory')).address,
-      (await ethers.getContract('uniswapRouter')).address,
-      (await ethers.getContract('uniswapOracle')).address
+      weth.address,
+      uniswapFactory.address,
+      uniswapRouter.address,
+      uniswapOracle.address
     );
   });
 
