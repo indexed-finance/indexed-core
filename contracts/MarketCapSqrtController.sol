@@ -2,28 +2,28 @@
 pragma solidity ^0.6.0;
 pragma experimental ABIEncoderV2;
 
-/* --- External Interfaces --- */
-import { IIndexedUniswapV2Oracle } from "@indexed-finance/uniswap-v2-oracle/contracts/interfaces/IIndexedUniswapV2Oracle.sol";
-import { IDelegateCallProxyManager } from "@indexed-finance/proxies/contracts/interfaces/IDelegateCallProxyManager.sol";
-import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+/* ========== External Interfaces ========== */
+import "@indexed-finance/uniswap-v2-oracle/contracts/interfaces/IIndexedUniswapV2Oracle.sol";
+import "@indexed-finance/proxies/contracts/interfaces/IDelegateCallProxyManager.sol";
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
-/* --- External Libraries --- */
-import { PriceLibrary as Prices } from "@indexed-finance/uniswap-v2-oracle/contracts/lib/PriceLibrary.sol";
-import { FixedPoint } from "@indexed-finance/uniswap-v2-oracle/contracts/lib/FixedPoint.sol";
-import { SaltyLib as Salty } from "@indexed-finance/proxies/contracts/SaltyLib.sol";
-import { SafeMath } from "@openzeppelin/contracts/math/SafeMath.sol";
+/* ========== External Libraries ========== */
+import "@indexed-finance/uniswap-v2-oracle/contracts/lib/PriceLibrary.sol";
+import "@indexed-finance/uniswap-v2-oracle/contracts/lib/FixedPoint.sol";
+import "@indexed-finance/proxies/contracts/SaltyLib.sol";
+import "@openzeppelin/contracts/math/SafeMath.sol";
 
-/* --- Internal Interfaces --- */
+/* ========== Internal Interfaces ========== */
 import { IPool } from "./balancer/IPool.sol";
-import { PoolFactory } from "./PoolFactory.sol";
-import { PoolInitializer } from "./PoolInitializer.sol";
+import "./interfaces/IPoolFactory.sol";
+import "./interfaces/IPoolInitializer.sol";
 
-/* --- Internal Libraries --- */
-import { MCapSqrtLibrary as MCapSqrt } from "./lib/MCapSqrtLibrary.sol";
-import { UnboundTokenSeller } from "./UnboundTokenSeller.sol";
+/* ========== Internal Libraries ========== */
+import "./lib/MCapSqrtLibrary.sol";
+import "./UnboundTokenSeller.sol";
 
-/* --- Internal Inheritance --- */
-import { MarketCapSortedTokenCategories } from "./MarketCapSortedTokenCategories.sol";
+/* ========== Internal Inheritance ========== */
+import "./MarketCapSortedTokenCategories.sol";
 
 
 /**
@@ -50,9 +50,9 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
   using FixedPoint for FixedPoint.uq112x112;
   using FixedPoint for FixedPoint.uq144x112;
   using SafeMath for uint256;
-  using Prices for Prices.TwoWayAveragePrice;
+  using PriceLibrary for PriceLibrary.TwoWayAveragePrice;
 
-/* ---  Constants  --- */
+/* ==========  Constants  ========== */
   // Minimum number of tokens in an index.
   uint256 internal constant MIN_INDEX_SIZE = 2;
 
@@ -60,7 +60,7 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
   uint256 internal constant MAX_INDEX_SIZE = 8;
 
   // Identifier for the pool initializer implementation on the proxy manager.
-  bytes32 internal constant INITIALIZER_IMPLEMENTATION_ID = keccak256("PoolInitializer.sol");
+  bytes32 internal constant INITIALIZER_IMPLEMENTATION_ID = keccak256("IPoolInitializer.sol");
 
   // Identifier for the unbound token seller implementation on the proxy manager.
   bytes32 internal constant SELLER_IMPLEMENTATION_ID = keccak256("UnboundTokenSeller.sol");
@@ -78,12 +78,12 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
   uint256 internal constant REWEIGHS_BEFORE_REINDEX = 3;
 
   // Pool factory contract
-  PoolFactory internal immutable _factory;
+  IPoolFactory internal immutable _factory;
 
   // Proxy manager & factory
   IDelegateCallProxyManager internal immutable _proxyManager;
 
-/* ---  Events  --- */
+/* ==========  Events  ========== */
 
   /** @dev Emitted when a pool is initialized and made public. */
   event PoolInitialized(
@@ -101,7 +101,7 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
     uint256 indexSize
   );
 
-/* ---  Structs  --- */
+/* ==========  Structs  ========== */
 
   /**
    * @dev Data structure with metadata about an index pool.
@@ -138,7 +138,7 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
     uint64 lastReweigh;
   }
 
-/* ---  Storage  --- */
+/* ==========  Storage  ========== */
 
   // Default slippage rate for token seller contracts.
   uint8 public defaultSellerPremium = 2;
@@ -146,14 +146,14 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
   // Metadata about index pools
   mapping(address => IndexPoolMeta) internal _poolMeta;
 
-/* --- Modifiers --- */
+/* ========== Modifiers ========== */
 
   modifier _havePool(address pool) {
     require(_poolMeta[pool].initialized, "ERR_POOL_NOT_FOUND");
     _;
   }
 
-/* ---  Constructor  --- */
+/* ==========  Constructor  ========== */
 
   /**
    * @dev Deploy the controller and configure the addresses
@@ -161,7 +161,7 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
    */
   constructor(
     IIndexedUniswapV2Oracle oracle,
-    PoolFactory factory,
+    IPoolFactory factory,
     IDelegateCallProxyManager proxyManager
   )
     public
@@ -171,7 +171,7 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
     _proxyManager = proxyManager;
   }
 
-/* ---  Pool Deployment  --- */
+/* ==========  Pool Deployment  ========== */
 
   /**
    * @dev Deploys an index pool and a pool initializer.
@@ -214,7 +214,7 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
       keccak256(abi.encodePacked(poolAddress))
     );
 
-    PoolInitializer initializer = PoolInitializer(initializerAddress);
+    IPoolInitializer initializer = IPoolInitializer(initializerAddress);
 
     // Get the initial tokens and balances for the pool.
     (
@@ -298,7 +298,7 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
     );
   }
 
-/* ---  Pool Management  --- */
+/* ==========  Pool Management  ========== */
 
   /**
    * @dev Sets the default premium rate for token seller contracts.
@@ -354,7 +354,7 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
     IPool.Record memory record = pool.getTokenRecord(tokenAddress);
     require(!record.ready, "ERR_TOKEN_READY");
     uint256 poolValue = _estimatePoolValue(pool);
-    Prices.TwoWayAveragePrice memory price = oracle.computeTwoWayAveragePrice(
+    PriceLibrary.TwoWayAveragePrice memory price = oracle.computeTwoWayAveragePrice(
       tokenAddress,
       1.75 days,
       1 weeks
@@ -363,7 +363,7 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
     pool.setMinimumBalance(tokenAddress, minimumBalance);
   }
 
-/* ---  Pool Rebalance Actions  --- */
+/* ==========  Pool Rebalance Actions  ========== */
 
   /**
    * @dev Re-indexes a pool by setting the underlying assets to the top
@@ -383,12 +383,12 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
     uint256 size = meta.indexSize;
     address[] memory tokens = getTopCategoryTokens(meta.categoryID, size);
   
-    Prices.TwoWayAveragePrice[] memory prices = oracle.computeTwoWayAveragePrices(
+    PriceLibrary.TwoWayAveragePrice[] memory prices = oracle.computeTwoWayAveragePrices(
       tokens,
       1.75 days,
       1 weeks
     );
-    FixedPoint.uq112x112[] memory weights = MCapSqrt.computeTokenWeights(tokens, prices);
+    FixedPoint.uq112x112[] memory weights = MCapSqrtLibrary.computeTokenWeights(tokens, prices);
 
     uint256[] memory minimumBalances = new uint256[](size);
     uint96[] memory denormalizedWeights = new uint96[](size);
@@ -432,12 +432,12 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
     );
 
     address[] memory tokens = IPool(poolAddress).getCurrentDesiredTokens();
-    Prices.TwoWayAveragePrice[] memory prices = oracle.computeTwoWayAveragePrices(
+    PriceLibrary.TwoWayAveragePrice[] memory prices = oracle.computeTwoWayAveragePrices(
       tokens,
       1.75 days,
       1 weeks
     );
-    FixedPoint.uq112x112[] memory weights = MCapSqrt.computeTokenWeights(tokens, prices);
+    FixedPoint.uq112x112[] memory weights = MCapSqrtLibrary.computeTokenWeights(tokens, prices);
     uint96[] memory denormalizedWeights = new uint96[](tokens.length);
 
     for (uint256 i = 0; i < tokens.length; i++) {
@@ -449,7 +449,7 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
     IPool(poolAddress).reweighTokens(tokens, denormalizedWeights);
   }
 
-/* ---  Pool Queries  --- */
+/* ==========  Pool Queries  ========== */
 
   /**
    * @dev Compute the create2 address for a pool initializer.
@@ -459,7 +459,7 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
     view
     returns (address initializerAddress)
   {
-    initializerAddress = Salty.computeProxyAddressManyToOne(
+    initializerAddress = SaltyLib.computeProxyAddressManyToOne(
       address(_proxyManager),
       address(this),
       INITIALIZER_IMPLEMENTATION_ID,
@@ -475,7 +475,7 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
     view
     returns (address sellerAddress)
   {
-    sellerAddress = Salty.computeProxyAddressManyToOne(
+    sellerAddress = SaltyLib.computeProxyAddressManyToOne(
       address(_proxyManager),
       address(this),
       SELLER_IMPLEMENTATION_ID,
@@ -491,7 +491,7 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
     view
     returns (address poolAddress)
   {
-    poolAddress = Salty.computeProxyAddressManyToOne(
+    poolAddress = SaltyLib.computeProxyAddressManyToOne(
       address(_proxyManager),
       address(_factory),
       POOL_IMPLEMENTATION_ID,
@@ -520,19 +520,19 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
     )
   {
     tokens = getTopCategoryTokens(categoryID, indexSize);
-    Prices.TwoWayAveragePrice[] memory prices = oracle.computeTwoWayAveragePrices(
+    PriceLibrary.TwoWayAveragePrice[] memory prices = oracle.computeTwoWayAveragePrices(
       tokens,
       1.75 days,
       1 weeks
     );
-    FixedPoint.uq112x112[] memory weights = MCapSqrt.computeTokenWeights(tokens, prices);
+    FixedPoint.uq112x112[] memory weights = MCapSqrtLibrary.computeTokenWeights(tokens, prices);
     balances = new uint256[](indexSize);
     for (uint256 i = 0; i < indexSize; i++) {
-      balances[i] = MCapSqrt.computeWeightedBalance(wethValue, weights[i], prices[i]);
+      balances[i] = MCapSqrtLibrary.computeWeightedBalance(wethValue, weights[i], prices[i]);
     }
   }
 
-/* ---  Internal Pool Utility Functions  --- */
+/* ==========  Internal Pool Utility Functions  ========== */
 
   /**
    * @dev Estimate the total value of a pool by taking its first token's
@@ -549,7 +549,7 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
     );
   }
 
-/* ---  General Utility Functions  --- */
+/* ==========  General Utility Functions  ========== */
 
   /**
    * @dev Converts a fixed point fraction to a denormalized weight.

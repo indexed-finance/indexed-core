@@ -2,14 +2,14 @@
 pragma solidity ^0.6.0;
 pragma experimental ABIEncoderV2;
 
-/* --- External Interfaces --- */
-import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+/* ========== External Interfaces ========== */
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
-/* --- External Libraries --- */
-import { PriceLibrary as Prices } from "@indexed-finance/uniswap-v2-oracle/contracts/lib/PriceLibrary.sol";
+/* ========== External Libraries ========== */
+import "@indexed-finance/uniswap-v2-oracle/contracts/lib/PriceLibrary.sol";
 import "@indexed-finance/uniswap-v2-oracle/contracts/lib/FixedPoint.sol";
 
-/* --- Internal Libraries --- */
+/* ========== Internal Libraries ========== */
 import "./Babylonian.sol";
 
 
@@ -17,7 +17,7 @@ library MCapSqrtLibrary {
   using Babylonian for uint256;
   using FixedPoint for FixedPoint.uq112x112;
   using FixedPoint for FixedPoint.uq144x112;
-  using Prices for Prices.TwoWayAveragePrice;
+  using PriceLibrary for PriceLibrary.TwoWayAveragePrice;
 
   /**
    * @dev Compute the average market cap of a token by extrapolating the
@@ -28,7 +28,7 @@ library MCapSqrtLibrary {
    */
   function computeAverageMarketCap(
     address token,
-    Prices.TwoWayAveragePrice memory averagePrice
+    PriceLibrary.TwoWayAveragePrice memory averagePrice
   ) internal view returns (uint144) {
     uint256 totalSupply = IERC20(token).totalSupply();
     return averagePrice.computeAverageEthForTokens(totalSupply);
@@ -43,7 +43,7 @@ library MCapSqrtLibrary {
    */
   function computeMarketCapSqrts(
     address[] memory tokens,
-    Prices.TwoWayAveragePrice[] memory averagePrices
+    PriceLibrary.TwoWayAveragePrice[] memory averagePrices
   ) internal view returns (uint112[] memory sqrts) {
     uint256 len = tokens.length;
     sqrts = new uint112[](len);
@@ -63,7 +63,7 @@ library MCapSqrtLibrary {
    */
   function computeTokenWeights(
     address[] memory tokens,
-    Prices.TwoWayAveragePrice[] memory averagePrices
+    PriceLibrary.TwoWayAveragePrice[] memory averagePrices
   ) internal view returns (FixedPoint.uq112x112[] memory weights) {
     // Get the square roots of token market caps
     uint112[] memory sqrts = computeMarketCapSqrts(tokens, averagePrices);
@@ -94,7 +94,7 @@ library MCapSqrtLibrary {
   function computeWeightedBalance(
     uint144 totalValue,
     FixedPoint.uq112x112 memory weight,
-    Prices.TwoWayAveragePrice memory averagePrice
+    PriceLibrary.TwoWayAveragePrice memory averagePrice
   ) internal pure returns (uint144 weightedBalance) {
     uint144 desiredWethValue = weight.mul(totalValue).decode144();
     // Multiply by reciprocal to avoid rounding in intermediary steps.
