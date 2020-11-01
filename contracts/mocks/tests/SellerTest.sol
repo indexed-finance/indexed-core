@@ -23,6 +23,9 @@ contract SellerTest is TestTokenMarkets, Diff, TestOrder {
   UnboundTokenSeller public seller;
   IIndexedUniswapV2Oracle public oracle;
   MockUnbindSourcePool public pool;
+  address undesiredToken;
+
+  /* abi.encodeWithSelector(token.transfer.selector, to, value) */
 
   constructor(
     MockERC20 _weth,
@@ -36,7 +39,42 @@ contract SellerTest is TestTokenMarkets, Diff, TestOrder {
     oracle = _oracle;
     seller = new UnboundTokenSeller(_router, _oracle, address(this));
     pool = new MockUnbindSourcePool(address(seller));
+  }
+
+  function test_initialize() external {
+    try seller.initialize(IPool(address(0)), 2) {
+      revert("Error: Expected revert");
+    } catch Error(string memory errorMsg) {
+      require(
+        keccak256(abi.encodePacked(errorMsg)) == keccak256("ERR_NULL_ADDRESS"),
+        "Error: Expected ERR_NULL_ADDRESS error message."
+      );
+    }
+    try seller.initialize(IPool(address(pool)), 0) {
+      revert("Error: Expected revert");
+    } catch Error(string memory errorMsg) {
+      require(
+        keccak256(abi.encodePacked(errorMsg)) == keccak256("ERR_PREMIUM"),
+        "Error: Expected ERR_PREMIUM error message."
+      );
+    }
+    try seller.initialize(IPool(address(pool)), 21) {
+      revert("Error: Expected revert");
+    } catch Error(string memory errorMsg) {
+      require(
+        keccak256(abi.encodePacked(errorMsg)) == keccak256("ERR_PREMIUM"),
+        "Error: Expected ERR_PREMIUM error message."
+      );
+    }
     seller.initialize(IPool(address(pool)), 2);
+    try seller.initialize(IPool(address(pool)), 2) {
+      revert("Error: Expected revert");
+    } catch Error(string memory errorMsg) {
+      require(
+        keccak256(abi.encodePacked(errorMsg)) == keccak256("ERR_INITIALIZED"),
+        "Error: Expected ERR_INITIALIZED error message."
+      );
+    }
   }
 
   function init() public {
@@ -54,6 +92,8 @@ contract SellerTest is TestTokenMarkets, Diff, TestOrder {
     pool.addToken(address(token3), 1.5e18, 5e21 / price3);
     pool.addToken(address(token4), 1.5e18, 5e21 / price4);
     pool.addToken(address(token5), 1.5e18, 5e21 / price5);
+    undesiredToken = address(new MockERC20("Test Token", "TTU"));
+    pool.addToken(undesiredToken, 0, 100);
   }
 
   function test_setPremiumPercent() external {
@@ -107,6 +147,24 @@ contract SellerTest is TestTokenMarkets, Diff, TestOrder {
       actualTokenOutput,
       "Error: Seller gave unexpected output value."
     );
+
+    try seller.calcOutGivenIn(undesiredToken, address(token1), 0) returns (uint256) {
+      revert("Error: Expected revert");
+    } catch Error(string memory errorMsg) {
+      require(
+        keccak256(abi.encodePacked(errorMsg)) == keccak256("ERR_UNDESIRED_TOKEN"),
+        "Error: Expected ERR_UNDESIRED_TOKEN error message."
+      );
+    }
+
+    try seller.calcOutGivenIn(address(token2), address(token1), 1e40) returns (uint256) {
+      revert("Error: Expected revert");
+    } catch Error(string memory errorMsg) {
+      require(
+        keccak256(abi.encodePacked(errorMsg)) == keccak256("ERR_INSUFFICIENT_BALANCE"),
+        "Error: Expected ERR_INSUFFICIENT_BALANCE error message."
+      );
+    }
   }
 
   function test_calcInGivenOut() external view {
@@ -118,11 +176,26 @@ contract SellerTest is TestTokenMarkets, Diff, TestOrder {
       address(token1),
       amountOut
     );
-    testDiff(
-      expectedTokenInput,
-      actualTokenInput,
-      "Error: Seller gave unexpected input value."
-    );
+
+    testDiff(expectedTokenInput, actualTokenInput, "Error: Seller gave unexpected input value.");
+
+    try seller.calcInGivenOut(undesiredToken, address(token1), 0) returns (uint256) {
+      revert("Error: Expected revert");
+    } catch Error(string memory errorMsg) {
+      require(
+        keccak256(abi.encodePacked(errorMsg)) == keccak256("ERR_UNDESIRED_TOKEN"),
+        "Error: Expected ERR_UNDESIRED_TOKEN error message."
+      );
+    }
+
+    try seller.calcInGivenOut(address(token2), address(token1), 1e40) returns (uint256) {
+      revert("Error: Expected revert");
+    } catch Error(string memory errorMsg) {
+      require(
+        keccak256(abi.encodePacked(errorMsg)) == keccak256("ERR_INSUFFICIENT_BALANCE"),
+        "Error: Expected ERR_INSUFFICIENT_BALANCE error message."
+      );
+    }
   }
 
   function test_swapExactTokensForTokens() external {
@@ -221,11 +294,30 @@ contract SellerTest is TestTokenMarkets, Diff, TestOrder {
       path
     );
     uint256 poolBalance2 = pool.getBalance(address(token2));
-    require(
-      poolBalance1 + amountOut == poolBalance2,
-      "Error: Pool did not gulp tokens."
-    );
+    require(poolBalance1 + amountOut == poolBalance2, "Error: Pool did not gulp tokens.");
     require(expectedPremium == premium, "Error: Unexpected premium.");
+
+    address[] memory path2 = new address[](2);
+    path2[0] = address(0);
+    path2[1] = address(token2);
+    try seller.executeSwapTokensForExactTokens(address(token1), address(token2), 1e5, path2) returns (uint256) {
+      revert("Error: Expected revert");
+    } catch Error(string memory errorMsg) {
+      require(
+        keccak256(abi.encodePacked(errorMsg)) == keccak256("ERR_PATH_TOKENS"),
+        "Error: Expected ERR_PATH_TOKENS error message."
+      );
+    }
+    path2[0] = address(token1);
+    path2[1] = address(0);
+    try seller.executeSwapTokensForExactTokens(address(token1), address(token2), 1e5, path2) returns (uint256) {
+      revert("Error: Expected revert");
+    } catch Error(string memory errorMsg) {
+      require(
+        keccak256(abi.encodePacked(errorMsg)) == keccak256("ERR_PATH_TOKENS"),
+        "Error: Expected ERR_PATH_TOKENS error message."
+      );
+    }
   }
 
   function test_executeSwapExactTokensForTokens() external {
@@ -250,10 +342,29 @@ contract SellerTest is TestTokenMarkets, Diff, TestOrder {
       path
     );
     uint256 poolBalance2 = pool.getBalance(address(token2));
-    require(
-      poolBalance1 + minAmountOut == poolBalance2,
-      "Error: Pool did not gulp tokens."
-    );
+    require(poolBalance1 + minAmountOut == poolBalance2, "Error: Pool did not gulp tokens.");
     require(expectedPremium == premium, "Error: Unexpected premium.");
+
+    address[] memory path2 = new address[](2);
+    path2[0] = address(0);
+    path2[1] = address(token2);
+    try seller.executeSwapExactTokensForTokens(address(token1), address(token2), 1e5, path2) returns (uint256) {
+      revert("Error: Expected revert");
+    } catch Error(string memory errorMsg) {
+      require(
+        keccak256(abi.encodePacked(errorMsg)) == keccak256("ERR_PATH_TOKENS"),
+        "Error: Expected ERR_PATH_TOKENS error message."
+      );
+    }
+    path2[0] = address(token1);
+    path2[1] = address(0);
+    try seller.executeSwapExactTokensForTokens(address(token1), address(token2), 1e5, path2) returns (uint256) {
+      revert("Error: Expected revert");
+    } catch Error(string memory errorMsg) {
+      require(
+        keccak256(abi.encodePacked(errorMsg)) == keccak256("ERR_PATH_TOKENS"),
+        "Error: Expected ERR_PATH_TOKENS error message."
+      );
+    }
   }
 }

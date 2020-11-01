@@ -76,12 +76,56 @@ function calcInGivenPrice(
   return tokenAmountIn;
 }
 
+function calcSingleOutGivenPoolIn(
+  tokenBalanceOut,
+  tokenWeightOut,
+  poolSupply,
+  totalWeight,
+  poolAmountIn,
+  swapFee
+) {
+  const normalizedWeight = Decimal(tokenWeightOut).div(Decimal(totalWeight));
+  const newPoolSupply = Decimal(poolSupply).minus(Decimal(poolAmountIn));
+  const poolRatio = newPoolSupply.div(Decimal(poolSupply));
+  const boo = Decimal(1).div(normalizedWeight);
+  const tokenOutRatio = poolRatio.pow(boo);
+  const newTokenBalanceOut = tokenOutRatio.mul(Decimal(tokenBalanceOut));
+  const tokenAmountOutBeforeSwapFee = Decimal(tokenBalanceOut).sub(Decimal(newTokenBalanceOut));
+  const zaz = (Decimal(1).sub(normalizedWeight)).mul(Decimal(swapFee));
+  const tokenAmountOut = tokenAmountOutBeforeSwapFee.mul(Decimal(1).sub(zaz));
+  return tokenAmountOut;
+}
+
+function calcPoolInGivenSingleOut(
+  tokenBalanceOut,
+  tokenWeightOut,
+  poolSupply,
+  totalWeight,
+  tokenAmountOut,
+  swapFee
+) {
+  const normalizedWeight = Decimal(tokenWeightOut).div(Decimal(totalWeight));
+  const zoo = Decimal(1).minus(normalizedWeight);
+  const zar = zoo.mul(swapFee);
+  const tokenAmountOutBeforeSwapFee = Decimal(tokenAmountOut).div(Decimal(1).minus(zar));
+  const newTokenBalanceOut = Decimal(tokenBalanceOut).minus(tokenAmountOutBeforeSwapFee);
+  const tokenOutRatio = newTokenBalanceOut.div(Decimal(tokenBalanceOut));
+  const poolRatio = tokenOutRatio.pow(normalizedWeight);
+  const newPoolSupply = poolRatio.mul(Decimal(poolSupply));
+  const poolAmountInAfterExitFee = Decimal(poolSupply).minus(newPoolSupply);
+  const poolAmountIn = poolAmountInAfterExitFee.div(Decimal(1));
+  return poolAmountIn;
+
+}
+
 module.exports = {
   calcSpotPrice,
   calcOutGivenIn,
   calcInGivenOut,
   calcPoolOutGivenSingleIn,
   calcSingleInGivenPoolOut,
+  calcPoolInGivenSingleOut,
+  calcSingleOutGivenPoolIn,
   calcRelativeDiff,
   calcInGivenPrice
 };

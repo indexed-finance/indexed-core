@@ -9,10 +9,8 @@ const { randomBytes } = require('crypto');
 
 const { types, internalTask } = require("@nomiclabs/buidler/config")
 
-usePlugin("@nomiclabs/buidler-web3");
 usePlugin("buidler-ethers-v5");
 usePlugin("buidler-deploy");
-usePlugin('buidler-abi-exporter');
 usePlugin("solidity-coverage");
 
 const keys = {
@@ -22,35 +20,7 @@ const keys = {
       : randomBytes(32)).getPrivateKeyString()
 };
 
-internalTask('getTimestamp', () => {
-  return web3.eth.getBlock('latest').then(b => b.timestamp);
-});
-
-internalTask('increaseTime', 'Increases the node timestamp')
-  .setAction(async ({ days, hours, seconds }) => {
-    const amount = days ? days * 86400 : hours ? hours * 3600 : seconds;
-    await web3.currentProvider._sendJsonRpcRequest({
-      method: "evm_increaseTime",
-      params: [amount],
-      jsonrpc: "2.0",
-      id: new Date().getTime()
-    });
-  });
-
 module.exports = {
-  abiExporter: {
-    path: './abi',
-    only: [
-      'MarketCapSqrtController',
-      'PoolFactory',
-      'PoolInitializer',
-      'UnboundTokenSeller',
-      'UniSwapV2PriceOracle',
-      'DelegateCallProxyManager',
-      'IPool'
-    ],
-    clear: true,
-  },
   etherscan: {
     url: "https://api.etherscan.io/api",
     apiKey: process.env.ETHERSCAN_API_KEY,
@@ -65,7 +35,8 @@ module.exports = {
     deployments: {
       rinkeby: [
         "node_modules/@indexed-finance/proxies/deployments/rinkeby",
-        "node_modules/@indexed-finance/uniswap-v2-oracle/deployments/rinkeby"
+        "node_modules/@indexed-finance/uniswap-v2-oracle/deployments/rinkeby",
+        "node_modules/@indexed-finance/uniswap-deployments/rinkeby"
       ]
     }
   },

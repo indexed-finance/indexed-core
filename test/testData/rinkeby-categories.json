@@ -1,0 +1,28 @@
+[
+  {
+    "name": "Governance",
+    "symbol": "GOV",
+    "description": "Governance tokens.",
+    "tokens": [
+      "BAL",
+      "UNI",
+      "COMP",
+      "YFI",
+      "CRV",
+      "KNC"
+    ]
+  },
+  {
+    "name": "Decentralized Finance",
+    "symbol": "DFI",
+    "description": "DEFI protocol tokens.",
+    "tokens": [
+      "WBTC",
+      "BAT",
+      "UNI",
+      "COMP",
+      "MKR",
+      "LINK"
+    ]
+  }
+]
