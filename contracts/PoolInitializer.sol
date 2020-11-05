@@ -34,8 +34,12 @@ contract PoolInitializer {
 
 /* ==========  Constants  ========== */
 
-  address internal immutable _controller;
-  IIndexedUniswapV2Oracle internal immutable _oracle;
+  uint32 internal constant SHORT_TWAP_MIN_TIME_ELAPSED = 20 minutes;
+  uint32 internal constant SHORT_TWAP_MAX_TIME_ELAPSED = 2 days;
+  uint256 internal constant TOKENS_MINTED = 1e20;
+
+  address public immutable controller;
+  IIndexedUniswapV2Oracle public immutable oracle;
 
 /* ==========  Events  ========== */
 
@@ -59,7 +63,6 @@ contract PoolInitializer {
   bool internal _finished;
   address internal _poolAddress;
   bool internal _mutex;
-  uint256 internal constant TOKENS_MINTED = 1e20;
 
 /* ==========  Modifiers  ========== */
 
@@ -71,7 +74,7 @@ contract PoolInitializer {
   }
 
   modifier _control_ {
-    require(msg.sender == _controller, "ERR_NOT_CONTROLLER");
+    require(msg.sender == controller, "ERR_NOT_CONTROLLER");
     _;
   }
 
@@ -88,11 +91,11 @@ contract PoolInitializer {
 /* ==========  Constructor  ========== */
 
   constructor(
-    IIndexedUniswapV2Oracle oracle,
-    address controller
+    IIndexedUniswapV2Oracle oracle_,
+    address controller_
   ) public {
-    _oracle = oracle;
-    _controller = controller;
+    oracle = oracle_;
+    controller = controller_;
   }
 
 /* ==========  Start & Finish Functions  ========== */
@@ -133,7 +136,7 @@ contract PoolInitializer {
     _not_finished_
   {
     uint256 len = _tokens.length;
-    address controller = _controller;
+    address controller_ = controller;
     address[] memory tokens = new address[](len);
     uint256[] memory balances = new uint256[](len);
     for (uint256 i = 0; i < len; i++) {
@@ -147,7 +150,7 @@ contract PoolInitializer {
         "ERR_PENDING_TOKENS"
       );
     }
-    PoolController(controller).finishPreparedIndexPool(
+    PoolController(controller_).finishPreparedIndexPool(
       _poolAddress,
       tokens,
       balances
@@ -210,11 +213,11 @@ contract PoolInitializer {
     if (amountIn > desiredAmount) {
       amountIn = desiredAmount;
     }
-    credit = _oracle.computeAverageEthForTokens(
+    credit = oracle.computeAverageEthForTokens(
       token,
       amountIn,
-      30 minutes,
-      12 hours
+      SHORT_TWAP_MIN_TIME_ELAPSED,
+      SHORT_TWAP_MAX_TIME_ELAPSED
     );
     require(credit > 0 && amountIn > 0, "ERR_ZERO_AMOUNT");
     require(credit >= minimumCredit, "ERR_MIN_CREDIT");
@@ -258,11 +261,11 @@ contract PoolInitializer {
       if (amountIn > desiredAmount) {
         amountIn = desiredAmount;
       }
-      uint256 creditOut = _oracle.computeAverageEthForTokens(
+      uint256 creditOut = oracle.computeAverageEthForTokens(
         token,
         amountIn,
-        30 minutes,
-        12 hours
+        SHORT_TWAP_MIN_TIME_ELAPSED,
+        SHORT_TWAP_MAX_TIME_ELAPSED
       );
       require(creditOut > 0 && amountIn > 0, "ERR_ZERO_AMOUNT");
       IERC20(token).safeTransferFrom(msg.sender, address(this), amountIn);
@@ -281,7 +284,7 @@ contract PoolInitializer {
    * @dev Updates the prices of all tokens.
    */
   function updatePrices() external {
-    _oracle.updatePrices(_tokens);
+    oracle.updatePrices(_tokens);
   }
 
 /* ==========  Status Queries  ========== */
@@ -361,11 +364,11 @@ contract PoolInitializer {
     if (amountIn > desiredAmount) {
       amountIn = desiredAmount;
     }
-    uint144 averageWethValue = _oracle.computeAverageEthForTokens(
+    uint144 averageWethValue = oracle.computeAverageEthForTokens(
       token,
       amountIn,
-      30 minutes,
-      12 hours
+      SHORT_TWAP_MIN_TIME_ELAPSED,
+      SHORT_TWAP_MAX_TIME_ELAPSED
     );
     amountOut = averageWethValue;
   }

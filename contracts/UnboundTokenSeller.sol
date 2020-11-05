@@ -43,9 +43,12 @@ contract UnboundTokenSeller {
 
 /* ==========  Constants  ========== */
 
+  uint32 internal constant SHORT_TWAP_MIN_TIME_ELAPSED = 20 minutes;
+  uint32 internal constant SHORT_TWAP_MAX_TIME_ELAPSED = 2 days;
+
   IUniswapV2Router02 internal immutable _uniswapRouter;
-  address internal immutable _controller;
-  IIndexedUniswapV2Oracle internal immutable _oracle;
+  address public immutable controller;
+  IIndexedUniswapV2Oracle public immutable oracle;
 
 /* ==========  Events  ========== */
 
@@ -81,7 +84,7 @@ contract UnboundTokenSeller {
 /* ==========  Modifiers  ========== */
 
   modifier _control_ {
-    require(msg.sender == _controller, "ERR_NOT_CONTROLLER");
+    require(msg.sender == controller, "ERR_NOT_CONTROLLER");
     _;
   }
 
@@ -102,12 +105,12 @@ contract UnboundTokenSeller {
 
   constructor(
     IUniswapV2Router02 uniswapRouter,
-    IIndexedUniswapV2Oracle oracle,
-    address controller
+    IIndexedUniswapV2Oracle oracle_,
+    address controller_
   ) public {
     _uniswapRouter = uniswapRouter;
-    _oracle = oracle;
-    _controller = controller;
+    oracle = oracle_;
+    controller = controller_;
   }
 
   /**
@@ -424,10 +427,10 @@ contract UnboundTokenSeller {
     address[] memory tokens = new address[](2);
     tokens[0] = token1;
     tokens[1] = token2;
-    PriceLibrary.TwoWayAveragePrice[] memory prices = _oracle.computeTwoWayAveragePrices(
+    PriceLibrary.TwoWayAveragePrice[] memory prices = oracle.computeTwoWayAveragePrices(
       tokens,
-      10 minutes,
-      12 hours
+      SHORT_TWAP_MIN_TIME_ELAPSED,
+      SHORT_TWAP_MAX_TIME_ELAPSED
     );
     avgPrice1 = prices[0];
     avgPrice2 = prices[1];

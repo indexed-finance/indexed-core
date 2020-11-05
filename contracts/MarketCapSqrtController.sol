@@ -256,8 +256,8 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
     uint144[] memory ethValues = oracle.computeAverageEthForTokens(
       tokens,
       balances,
-      30 minutes,
-      12 hours
+      SHORT_TWAP_MIN_TIME_ELAPSED,
+      SHORT_TWAP_MAX_TIME_ELAPSED
     );
     for (uint256 i = 0; i < len; i++) {
       valueSum = valueSum.add(ethValues[i]);
@@ -356,8 +356,8 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
     uint256 poolValue = _estimatePoolValue(pool);
     PriceLibrary.TwoWayAveragePrice memory price = oracle.computeTwoWayAveragePrice(
       tokenAddress,
-      1.75 days,
-      1 weeks
+      SHORT_TWAP_MIN_TIME_ELAPSED,
+      SHORT_TWAP_MAX_TIME_ELAPSED
     );
     uint256 minimumBalance = price.computeAverageTokensForEth(poolValue) / 100;
     pool.setMinimumBalance(tokenAddress, minimumBalance);
@@ -385,8 +385,8 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
   
     PriceLibrary.TwoWayAveragePrice[] memory prices = oracle.computeTwoWayAveragePrices(
       tokens,
-      1.75 days,
-      1 weeks
+      LONG_TWAP_MIN_TIME_ELAPSED,
+      LONG_TWAP_MAX_TIME_ELAPSED
     );
     FixedPoint.uq112x112[] memory weights = MCapSqrtLibrary.computeTokenWeights(tokens, prices);
 
@@ -434,8 +434,8 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
     address[] memory tokens = IPool(poolAddress).getCurrentDesiredTokens();
     PriceLibrary.TwoWayAveragePrice[] memory prices = oracle.computeTwoWayAveragePrices(
       tokens,
-      1.75 days,
-      1 weeks
+      LONG_TWAP_MIN_TIME_ELAPSED,
+      LONG_TWAP_MAX_TIME_ELAPSED
     );
     FixedPoint.uq112x112[] memory weights = MCapSqrtLibrary.computeTokenWeights(tokens, prices);
     uint96[] memory denormalizedWeights = new uint96[](tokens.length);
@@ -522,8 +522,8 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
     tokens = getTopCategoryTokens(categoryID, indexSize);
     PriceLibrary.TwoWayAveragePrice[] memory prices = oracle.computeTwoWayAveragePrices(
       tokens,
-      1.75 days,
-      1 weeks
+      LONG_TWAP_MIN_TIME_ELAPSED,
+      LONG_TWAP_MAX_TIME_ELAPSED
     );
     FixedPoint.uq112x112[] memory weights = MCapSqrtLibrary.computeTokenWeights(tokens, prices);
     balances = new uint256[](indexSize);
@@ -544,8 +544,8 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
     return oracle.computeAverageEthForTokens(
       token,
       value,
-      1.75 days,
-      1 weeks
+      SHORT_TWAP_MIN_TIME_ELAPSED,
+      SHORT_TWAP_MAX_TIME_ELAPSED
     );
   }
 
