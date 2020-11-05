@@ -10,7 +10,6 @@ module.exports = async (bre) => {
   const deploy = await Deployer(bre, logger);
 
   if (chainID == 1 && bre.network.name != 'coverage') return;
-
   const weth = await deploy('MockERC20', 'weth', {
     from: deployer,
     gas: 4000000,
