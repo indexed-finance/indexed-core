@@ -60,7 +60,7 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
   uint256 internal constant MAX_INDEX_SIZE = 8;
 
   // Identifier for the pool initializer implementation on the proxy manager.
-  bytes32 internal constant INITIALIZER_IMPLEMENTATION_ID = keccak256("IPoolInitializer.sol");
+  bytes32 internal constant INITIALIZER_IMPLEMENTATION_ID = keccak256("PoolInitializer.sol");
 
   // Identifier for the unbound token seller implementation on the proxy manager.
   bytes32 internal constant SELLER_IMPLEMENTATION_ID = keccak256("UnboundTokenSeller.sol");
