@@ -29,9 +29,8 @@ module.exports = async (bre) => {
   const controller = await ethers.getContract('controller', signer);
 
   const weth = await ethers.getContractAt('MockERC20', '0x72710B0b93c8F86aEf4ec8bd832868A15df50375');
-  const uniswapFactory = await ethers.getContract('UniswapV2Factory');
-  const uniswapRouter = await ethers.getContract('UniswapV2Router02');
-  const uniswapOracle = await ethers.getContract('IndexedUniswapV2Oracle');
+  const uniswapFactory = await ethers.getContract('uniswapFactory');
+  const uniswapRouter = await ethers.getContract('uniswapRouter');
 
   const liquidityAdder = await deploy('LiquidityAdder', 'liquidityAdder', {
     from: deployer,
@@ -44,20 +43,27 @@ module.exports = async (bre) => {
     logger.success(`Category index not zero, skipping category setup.`);
     return;
   }
-
   const tokenAddresses = {};
 
   for (let token of testTokens) {
     const { amountToken, amountWeth } = toLiquidityAmounts(token);
     const { name, symbol } = token;
-    const erc20 = await deploy('MockERC20', symbol.toLowerCase(), {
-      from: deployer,
-      gas: 4000000,
-      args: [name, symbol]
-    });
+    const deployment = await deployments.getOrNull(symbol.toLowerCase());
+    let erc20;
+    if (deployment) {
+      erc20 = await ethers.getContractAt('MockERC20', deployment.address);
+    } else {
+      erc20 = await deploy('MockERC20', symbol.toLowerCase(), {
+        from: deployer,
+        gas: 4000000,
+        args: [name, symbol]
+      }, true);
+      await uniswapFactory.createPair(weth.address, erc20.address, { gasLimit: 5500000 }).then(tx => tx.wait());
+    }
     tokenAddresses[symbol.toLowerCase()] = erc20.address;
-    await uniswapFactory.createPair(erc20.address, weth.address, { gasLimit: 250000 });
-    await liquidityAdder.addLiquiditySingle(erc20.address, amountToken, amountWeth, { gasLimit: 250000 });
+    logger.info(`Adding liquidity to Uniswap market between WETH and ${symbol}`);
+    await liquidityAdder.addLiquiditySingle(erc20.address, amountToken, amountWeth, { gasLimit: 2500000 }).then(tx => tx.wait());
+    logger.success(`Added liquidity to Uniswap market between WETH and ${symbol}`);
   }
 
   for (let category of categories) {
@@ -67,16 +73,48 @@ module.exports = async (bre) => {
     const { events } = await controller.createCategory(sha3Hash, { gasLimit: 250000 }).then(tx => tx.wait());
     const { args: { categoryID } } = events.filter(e => e.event == 'CategoryAdded')[0];
     logger.success(`Created category ${name} with ID ${categoryID}`);
-    category.categoryID = categoryID;
     const addresses = tokens.map(symbol => tokenAddresses[symbol.toLowerCase()]);
-    await controller.addTokens(categoryID, addresses, { gasLimit: 250000 });
+    await controller.addTokens(categoryID, addresses, { gasLimit: 1500000 }).then(tx => tx.wait());
+    logger.success(`Added ${addresses.length} tokens to category ${name}`);
   }
 
   for (let token of testTokens) {
     const { amountToken, amountWeth } = toLiquidityAmounts(token);
     const { symbol } = token;
     const address = tokenAddresses[symbol.toLowerCase()];
-    await liquidityAdder.addLiquiditySingle(address, amountToken, amountWeth, { gasLimit: 250000 });
+    await liquidityAdder.addLiquiditySingle(address, amountToken, amountWeth, { gasLimit: 1250000 }).then(tx => tx.wait());;
+  }
+
+  const initialWethValue = toWei(5);
+
+  for (let i = 0; i < categories.length; i++) {
+    const category = categories[i];
+    const categoryID = i + 1;
+    logger.info(`Sorting category ${categoryID}...`);
+    await controller.orderCategoryTokensByMarketCap(categoryID, { gasLimit: 1000000 }).then(tx => tx.wait());
+    logger.success(`Sorted category ${categoryID}!`);
+    const name = `${category.name} Top 5 Index`;
+    const symbol = `${category.symbol}5r`;
+    logger.info(`Creating index pool for category ${categoryID}...`);
+    const { events } = await controller.prepareIndexPool(categoryID, 5, initialWethValue, name, symbol, { gasLimit: 2250000 }).then(tx => tx.wait());
+    const event = events.filter(e => e.event == 'NewPoolInitializer')[0];
+    const { pool, initializer } = event.args;
+    logger.success(`Deployed index pool and initializer: Pool ${pool} | Initializer ${initializer}`);
+    if (i == 0) {
+      const poolInitializer = await ethers.getContractAt('PoolInitializer', initializer);
+      const iTokens = await poolInitializer.getDesiredTokens();
+      const amounts = await poolInitializer.getDesiredAmounts(iTokens);
+      for (let t = 0; t < 5; t++) {
+        const tokenAddress = iTokens[t];
+        const amountIn = amounts[t];
+        const iToken = await ethers.getContractAt('MockERC20', tokenAddress);
+        await iToken.getFreeTokens(deployer, amountIn, { gasLimit: 60000 }).then(tx => tx.wait());
+        await iToken.approve(initializer, amountIn, { gasLimit: 60000 }).then(tx => tx.wait());
+      }
+      await poolInitializer['contributeTokens(address[],uint256[],uint256)'](iTokens, amounts, 0, { gasLimit: 1500000 }).then(tx => tx.wait());
+      await poolInitializer.finish({ gasLimit: 1500000 });
+      await poolInitializer['claimTokens()']({ gasLimit: 150000 });
+    }
   }
 };
 

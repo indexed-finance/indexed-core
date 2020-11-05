@@ -38,6 +38,14 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 contract MarketCapSortedTokenCategories is Ownable {
 /* ==========  Constants  ========== */
 
+  // TWAP parameters for capturing long-term price trends
+  uint32 internal constant LONG_TWAP_MIN_TIME_ELAPSED = 1 days;
+  uint32 internal constant LONG_TWAP_MAX_TIME_ELAPSED = 1.5 weeks;
+
+  // TWAP parameters for assessing current price
+  uint32 internal constant SHORT_TWAP_MIN_TIME_ELAPSED = 20 minutes;
+  uint32 internal constant SHORT_TWAP_MAX_TIME_ELAPSED = 2 days;
+
   // Maximum time between a category being sorted and a query for the top n tokens
   uint256 internal constant MAX_SORT_DELAY = 1 days;
 
@@ -190,8 +198,8 @@ contract MarketCapSortedTokenCategories is Ownable {
     return oracle.computeAverageEthForTokens(
       token,
       totalSupply,
-      1.75 days,
-      1 weeks
+      LONG_TWAP_MIN_TIME_ELAPSED,
+      LONG_TWAP_MAX_TIME_ELAPSED
     );
   }
 
@@ -211,8 +219,8 @@ contract MarketCapSortedTokenCategories is Ownable {
     marketCaps = oracle.computeAverageEthForTokens(
       tokens,
       totalSupplies,
-      1.75 days,
-      1 weeks
+      LONG_TWAP_MIN_TIME_ELAPSED,
+      LONG_TWAP_MAX_TIME_ELAPSED
     );
   }
 

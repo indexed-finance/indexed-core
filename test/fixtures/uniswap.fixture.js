@@ -5,7 +5,7 @@ let _i = 1;
 const toAddress = (token) => typeof token == 'string' ? token : token.address;
 
 const uniswapFixture = async ({ deployments, ethers }) => {
-  await deployments.fixture();
+  await deployments.fixture('None');
   const [ signer ] = await ethers.getSigners();
 
   const deploy = async (name, ...args) => {

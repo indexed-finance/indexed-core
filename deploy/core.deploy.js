@@ -34,7 +34,7 @@ module.exports = async (bre) => {
   const deploy = await Deployer(bre, logger);
 
   // ------- External Contracts -------
-  const weth = '0x72710B0b93c8F86aEf4ec8bd832868A15df50375';//(await deployments.get('weth')).address;
+  const weth = /* (await deployments.get('weth')).address; //  */'0x72710B0b93c8F86aEf4ec8bd832868A15df50375';
   const uniswapRouter = (await deployments.get('uniswapRouter')).address;
   const uniswapFactory = (await deployments.get('uniswapFactory')).address;
 
