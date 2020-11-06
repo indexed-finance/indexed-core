@@ -50,6 +50,8 @@ contract PoolInitializer {
     uint256 credit
   );
 
+  event TokensClaimed(address account, uint256 tokens);
+
 /* ==========  Storage  ========== */
   // Token amounts to purchase
   mapping(address => uint256) internal _remainingDesiredAmounts;
@@ -387,6 +389,7 @@ contract PoolInitializer {
     uint256 amountOut = (TOKENS_MINTED.mul(credit)).div(_totalCredit);
     _credits[account] = 0;
     IERC20(_poolAddress).safeTransfer(account, amountOut);
+    emit TokensClaimed(account, amountOut);
   }
 }
 
