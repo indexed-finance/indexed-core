@@ -1,6 +1,6 @@
 const { expect } = require("chai");
 const { categoriesFixture } = require("./fixtures/categories.fixture");
-const { verifyRejection, zero, toWei, zeroAddress, fastForward, fromWei, oneE18, getTransactionTimestamp } = require("./utils");
+const { verifyRejection, zero, toWei, zeroAddress, fastForward, fromWei, oneE18, getTransactionTimestamp, DAY } = require("./utils");
 const { calcRelativeDiff } = require('./lib/calc_comparisons');
 
 const errorDelta = 10 ** -8;
@@ -174,6 +174,14 @@ describe('MarketCapSortedTokenCategories.sol', () => {
       await categories.addToken(token.address, 2);
       await verifyRevert('addToken', /ERR_TOKEN_BOUND/g, token.address, 2);
     });
+
+    it('Resets the lastCategoryUpdate time', async () => {
+      const lastUpdate1 = await categories.getLastCategoryUpdate(2);
+      const token = await deployTestToken();
+      await categories.addToken(token.address, 2);
+      const lastUpdate2 = await categories.getLastCategoryUpdate(2);
+      expect(lastUpdate2.eq(lastUpdate1.sub(DAY))).to.be.true
+    })
   });
 
   describe('addTokens()', async () => {
