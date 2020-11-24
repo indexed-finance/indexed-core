@@ -98,9 +98,9 @@ contract MarketCapSortedTokenCategories is Ownable {
   /**
    * @dev Updates the prices on the oracle for all the tokens in a category.
    */
-  function updateCategoryPrices(uint256 categoryID) external validCategory(categoryID) {
+  function updateCategoryPrices(uint256 categoryID) external validCategory(categoryID) returns (bool[] memory pricesUpdated) {
     address[] memory tokens = _categoryTokens[categoryID];
-    oracle.updatePrices(tokens);
+    pricesUpdated = oracle.updatePrices(tokens);
   }
 
   /**
