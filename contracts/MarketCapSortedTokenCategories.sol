@@ -98,9 +98,9 @@ contract MarketCapSortedTokenCategories is Ownable {
   /**
    * @dev Updates the prices on the oracle for all the tokens in a category.
    */
-  function updateCategoryPrices(uint256 categoryID) external validCategory(categoryID) {
+  function updateCategoryPrices(uint256 categoryID) external validCategory(categoryID) returns (bool[] memory pricesUpdated) {
     address[] memory tokens = _categoryTokens[categoryID];
-    oracle.updatePrices(tokens);
+    pricesUpdated = oracle.updatePrices(tokens);
   }
 
   /**
@@ -154,6 +154,25 @@ contract MarketCapSortedTokenCategories is Ownable {
     _lastCategoryUpdate[categoryID] -= MAX_SORT_DELAY;
   }
 
+  function removeToken(uint256 categoryID, address token) external onlyOwner validCategory(categoryID) {
+    uint256 i = 0;
+    uint256 len = _categoryTokens[categoryID].length;
+    require(len > 0, "ERR_EMPTY_CATEGORY");
+    for (; i < len; i++) {
+      if (_categoryTokens[categoryID][i] == token) {
+        uint256 last = len - 1;
+        if (i != last) {
+          address lastToken = _categoryTokens[categoryID][last];
+          _categoryTokens[categoryID][i] = lastToken;
+        }
+        _lastCategoryUpdate[categoryID] -= MAX_SORT_DELAY;
+        _categoryTokens[categoryID].pop();
+        return;
+      }
+    }
+    revert("ERR_TOKEN_NOT_FOUND");
+  }
+
   /**
    * @dev Sorts a category's tokens in descending order by market cap.
    * Note: Uses in-memory insertion sort.
@@ -200,7 +219,7 @@ contract MarketCapSortedTokenCategories is Ownable {
       totalSupply,
       LONG_TWAP_MIN_TIME_ELAPSED,
       LONG_TWAP_MAX_TIME_ELAPSED
-    );
+    ); 
   }
 
   /**

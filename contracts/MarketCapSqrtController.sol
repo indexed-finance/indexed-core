@@ -17,10 +17,10 @@ import "@openzeppelin/contracts/math/SafeMath.sol";
 import { IPool } from "./balancer/IPool.sol";
 import "./interfaces/IPoolFactory.sol";
 import "./interfaces/IPoolInitializer.sol";
+import "./interfaces/IUnboundTokenSeller.sol";
 
 /* ========== Internal Libraries ========== */
 import "./lib/MCapSqrtLibrary.sol";
-import "./UnboundTokenSeller.sol";
 
 /* ========== Internal Inheritance ========== */
 import "./MarketCapSortedTokenCategories.sol";
@@ -281,8 +281,8 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
       sellerAddress
     );
 
-    UnboundTokenSeller(sellerAddress).initialize(
-      IPool(poolAddress),
+    IUnboundTokenSeller(sellerAddress).initialize(
+      poolAddress,
       defaultSellerPremium
     );
 
@@ -315,7 +315,7 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
    */
   function updateSellerPremium(address tokenSeller, uint8 premiumPercent) external onlyOwner {
     require(premiumPercent > 0 && premiumPercent < 20, "ERR_PREMIUM");
-    UnboundTokenSeller(tokenSeller).setPremiumPercent(premiumPercent);
+    IUnboundTokenSeller(tokenSeller).setPremiumPercent(premiumPercent);
   }
 
   /**

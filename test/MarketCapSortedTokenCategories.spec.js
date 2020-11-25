@@ -1,7 +1,8 @@
 const { expect } = require("chai");
 const { categoriesFixture } = require("./fixtures/categories.fixture");
-const { verifyRejection, zero, toWei, zeroAddress, fastForward, fromWei, oneE18, getTransactionTimestamp } = require("./utils");
+const { verifyRejection, zero, toWei, zeroAddress, fastForward, fromWei, oneE18, getTransactionTimestamp, DAY, HOUR } = require("./utils");
 const { calcRelativeDiff } = require('./lib/calc_comparisons');
+const { BigNumber } = require("ethers");
 
 const errorDelta = 10 ** -8;
 
@@ -174,7 +175,74 @@ describe('MarketCapSortedTokenCategories.sol', () => {
       await categories.addToken(token.address, 2);
       await verifyRevert('addToken', /ERR_TOKEN_BOUND/g, token.address, 2);
     });
+
+    it('Resets the lastCategoryUpdate time', async () => {
+      const token = await deployTestToken();
+      expect((await categories.getCategoryTokens(2)).length).to.eq(1);
+      await categories.addToken(token.address, 2);
+      expect((await categories.getCategoryTokens(2)).length).to.eq(2);
+      await categories.updateCategoryPrices(2)
+      await fastForward(DAY * 2)
+      await categories.orderCategoryTokensByMarketCap(2);
+      const lastUpdate1 = await categories.getLastCategoryUpdate(2);
+      expect(lastUpdate1.gt(0)).to.be.true;
+      const token1 = await deployTestToken();
+      await categories.addToken(token1.address, 2);
+      expect((await categories.getCategoryTokens(2)).length).to.eq(3);
+      const lastUpdate2 = await categories.getLastCategoryUpdate(2);
+      expect(lastUpdate2.eq(lastUpdate1.sub(DAY))).to.be.true;
+    })
   });
+
+  describe('removeToken()', async () => {
+    setupTests();
+
+    it('Reverts if caller is not owner', async () => {
+      await verifyRejection(
+        categories.connect(notOwner),
+        'removeToken',
+        /Ownable: caller is not the owner/g,
+        0,
+        zeroAddress
+      );
+    });
+
+    it('Reverts if categoryIndex is 0', async () => {
+      await verifyRevert('removeToken', /ERR_CATEGORY_ID/g, zero, zeroAddress);
+    });
+
+    it('Reverts if categoryID > categoryIndex', async () => {
+      await makeCategory();
+      await verifyRevert('removeToken', /ERR_CATEGORY_ID/g, 2, zeroAddress);
+    });
+
+    it('Reverts if category is empty', async () => {
+      await categories.createCategory(`0x${'00'.repeat(32)}`);
+      await verifyRevert('removeToken', /ERR_EMPTY_CATEGORY/g, 2, zeroAddress);
+    });
+
+    it('Reverts if token not found', async () => {
+      const token = await deployTestToken();
+      await categories.addToken(token.address, 2);
+      await verifyRevert('removeToken', /ERR_TOKEN_NOT_FOUND/g, 2, zeroAddress);
+    });
+
+    it('Resets the lastCategoryUpdate time', async () => {
+      const token = await deployTestToken();
+      expect((await categories.getCategoryTokens(2)).length).to.eq(1);
+      await categories.addToken(token.address, 2);
+      expect((await categories.getCategoryTokens(2)).length).to.eq(2);
+      await categories.updateCategoryPrices(2)
+      await fastForward(DAY * 2)
+      await categories.orderCategoryTokensByMarketCap(2);
+      const lastUpdate1 = await categories.getLastCategoryUpdate(2);
+      expect(lastUpdate1.gt(0)).to.be.true;
+      await categories.removeToken(2, token.address)
+      expect((await categories.getCategoryTokens(2)).length).to.eq(1);
+      const lastUpdate2 = await categories.getLastCategoryUpdate(2);
+      expect(lastUpdate2.eq(lastUpdate1.sub(DAY))).to.be.true;
+    })
+  })
 
   describe('addTokens()', async () => {
     setupTests();
