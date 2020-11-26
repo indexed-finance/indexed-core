@@ -697,6 +697,7 @@ contract IndexPool is BToken, BMath, IIndexPool {
           record.denorm = newDenorm;
           record.lastDenormUpdate = uint40(now);
           _totalWeight = badd(_totalWeight, newDenorm);
+          emit LOG_DENORM_UPDATED(token, record.denorm);
         }
       }
       _records[token].balance = balance;
@@ -755,6 +756,7 @@ contract IndexPool is BToken, BMath, IIndexPool {
         record.denorm = newDenorm;
         record.lastDenormUpdate = uint40(now);
         _totalWeight = badd(_totalWeight, newDenorm);
+        emit LOG_DENORM_UPDATED(token, record.denorm);
       }
     }
   }
@@ -1401,6 +1403,7 @@ contract IndexPool is BToken, BMath, IIndexPool {
         _records[token].denorm = record.denorm;
         _records[token].lastDenormUpdate = uint40(now);
         _totalWeight = badd(_totalWeight, record.denorm);
+        emit LOG_DENORM_UPDATED(token, record.denorm);
       } else {
         uint256 realToMinRatio = bdiv(
           bsub(record.balance, realBalance),
