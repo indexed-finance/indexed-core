@@ -3,7 +3,7 @@ const Deployer = require('../lib/deployer');
 const { sha3 } = require('../test/utils');
 
 const poolInitializerID = sha3('PoolInitializer.sol')
-const poolImplementationID = sha3('IPool.sol');
+const poolImplementationID = sha3('IndexPool.sol');
 const sellerImplementationID = sha3('UnboundTokenSeller.sol');
 
 
@@ -136,8 +136,8 @@ module.exports = async (bre) => {
   });
   await addImplementation(sellerImplementationID, tokenSellerImplementation);
 
-  // Add IPool implementation
-  const poolImplementation = await deploy('IPool', 'poolImplementation', {
+  // Add IndexPool implementation
+  const poolImplementation = await deploy('IndexPool', 'poolImplementation', {
     from: deployer,
     gas: 4000000,
     args: []
