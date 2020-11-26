@@ -334,7 +334,7 @@ describe('reweighTokens()', async () => {
   describe('reindexTokens(): success', async () => {
     before(async () => {
       newToken = await erc20Factory.deploy('New Token', 'NTT');
-      const IPool = await ethers.getContractFactory('IPool');
+      const IPool = await ethers.getContractFactory('IndexPool');
       indexPool = await IPool.deploy();
       await indexPool.configure(from, 'pool', 'pool symbol');
       for (let i = 0; i < tokens.length; i++) {

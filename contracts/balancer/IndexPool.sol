@@ -8,6 +8,7 @@ import "./BMath.sol";
 
 /* ========== Internal Interfaces ========== */
 import "../interfaces/IFlashLoanRecipient.sol";
+import "../interfaces/IIndexPool.sol";
 
 /************************************************************************************************
 Originally from https://github.com/balancer-labs/balancer-core/blob/master/contracts/BPool.sol
@@ -19,26 +20,7 @@ Subject to the GPL-3.0 license
 *************************************************************************************************/
 
 
-contract IPool is BToken, BMath {
-  /**
-   * @dev Token record data structure
-   * @param bound is token bound to pool
-   * @param ready has token been initialized
-   * @param lastDenormUpdate timestamp of last denorm change
-   * @param denorm denormalized weight
-   * @param desiredDenorm desired denormalized weight (used for incremental changes)
-   * @param index index of address in tokens array
-   * @param balance token balance
-   */
-  struct Record {
-    bool bound;
-    bool ready;
-    uint40 lastDenormUpdate;
-    uint96 denorm;
-    uint96 desiredDenorm;
-    uint8 index;
-    uint256 balance;
-  }
+contract IndexPool is BToken, BMath, IIndexPool {
 
 /* ==========  EVENTS  ========== */
 
@@ -172,7 +154,7 @@ contract IPool is BToken, BMath {
     address controller,
     string calldata name,
     string calldata symbol
-  ) external {
+  ) external override {
     require(_controller == address(0), "ERR_CONFIGURED");
     require(controller != address(0), "ERR_NULL_ADDRESS");
     _controller = controller;
@@ -200,6 +182,7 @@ contract IPool is BToken, BMath {
     address unbindHandler
   )
     external
+    override
     _control_
   {
     require(_tokens.length == 0, "ERR_INITIALIZED");
@@ -246,7 +229,7 @@ contract IPool is BToken, BMath {
    *
    * If it is set to 0, the limit will be removed.
    */
-  function setMaxPoolTokens(uint256 maxPoolTokens) external _control_ {
+  function setMaxPoolTokens(uint256 maxPoolTokens) external override _control_ {
     _maxPoolTokens = maxPoolTokens;
     emit LOG_MAX_TOKENS_UPDATED(maxPoolTokens);
   }
@@ -257,7 +240,7 @@ contract IPool is BToken, BMath {
    * @dev Set the swap fee.
    * Note: Swap fee must be between 0.0001% and 10%
    */
-  function setSwapFee(uint256 swapFee) external _control_ {
+  function setSwapFee(uint256 swapFee) external override _control_ {
     require(swapFee >= MIN_FEE, "ERR_MIN_FEE");
     require(swapFee <= MAX_FEE, "ERR_MAX_FEE");
     _swapFee = swapFee;
@@ -281,6 +264,7 @@ contract IPool is BToken, BMath {
     uint96[] calldata desiredDenorms
   )
     external
+    override
     _lock_
     _control_
   {
@@ -304,6 +288,7 @@ contract IPool is BToken, BMath {
     uint256[] calldata minimumBalances
   )
     external
+    override
     _lock_
     _control_
   {
@@ -357,6 +342,7 @@ contract IPool is BToken, BMath {
     uint256 minimumBalance
   )
     external
+    override
     _control_
   {
     Record storage record = _records[token];
@@ -382,6 +368,7 @@ contract IPool is BToken, BMath {
    */
   function joinPool(uint256 poolAmountOut, uint256[] calldata maxAmountsIn)
     external
+    override
     _lock_
     _public_
   {
@@ -430,6 +417,7 @@ contract IPool is BToken, BMath {
     uint256 minPoolAmountOut
   )
     external
+    override
     _lock_
     _public_
     returns (uint256/* poolAmountOut */)
@@ -490,6 +478,7 @@ contract IPool is BToken, BMath {
     uint256 maxAmountIn
   )
     external
+    override
     _lock_
     _public_
     returns (uint256/* tokenAmountIn */)
@@ -545,6 +534,7 @@ contract IPool is BToken, BMath {
    */
   function exitPool(uint256 poolAmountIn, uint256[] calldata minAmountsOut)
     external
+    override
     _lock_
   {
     require(minAmountsOut.length == _tokens.length, "ERR_ARR_LEN");
@@ -593,6 +583,7 @@ contract IPool is BToken, BMath {
     uint256 minAmountOut
   )
     external
+    override
     _lock_
     returns (uint256/* tokenAmountOut */)
   {
@@ -646,6 +637,7 @@ contract IPool is BToken, BMath {
     uint256 maxPoolAmountIn
   )
     external
+    override
     _lock_
     returns (uint256/* poolAmountIn */)
   {
@@ -689,7 +681,7 @@ contract IPool is BToken, BMath {
    * If the token is not bound, it will be sent to the unbound
    * token handler.
    */
-  function gulp(address token) external _lock_ {
+  function gulp(address token) external override _lock_ {
     Record storage record = _records[token];
     uint256 balance = IERC20(token).balanceOf(address(this));
     if (record.bound) {
@@ -705,6 +697,7 @@ contract IPool is BToken, BMath {
           record.denorm = newDenorm;
           record.lastDenormUpdate = uint40(now);
           _totalWeight = badd(_totalWeight, newDenorm);
+          emit LOG_DENORM_UPDATED(token, record.denorm);
         }
       }
       _records[token].balance = balance;
@@ -726,12 +719,13 @@ contract IPool is BToken, BMath {
    * @param data Data to send to the recipient in `receiveFlashLoan` call
    */
   function flashBorrow(
-    IFlashLoanRecipient recipient,
+    address recipient,
     address token,
     uint256 amount,
     bytes calldata data
   )
     external
+    override
     _lock_
   {
     Record storage record = _records[token];
@@ -741,7 +735,7 @@ contract IPool is BToken, BMath {
     _pushUnderlying(token, address(recipient), amount);
     uint256 fee = bmul(balStart, _swapFee);
     uint256 amountDue = badd(amount, fee);
-    recipient.receiveFlashLoan(token, amount, amountDue, data);
+    IFlashLoanRecipient(recipient).receiveFlashLoan(token, amount, amountDue, data);
     uint256 balEnd = IERC20(token).balanceOf(address(this));
     require(
       balEnd > balStart && balEnd >= amountDue,
@@ -762,6 +756,7 @@ contract IPool is BToken, BMath {
         record.denorm = newDenorm;
         record.lastDenormUpdate = uint40(now);
         _totalWeight = badd(_totalWeight, newDenorm);
+        emit LOG_DENORM_UPDATED(token, record.denorm);
       }
     }
   }
@@ -789,6 +784,7 @@ contract IPool is BToken, BMath {
     uint256 maxPrice
   )
     external
+    override
     _lock_
     _public_
     returns (uint256/* tokenAmountOut */, uint256/* spotPriceAfter */)
@@ -878,6 +874,7 @@ contract IPool is BToken, BMath {
     uint256 maxPrice
   )
     external
+    override
     _lock_
     _public_
     returns (uint256 /* tokenAmountIn */, uint256 /* spotPriceAfter */)
@@ -950,38 +947,38 @@ contract IPool is BToken, BMath {
   /**
    * @dev Check if swapping tokens and joining the pool is allowed.
    */
-  function isPublicSwap() external view returns (bool) {
+  function isPublicSwap() external view override returns (bool) {
     return _publicSwap;
   }
 
-  function getSwapFee() external view _viewlock_ returns (uint256/* swapFee */) {
+  function getSwapFee() external view override _viewlock_ returns (uint256/* swapFee */) {
     return _swapFee;
   }
 
   /**
    * @dev Returns the controller address.
    */
-  function getController() external view returns (address)
+  function getController() external view override returns (address)
   {
     return _controller;
   }
 
 /* ==========  Token Queries  ========== */
-  function getMaxPoolTokens() external view returns (uint256) {
+  function getMaxPoolTokens() external view override returns (uint256) {
     return _maxPoolTokens;
   }
 
   /**
    * @dev Check if a token is bound to the pool.
    */
-  function isBound(address t) external view returns (bool) {
+  function isBound(address t) external view override returns (bool) {
     return _records[t].bound;
   }
 
   /**
    * @dev Get the number of tokens bound to the pool.
    */
-  function getNumTokens() external view returns (uint256) {
+  function getNumTokens() external view override returns (uint256) {
     return _tokens.length;
   }
 
@@ -991,6 +988,7 @@ contract IPool is BToken, BMath {
   function getCurrentTokens()
     external
     view
+    override
     _viewlock_
     returns (address[] memory tokens)
   {
@@ -1004,6 +1002,7 @@ contract IPool is BToken, BMath {
   function getCurrentDesiredTokens()
     external
     view
+    override
     _viewlock_
     returns (address[] memory tokens)
   {
@@ -1025,6 +1024,7 @@ contract IPool is BToken, BMath {
   function getDenormalizedWeight(address token)
     external
     view
+    override
     _viewlock_
     returns (uint256/* denorm */)
   {
@@ -1038,6 +1038,7 @@ contract IPool is BToken, BMath {
   function getTokenRecord(address token)
     external
     view
+    override
     _viewlock_
     returns (Record memory record)
   {
@@ -1057,6 +1058,7 @@ contract IPool is BToken, BMath {
   function extrapolatePoolValueFromToken()
     external
     view
+    override
     _viewlock_
     returns (address/* token */, uint256/* extrapolatedValue */)
   {
@@ -1084,6 +1086,7 @@ contract IPool is BToken, BMath {
   function getTotalDenormalizedWeight()
     external
     view
+    override
     _viewlock_
     returns (uint256)
   {
@@ -1093,7 +1096,7 @@ contract IPool is BToken, BMath {
   /**
    * @dev Returns the stored balance of a bound token.
    */
-  function getBalance(address token) external view _viewlock_ returns (uint256) {
+  function getBalance(address token) external view override _viewlock_ returns (uint256) {
     Record storage record = _records[token];
     require(record.bound, "ERR_NOT_BOUND");
     return record.balance;
@@ -1103,7 +1106,7 @@ contract IPool is BToken, BMath {
    * @dev Get the minimum balance of an uninitialized token.
    * Note: Throws if the token is initialized.
    */
-  function getMinimumBalance(address token) external view _viewlock_ returns (uint256) {
+  function getMinimumBalance(address token) external view override _viewlock_ returns (uint256) {
     Record memory record = _records[token];
     require(record.bound, "ERR_NOT_BOUND");
     require(!record.ready, "ERR_READY");
@@ -1115,7 +1118,7 @@ contract IPool is BToken, BMath {
    * calculations. If the token is initialized, this is the
    * stored balance; if not, this is the minimum balance.
    */
-  function getUsedBalance(address token) external view _viewlock_ returns (uint256) {
+  function getUsedBalance(address token) external view override _viewlock_ returns (uint256) {
     Record memory record = _records[token];
     require(record.bound, "ERR_NOT_BOUND");
     if (!record.ready) {
@@ -1131,6 +1134,7 @@ contract IPool is BToken, BMath {
   function getSpotPrice(address tokenIn, address tokenOut)
     external
     view
+    override
     _viewlock_
     returns (uint256)
   {
@@ -1399,6 +1403,7 @@ contract IPool is BToken, BMath {
         _records[token].denorm = record.denorm;
         _records[token].lastDenormUpdate = uint40(now);
         _totalWeight = badd(_totalWeight, record.denorm);
+        emit LOG_DENORM_UPDATED(token, record.denorm);
       } else {
         uint256 realToMinRatio = bdiv(
           bsub(record.balance, realBalance),

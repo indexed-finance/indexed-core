@@ -164,7 +164,7 @@ describe('MarketCapSqrtController.sol', async () => {
     if ((await controller.categoryIndex()).eq(0)) await setupCategory();
     const { events } = await controller.prepareIndexPool(1, size, toWei(ethValue), 'Test Index Pool', 'TIP').then(tx => tx.wait());
     const { args: { pool: poolAddress, initializer: initializerAddress } } = events.filter(e => e.event == 'NewPoolInitializer')[0];
-    pool = await ethers.getContractAt('IPool', poolAddress);
+    pool = await ethers.getContractAt('IndexPool', poolAddress);
     initializer = await ethers.getContractAt('PoolInitializer', initializerAddress);
     return { poolAddress, initializerAddress };
   }
@@ -258,7 +258,7 @@ describe('MarketCapSqrtController.sol', async () => {
       poolSize = 4;
       const { events } = await controller.prepareIndexPool(1, 4, toWei(10), 'Test Index Pool', 'TIP').then(tx => tx.wait());
       const { args: { pool: poolAddress, initializer: initializerAddress, categoryID, indexSize } } = events.filter(e => e.event == 'NewPoolInitializer')[0];
-      pool = await ethers.getContractAt('IPool', poolAddress);
+      pool = await ethers.getContractAt('IndexPool', poolAddress);
       initializer = await ethers.getContractAt('PoolInitializer', initializerAddress);
       expect(categoryID.eq(1)).to.be.true;
       expect(indexSize.eq(4)).to.be.true;

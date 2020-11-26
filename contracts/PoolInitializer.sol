@@ -11,7 +11,7 @@ import "@openzeppelin/contracts/math/SafeMath.sol";
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
 
 /* ========== Internal Interfaces ========== */
-import { IPool } from "./balancer/IPool.sol";
+import "./interfaces/IPoolInitializer.sol";
 
 
 /**
@@ -28,7 +28,7 @@ import { IPool } from "./balancer/IPool.sol";
  * Once the contract receives the index pool tokens, users can claim their
  * share of the tokens proportional to their credited contribution value.
  */
-contract PoolInitializer {
+contract PoolInitializer is IPoolInitializer {
   using SafeMath for uint256;
   using SafeERC20 for IERC20;
 
@@ -115,6 +115,7 @@ contract PoolInitializer {
     uint256[] calldata amounts
   )
     external
+    override
     _control_
   {
     require(_poolAddress == address(0), "ERR_INITIALIZED");
@@ -134,6 +135,7 @@ contract PoolInitializer {
   */
   function finish()
     external
+    override
     _lock_
     _not_finished_
   {
@@ -166,7 +168,7 @@ contract PoolInitializer {
    * @dev Claims the tokens owed to `msg.sender` based on their proportion
    * of the total credits.
   */
-  function claimTokens() external _lock_ _finished_ {
+  function claimTokens() external override _lock_ _finished_ {
     _claimTokens(msg.sender);
   }
 
@@ -174,7 +176,7 @@ contract PoolInitializer {
    * @dev Claims the tokens owed to `account` based on their proportion
    * of the total credits.
   */
-  function claimTokens(address account) external _lock_ _finished_ {
+  function claimTokens(address account) external override _lock_ _finished_ {
     _claimTokens(account);
   }
 
@@ -182,7 +184,7 @@ contract PoolInitializer {
    * @dev Claims the tokens owed to `account` based on their proportion
    * of the total credits.
   */
-  function claimTokens(address[] calldata accounts) external _lock_ _finished_ {
+  function claimTokens(address[] calldata accounts) external override _lock_ _finished_ {
     for (uint256 i = 0; i < accounts.length; i++) {
       _claimTokens(accounts[i]);
     }
@@ -206,6 +208,7 @@ contract PoolInitializer {
     uint256 minimumCredit
   )
     external
+    override
     _lock_
     _not_finished_
     returns (uint256 credit)
@@ -248,6 +251,7 @@ contract PoolInitializer {
     uint256 minimumCredit
   )
     external
+    override
     _lock_
     _not_finished_
     returns (uint256 credit)
@@ -285,7 +289,7 @@ contract PoolInitializer {
   /**
    * @dev Updates the prices of all tokens.
    */
-  function updatePrices() external {
+  function updatePrices() external override {
     oracle.updatePrices(_tokens);
   }
 
@@ -294,7 +298,7 @@ contract PoolInitializer {
   /**
    * @dev Returns whether the pool has been initialized.
    */
-  function isFinished() external view returns (bool) {
+  function isFinished() external view override returns (bool) {
     return _finished;
   }
 
@@ -303,7 +307,7 @@ contract PoolInitializer {
   /**
    * @dev Returns the total value credited for token contributions.
    */
-  function getTotalCredit() external view returns (uint256) {
+  function getTotalCredit() external view override returns (uint256) {
     return _totalCredit;
   }
 
@@ -313,6 +317,7 @@ contract PoolInitializer {
   function getCreditOf(address account)
     external
     view
+    override
     returns (uint256)
   {
     return _credits[account];
@@ -323,6 +328,7 @@ contract PoolInitializer {
   function getDesiredTokens()
     external
     view
+    override
     returns (address[] memory tokens)
   {
     tokens = _tokens;
@@ -331,6 +337,7 @@ contract PoolInitializer {
   function getDesiredAmount(address token)
     external
     view
+    override
     returns (uint256)
   {
     return _remainingDesiredAmounts[token];
@@ -339,6 +346,7 @@ contract PoolInitializer {
   function getDesiredAmounts(address[] calldata tokens)
     external
     view
+    override
     returns (uint256[] memory amounts)
   {
     amounts = new uint256[](tokens.length);
@@ -359,6 +367,7 @@ contract PoolInitializer {
   function getCreditForTokens(address token, uint256 amountIn)
     external
     view
+    override
     returns (uint144 amountOut)
   {
     uint256 desiredAmount = _remainingDesiredAmounts[token];

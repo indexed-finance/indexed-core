@@ -14,7 +14,7 @@ import "@indexed-finance/proxies/contracts/SaltyLib.sol";
 import "@openzeppelin/contracts/math/SafeMath.sol";
 
 /* ========== Internal Interfaces ========== */
-import { IPool } from "./balancer/IPool.sol";
+import "./interfaces/IIndexPool.sol";
 import "./interfaces/IPoolFactory.sol";
 import "./interfaces/IPoolInitializer.sol";
 import "./interfaces/IUnboundTokenSeller.sol";
@@ -66,7 +66,7 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
   bytes32 internal constant SELLER_IMPLEMENTATION_ID = keccak256("UnboundTokenSeller.sol");
 
   // Identifier for the index pool implementation on the proxy manager.
-  bytes32 internal constant POOL_IMPLEMENTATION_ID = keccak256("IPool.sol");
+  bytes32 internal constant POOL_IMPLEMENTATION_ID = keccak256("IndexPool.sol");
 
   // Default total weight for a pool.
   uint256 internal constant WEIGHT_MULTIPLIER = 25e18;
@@ -199,7 +199,7 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
       POOL_IMPLEMENTATION_ID,
       keccak256(abi.encodePacked(categoryID, indexSize))
     );
-    IPool(poolAddress).configure(address(this), name, symbol);
+    IIndexPool(poolAddress).configure(address(this), name, symbol);
 
     _poolMeta[poolAddress] = IndexPoolMeta({
       initialized: false,
@@ -273,7 +273,7 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
       keccak256(abi.encodePacked(poolAddress))
     );
 
-    IPool(poolAddress).initialize(
+    IIndexPool(poolAddress).initialize(
       tokens,
       balances,
       denormalizedWeights,
@@ -335,14 +335,14 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
     address poolAddress,
     uint256 maxPoolTokens
   ) external onlyOwner _havePool(poolAddress) {
-    IPool(poolAddress).setMaxPoolTokens(maxPoolTokens);
+    IIndexPool(poolAddress).setMaxPoolTokens(maxPoolTokens);
   }
 
   /**
    * @dev Sets the swap fee on an index pool.
    */
   function setSwapFee(address poolAddress, uint256 swapFee) external onlyOwner _havePool(poolAddress) {
-    IPool(poolAddress).setSwapFee(swapFee);
+    IIndexPool(poolAddress).setSwapFee(swapFee);
   }
 
   /**
@@ -350,8 +350,8 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
    * useful when the token's price on the pool is too low relative to
    * external prices for people to trade it in.
    */
-  function updateMinimumBalance(IPool pool, address tokenAddress) external _havePool(address(pool)) {
-    IPool.Record memory record = pool.getTokenRecord(tokenAddress);
+  function updateMinimumBalance(IIndexPool pool, address tokenAddress) external _havePool(address(pool)) {
+    IIndexPool.Record memory record = pool.getTokenRecord(tokenAddress);
     require(!record.ready, "ERR_TOKEN_READY");
     uint256 poolValue = _estimatePoolValue(pool);
     PriceLibrary.TwoWayAveragePrice memory price = oracle.computeTwoWayAveragePrice(
@@ -392,7 +392,7 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
 
     uint256[] memory minimumBalances = new uint256[](size);
     uint96[] memory denormalizedWeights = new uint96[](size);
-    uint144 totalValue = _estimatePoolValue(IPool(poolAddress));
+    uint144 totalValue = _estimatePoolValue(IIndexPool(poolAddress));
 
     for (uint256 i = 0; i < size; i++) {
       // The minimum balance is the number of tokens worth the minimum weight
@@ -406,7 +406,7 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
     meta.lastReweigh = uint64(now);
     _poolMeta[poolAddress] = meta;
 
-    IPool(poolAddress).reindexTokens(
+    IIndexPool(poolAddress).reindexTokens(
       tokens,
       denormalizedWeights,
       minimumBalances
@@ -431,7 +431,7 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
       "ERR_REWEIGH_INDEX"
     );
 
-    address[] memory tokens = IPool(poolAddress).getCurrentDesiredTokens();
+    address[] memory tokens = IIndexPool(poolAddress).getCurrentDesiredTokens();
     PriceLibrary.TwoWayAveragePrice[] memory prices = oracle.computeTwoWayAveragePrices(
       tokens,
       LONG_TWAP_MIN_TIME_ELAPSED,
@@ -446,7 +446,7 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
 
     meta.lastReweigh = uint64(now);
     _poolMeta[poolAddress] = meta;
-    IPool(poolAddress).reweighTokens(tokens, denormalizedWeights);
+    IIndexPool(poolAddress).reweighTokens(tokens, denormalizedWeights);
   }
 
 /* ==========  Pool Queries  ========== */
@@ -539,7 +539,7 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
    * "virtual balance" (balance * (totalWeight/weight)) and multiplying
    * by that token's average ether price from UniSwap.
    */
-  function _estimatePoolValue(IPool pool) internal view returns (uint144) {
+  function _estimatePoolValue(IIndexPool pool) internal view returns (uint144) {
     (address token, uint256 value) = pool.extrapolatePoolValueFromToken();
     return oracle.computeAverageEthForTokens(
       token,

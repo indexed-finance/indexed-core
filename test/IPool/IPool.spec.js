@@ -7,7 +7,7 @@ const { defaultAbiCoder } = require('ethers/lib/utils');
 
 const errorDelta = 10 ** -8;
 
-describe('IPool.sol', async () => {
+describe('IndexPool.sol', async () => {
   let poolHelper, indexPool, erc20Factory, nonOwnerFaker;
   let getPoolData, verifyRevert, mintAndApprove, wrappedTokens;
   let tokens, balances, denormalizedWeights, normalizedWeights;
@@ -101,7 +101,7 @@ describe('IPool.sol', async () => {
     });
 
     it('Functions with _public_ modifier are only callable after initialization', async () => {
-      const IPool = await ethers.getContractFactory('IPool');
+      const IPool = await ethers.getContractFactory('IndexPool');
       indexPool = await IPool.deploy();
       const faker = getFakerContract(indexPool);
       const controllerOnlyFunctions = [
@@ -123,7 +123,7 @@ describe('IPool.sol', async () => {
     });
 
     it('Reverts if provided controller address is zero', async () => {
-      const IPool = await ethers.getContractFactory("IPool");
+      const IPool = await ethers.getContractFactory("IndexPool");
       const pool = await IPool.deploy();
       await verifyRejection(pool, 'configure', /ERR_NULL_ADDRESS/g, zeroAddress, 'name', 'symbol');
     });
@@ -139,7 +139,7 @@ describe('IPool.sol', async () => {
     });
     
     it('Reverts if array lengths do not match', async () => {
-      const IPool = await ethers.getContractFactory("IPool");
+      const IPool = await ethers.getContractFactory("IndexPool");
       pool = await IPool.deploy();
       await pool.configure(from, 'pool', 'pl');
       for (let i = 0; i < tokens.length; i++) {
@@ -210,7 +210,7 @@ describe('IPool.sol', async () => {
       tokenC = await erc20Factory.deploy('TokenC', 'C');
       await tokenA.getFreeTokens(from, toWei(100));
       await tokenB.getFreeTokens(from, toWei(100));
-      const IPool = await ethers.getContractFactory('IPool');
+      const IPool = await ethers.getContractFactory('IndexPool');
       pool = await IPool.deploy();
       await tokenA.approve(pool.address, toWei(100));
       await tokenB.approve(pool.address, toWei(100));
@@ -286,7 +286,7 @@ describe('IPool.sol', async () => {
       unboundToken = await MockERC20.deploy('Unbound', 'UB');
       tokenA = await MockERC20.deploy('TokenA', 'A');
       tokenB = await MockERC20.deploy('TokenB', 'B');
-      const IPool = await ethers.getContractFactory('IPool');
+      const IPool = await ethers.getContractFactory('IndexPool');
       pool = await IPool.deploy();
       await pool.configure(
         from,
