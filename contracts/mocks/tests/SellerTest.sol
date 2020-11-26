@@ -14,7 +14,7 @@ import { IIndexedUniswapV2Oracle } from "@indexed-finance/uniswap-v2-oracle/cont
 import { MockERC20, TestTokenMarkets } from "./util/TestTokenMarkets.sol";
 import "./util/Diff.sol";
 import "./util/TestOrder.sol";
-import { UnboundTokenSeller, IPool } from "../../UnboundTokenSeller.sol";
+import { UnboundTokenSeller, IIndexPool } from "../../UnboundTokenSeller.sol";
 import { MockUnbindSourcePool } from "../MockUnbindSourcePool.sol";
 import { UniswapV2Library } from "../../lib/UniswapV2Library.sol";
 
@@ -42,7 +42,7 @@ contract SellerTest is TestTokenMarkets, Diff, TestOrder {
   }
 
   function test_initialize() external {
-    try seller.initialize(IPool(address(0)), 2) {
+    try seller.initialize(address(0), 2) {
       revert("Error: Expected revert");
     } catch Error(string memory errorMsg) {
       require(
@@ -50,7 +50,7 @@ contract SellerTest is TestTokenMarkets, Diff, TestOrder {
         "Error: Expected ERR_NULL_ADDRESS error message."
       );
     }
-    try seller.initialize(IPool(address(pool)), 0) {
+    try seller.initialize(address(pool), 0) {
       revert("Error: Expected revert");
     } catch Error(string memory errorMsg) {
       require(
@@ -58,7 +58,7 @@ contract SellerTest is TestTokenMarkets, Diff, TestOrder {
         "Error: Expected ERR_PREMIUM error message."
       );
     }
-    try seller.initialize(IPool(address(pool)), 21) {
+    try seller.initialize(address(pool), 21) {
       revert("Error: Expected revert");
     } catch Error(string memory errorMsg) {
       require(
@@ -66,8 +66,8 @@ contract SellerTest is TestTokenMarkets, Diff, TestOrder {
         "Error: Expected ERR_PREMIUM error message."
       );
     }
-    seller.initialize(IPool(address(pool)), 2);
-    try seller.initialize(IPool(address(pool)), 2) {
+    seller.initialize(address(pool), 2);
+    try seller.initialize(address(pool), 2) {
       revert("Error: Expected revert");
     } catch Error(string memory errorMsg) {
       require(

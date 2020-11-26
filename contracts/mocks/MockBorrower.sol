@@ -1,7 +1,7 @@
 pragma solidity ^0.6.0;
 
 import {MockERC20} from "./MockERC20.sol";
-import "../balancer/IPool.sol";
+import "../interfaces/IIndexPool.sol";
 
 
 contract MockBorrower {
@@ -22,7 +22,7 @@ contract MockBorrower {
       token.getFreeTokens(msg.sender, amountBorrowed);
     } else if (testScenario == 2) {
       // Attempt reentry
-      IPool(msg.sender).gulp(tokenBorrowed);
+      IIndexPool(msg.sender).gulp(tokenBorrowed);
     }
   }
 }
