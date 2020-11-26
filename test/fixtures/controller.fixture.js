@@ -4,7 +4,7 @@ const { verifyRejection, getFakerContract, toWei, oneE18, sha3 } = require('../u
 const { uniswapFixture } = require('./uniswap.fixture');
 
 const poolInitializerID = sha3('PoolInitializer.sol')
-const poolImplementationID = sha3('IPool.sol');
+const poolImplementationID = sha3('IndexPool.sol');
 const sellerImplementationID = sha3('UnboundTokenSeller.sol');
 
 const toLiquidityAmounts = ({ price, marketcap }, init = false) => {
@@ -42,7 +42,7 @@ const controllerFixture = async ({ deployments, getNamedAccounts, ethers }) => {
     { gasLimit: 400000 }
   ).then(r => r.wait());
 
-  const poolImplementation = await deploy('IPool');
+  const poolImplementation = await deploy('IndexPool');
 
   await proxyManager.createManyToOneProxyRelationship(
     poolImplementationID,

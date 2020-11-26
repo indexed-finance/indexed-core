@@ -1,6 +1,6 @@
 const { sha3, verifyRejection, expect, zeroAddress } = require("./utils");
 
-const poolImplementationID = sha3('IPool.sol');
+const poolImplementationID = sha3('IndexPool.sol');
 
 const salt = '0x'+'ff'.repeat(32);
 
@@ -12,7 +12,7 @@ describe('PoolFactory.sol', async () => {
   before(async () => {
     const deploy = async (name, ...args) => (await ethers.getContractFactory(name)).deploy(...args);
     const proxyManager = await deploy('DelegateCallProxyManager');
-    const poolImplementation = await deploy('IPool');
+    const poolImplementation = await deploy('IndexPool');
     await proxyManager.createManyToOneProxyRelationship(poolImplementationID, poolImplementation.address);
     poolFactory = await deploy('PoolFactory', proxyManager.address);
     await proxyManager.approveDeployer(poolFactory.address).then(r => r.wait());

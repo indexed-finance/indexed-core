@@ -12,7 +12,7 @@ const poolFixture = async ({ deployments, getNamedAccounts, ethers }) => {
   const {tokens: _wrappedTokens} = await deployments.createFixture(wrappedTokensFixture)();
 
   // Deploy contracts
-  const IPoolFactory = await ethers.getContractFactory("IPool");
+  const IPoolFactory = await ethers.getContractFactory("IndexPool");
   const MockUnbindTokenHandler = await ethers.getContractFactory('MockUnbindTokenHandler');
   const unbindTokenHandler = await MockUnbindTokenHandler.deploy();
   const indexPool = await IPoolFactory.deploy();

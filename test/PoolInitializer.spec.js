@@ -88,7 +88,7 @@ describe('PoolInitializer.sol', async () => {
         await addLiquidityAll();
         const { events } = await controller.prepareIndexPool(1, 5, ethValue, 'Test Index Pool', 'TIP').then(tx => tx.wait());
         const { args: { pool: poolAddress, initializer: initializerAddress } } = events.filter(e => e.event == 'NewPoolInitializer')[0];
-        pool = await ethers.getContractAt('IPool', poolAddress);
+        pool = await ethers.getContractAt('IndexPool', poolAddress);
         initializer = await ethers.getContractAt('PoolInitializer', initializerAddress);
         verifyRevert = (...args) => verifyRejection(initializer, ...args);
       })();
