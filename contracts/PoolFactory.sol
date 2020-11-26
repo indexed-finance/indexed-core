@@ -11,16 +11,19 @@ import "@indexed-finance/proxies/contracts/interfaces/IDelegateCallProxyManager.
 /* ========== External Libraries ========== */
 import "@indexed-finance/proxies/contracts/SaltyLib.sol";
 
+/* ========== Internal Interfaces ========== */
+import "./interfaces/IPoolFactory.sol";
+
 
 /**
  * @title PoolFactory
  * @author d1ll0n
  */
-contract PoolFactory is Ownable {
+contract PoolFactory is Ownable, IPoolFactory {
 /* ==========  Constants  ========== */
 
   // Address of the proxy manager contract.
-  IDelegateCallProxyManager public immutable proxyManager;
+  IDelegateCallProxyManager public override immutable proxyManager;
 
 /* ==========  Events  ========== */
 
@@ -29,8 +32,8 @@ contract PoolFactory is Ownable {
 
 /* ==========  Storage  ========== */
 
-  mapping(address => bool) public isApprovedController;
-  mapping(address => bytes32) public getPoolImplementationID;
+  mapping(address => bool) public override isApprovedController;
+  mapping(address => bytes32) public override getPoolImplementationID;
 
 /* ==========  Modifiers  ========== */
 
@@ -48,12 +51,12 @@ contract PoolFactory is Ownable {
 /* ==========  Controller Approval  ========== */
 
   /** @dev Approves `controller` to deploy pools. */
-  function approvePoolController(address controller) external onlyOwner {
+  function approvePoolController(address controller) external override onlyOwner {
     isApprovedController[controller] = true;
   }
 
   /** @dev Removes the ability of `controller` to deploy pools. */
-  function disapprovePoolController(address controller) external onlyOwner {
+  function disapprovePoolController(address controller) external override onlyOwner {
     isApprovedController[controller] = false;
   }
 
@@ -72,6 +75,7 @@ contract PoolFactory is Ownable {
    */
   function deployPool(bytes32 implementationID, bytes32 controllerSalt)
     external
+    override
     onlyApproved
     returns (address poolAddress)
   {
@@ -86,7 +90,7 @@ contract PoolFactory is Ownable {
   /**
    * @dev Checks if an address is a pool that was deployed by the factory.
    */
-  function isRecognizedPool(address pool) external view returns (bool) {
+  function isRecognizedPool(address pool) external view override returns (bool) {
     return getPoolImplementationID[pool] != bytes32(0);
   }
 
@@ -96,6 +100,7 @@ contract PoolFactory is Ownable {
   function computePoolAddress(bytes32 implementationID, address controller, bytes32 controllerSalt)
     public
     view
+    override
     returns (address)
   {
     bytes32 suppliedSalt = keccak256(abi.encodePacked(controller, controllerSalt));
