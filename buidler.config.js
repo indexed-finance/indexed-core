@@ -12,8 +12,14 @@ const { types, internalTask } = require("@nomiclabs/buidler/config")
 usePlugin("buidler-ethers-v5");
 usePlugin("buidler-deploy");
 usePlugin("solidity-coverage");
+usePlugin("@nomiclabs/buidler-etherscan");
 
 const keys = {
+  mainnet: fromPrivateKey(
+    process.env.MAINNET_PVT_KEY
+      ? Buffer.from(process.env.MAINNET_PVT_KEY.slice(2), 'hex')
+      : randomBytes(32)
+  ).getPrivateKeyString(),
   rinkeby: fromPrivateKey(
     process.env.RINKEBY_PVT_KEY
       ? Buffer.from(process.env.RINKEBY_PVT_KEY.slice(2), 'hex')
@@ -33,6 +39,11 @@ module.exports = {
       "node_modules/@indexed-finance/uniswap-v2-oracle/artifacts"
     ],
     deployments: {
+      mainnet: [
+        "node_modules/@indexed-finance/proxies/deployments/mainnet",
+        "node_modules/@indexed-finance/uniswap-v2-oracle/deployments/mainnet",
+        "node_modules/@indexed-finance/uniswap-deployments/mainnet"
+      ],
       rinkeby: [
         "node_modules/@indexed-finance/proxies/deployments/rinkeby",
         "node_modules/@indexed-finance/uniswap-v2-oracle/deployments/rinkeby",
@@ -62,6 +73,11 @@ module.exports = {
         port: 8545,
         hostname: "localhost",
       }),
+    },
+    mainnet: {
+      url: new InfuraProvider("mainnet", process.env.INFURA_PROJECT_ID).connection.url,
+      accounts: [keys.mainnet],
+      chainId: 1
     },
     rinkeby: {
       url: new InfuraProvider("rinkeby", process.env.INFURA_PROJECT_ID).connection.url,
