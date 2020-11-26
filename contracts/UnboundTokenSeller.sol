@@ -12,7 +12,8 @@ import "@indexed-finance/uniswap-v2-oracle/contracts/lib/PriceLibrary.sol";
 import "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
 
 /* ========== Internal Interfaces ========== */
-import { IPool } from "./balancer/IPool.sol";
+import "./interfaces/IIndexPool.sol";
+import "./interfaces/IUnboundTokenSeller.sol";
 
 
 /**
@@ -37,7 +38,7 @@ import { IPool } from "./balancer/IPool.sol";
  * events, meaning this is not well suited for trades with other smart
  * contracts.
  */
-contract UnboundTokenSeller {
+contract UnboundTokenSeller is IUnboundTokenSeller {
   using SafeERC20 for IERC20;
   using PriceLibrary for PriceLibrary.TwoWayAveragePrice;
 
@@ -74,7 +75,7 @@ contract UnboundTokenSeller {
 
 /* ==========  Storage  ========== */
   // Pool the contract is selling tokens for.
-  IPool internal _pool;
+  IIndexPool internal _pool;
   // Premium on the amount paid in swaps.
   // Half goes to the caller, half is used to increase payments.
   uint8 internal _premiumPercent;
@@ -96,7 +97,7 @@ contract UnboundTokenSeller {
   }
 
   modifier _desired_(address token) {
-    IPool.Record memory record = _pool.getTokenRecord(token);
+    IIndexPool.Record memory record = _pool.getTokenRecord(token);
     require(record.desiredDenorm > 0, "ERR_UNDESIRED_TOKEN");
     _;
   }
@@ -117,18 +118,19 @@ contract UnboundTokenSeller {
    * @dev Initialize the proxy contract with the acceptable premium rate
    * and the address of the pool it is for.
    */
-  function initialize(IPool pool, uint8 premiumPercent)
+  function initialize(address pool, uint8 premiumPercent)
     external
+    override
     _control_
   {
     require(address(_pool) == address(0), "ERR_INITIALIZED");
-    require(address(pool) != address(0), "ERR_NULL_ADDRESS");
+    require(pool != address(0), "ERR_NULL_ADDRESS");
     require(
       premiumPercent > 0 && premiumPercent < 20,
       "ERR_PREMIUM"
     );
     _premiumPercent = premiumPercent;
-    _pool = pool;
+    _pool = IIndexPool(pool);
   }
 
 /* ==========  Controls  ========== */
@@ -138,6 +140,7 @@ contract UnboundTokenSeller {
    */
   function handleUnbindToken(address token, uint256 amount)
     external
+    override
   {
     require(msg.sender == address(_pool), "ERR_ONLY_POOL");
     emit NewTokensToSell(token, amount);
@@ -146,7 +149,7 @@ contract UnboundTokenSeller {
   /**
    * @dev Set the premium rate as a percent.
    */
-  function setPremiumPercent(uint8 premiumPercent) external _control_ {
+  function setPremiumPercent(uint8 premiumPercent) external override _control_ {
     require(
       premiumPercent > 0 && premiumPercent < 20,
       "ERR_PREMIUM"
@@ -174,6 +177,7 @@ contract UnboundTokenSeller {
     address[] calldata path
   )
     external
+    override
     _lock_
     returns (uint256 premiumPaidToCaller)
   {
@@ -235,6 +239,7 @@ contract UnboundTokenSeller {
     address[] calldata path
   )
     external
+    override
     _lock_
     returns (uint256 premiumPaidToCaller)
   {
@@ -295,6 +300,7 @@ contract UnboundTokenSeller {
     uint256 minAmountOut
   )
     external
+    override
     _lock_
     returns (uint256 amountOut)
   {
@@ -330,6 +336,7 @@ contract UnboundTokenSeller {
     uint256 maxAmountIn
   )
     external
+    override
     _lock_
     returns (uint256 amountIn)
   {
@@ -350,7 +357,7 @@ contract UnboundTokenSeller {
 
 /* ==========  Swap Queries  ========== */
 
-  function getPremiumPercent() external view returns (uint8) {
+  function getPremiumPercent() external view override returns (uint8) {
     return _premiumPercent;
   }
 
@@ -365,6 +372,7 @@ contract UnboundTokenSeller {
   )
     public
     view
+    override
     _desired_(tokenIn)
     returns (uint256 amountIn)
   {
@@ -395,6 +403,7 @@ contract UnboundTokenSeller {
   )
     public
     view
+    override
     _desired_(tokenIn)
     returns (uint256 amountOut)
   {
