@@ -57,7 +57,7 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
   uint256 internal constant MIN_INDEX_SIZE = 2;
 
   // Maximum number of tokens in an index.
-  uint256 internal constant MAX_INDEX_SIZE = 8;
+  uint256 internal constant MAX_INDEX_SIZE = 10;
 
   // Identifier for the pool initializer implementation on the proxy manager.
   bytes32 internal constant INITIALIZER_IMPLEMENTATION_ID = keccak256("PoolInitializer.sol");
