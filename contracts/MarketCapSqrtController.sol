@@ -141,7 +141,7 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
 /* ==========  Storage  ========== */
 
   // Default slippage rate for token seller contracts.
-  uint8 public defaultSellerPremium = 2;
+  uint8 public defaultSellerPremium;
 
   // Metadata about index pools
   mapping(address => IndexPoolMeta) internal _poolMeta;
@@ -169,6 +169,17 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
   {
     _factory = factory;
     _proxyManager = proxyManager;
+  }
+
+/* ==========  Initializer  ========== */
+
+  /**
+   * @dev Initialize the controller with the owner address and default seller premium.
+   * This sets up the controller which is deployed as a singleton proxy.
+   */
+  function initialize() public override {
+    defaultSellerPremium = 2;
+    super.initialize();
   }
 
 /* ==========  Pool Deployment  ========== */
