@@ -50,7 +50,7 @@ contract MarketCapSortedTokenCategories is Ownable {
   uint256 internal constant MAX_SORT_DELAY = 1 days;
 
   // Maximum number of tokens in a category
-  uint256 internal constant MAX_CATEGORY_TOKENS = 15;
+  uint256 internal constant MAX_CATEGORY_TOKENS = 25;
 
   // Long term price oracle
   IIndexedUniswapV2Oracle public immutable oracle;
