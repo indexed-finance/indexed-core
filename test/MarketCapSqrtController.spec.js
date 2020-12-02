@@ -235,6 +235,11 @@ describe('MarketCapSqrtController.sol', async () => {
       expect(balances[0].eq(expectedBalances[0])).to.be.true;
       expect(balances[1].eq(expectedBalances[1])).to.be.true;
     });
+
+    it('Reverts if any token has a target balance below the minimum', async () => {
+      const ethValue = toWei(1).div(1e12);
+      await verifyRevert('getInitialTokensAndBalances', /ERR_MIN_BALANCE/g, 1, 2, ethValue);
+    });
   });
 
   describe('prepareIndexPool()', async () => {
