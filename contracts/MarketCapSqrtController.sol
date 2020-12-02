@@ -59,6 +59,9 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
   // Maximum number of tokens in an index.
   uint256 internal constant MAX_INDEX_SIZE = 10;
 
+  // Minimum balance for a token (only applied at initialization)
+  uint256 internal constant MIN_BALANCE = 1e6;
+
   // Identifier for the pool initializer implementation on the proxy manager.
   bytes32 internal constant INITIALIZER_IMPLEMENTATION_ID = keccak256("PoolInitializer.sol");
 
@@ -539,7 +542,9 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
     FixedPoint.uq112x112[] memory weights = MCapSqrtLibrary.computeTokenWeights(tokens, prices);
     balances = new uint256[](indexSize);
     for (uint256 i = 0; i < indexSize; i++) {
-      balances[i] = MCapSqrtLibrary.computeWeightedBalance(wethValue, weights[i], prices[i]);
+      uint256 targetBalance = MCapSqrtLibrary.computeWeightedBalance(wethValue, weights[i], prices[i]);
+      require(targetBalance >= MIN_BALANCE, "ERR_MIN_BALANCE");
+      balances[i] = targetBalance;
     }
   }
 
