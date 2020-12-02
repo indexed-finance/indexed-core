@@ -66,6 +66,9 @@ contract MarketCapSortedTokenCategories is OwnableProxy {
   /** @dev Emitted when a token is added to a category. */
   event TokenAdded(address token, uint256 categoryID);
 
+  /** @dev Emitted when a token is removed from a category. */
+  event TokenRemoved(address token, uint256 categoryID);
+
 /* ==========  Storage  ========== */
 
   // Number of categories that exist.
@@ -186,6 +189,7 @@ contract MarketCapSortedTokenCategories is OwnableProxy {
         }
         _lastCategoryUpdate[categoryID] -= MAX_SORT_DELAY;
         _categoryTokens[categoryID].pop();
+        emit TokenRemoved(token, categoryID);
         return;
       }
     }
