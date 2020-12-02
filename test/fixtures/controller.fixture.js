@@ -2,10 +2,12 @@ const [...testTokens] = require('../testData/test-tokens.json');
 
 const { verifyRejection, getFakerContract, toWei, oneE18, sha3 } = require('../utils');
 const { uniswapFixture } = require('./uniswap.fixture');
-
-const poolInitializerID = sha3('PoolInitializer.sol')
-const poolImplementationID = sha3('IndexPool.sol');
-const sellerImplementationID = sha3('UnboundTokenSeller.sol');
+const {
+  controllerImplementationSalt,
+  poolInitializerID,
+  poolImplementationID,
+  sellerImplementationID,
+} = require('../../lib/implementationIDs');
 
 const toLiquidityAmounts = ({ price, marketcap }, init = false) => {
   let amountWeth = toWei(marketcap);
@@ -33,7 +35,11 @@ const controllerFixture = async ({ deployments, getNamedAccounts, ethers }) => {
   const poolFactory = await deploy('PoolFactory', proxyManager.address);
 
   // Deploy pool controller
-  const controller = await deploy('MarketCapSqrtController', uniswapOracle.address, poolFactory.address, proxyManager.address);
+  const controllerImplementation = await deploy('MarketCapSqrtController', uniswapOracle.address, poolFactory.address, proxyManager.address);
+  const controllerAddress = await proxyManager.computeProxyAddressOneToOne(deployer, controllerImplementationSalt);
+  await proxyManager.deployProxyOneToOne(controllerImplementationSalt, controllerImplementation.address);
+  const controller = await ethers.getContractAt('MarketCapSqrtController', controllerAddress);
+  await controller.initialize();
 
   const tokenSellerImplementation = await deploy('UnboundTokenSeller', uniswapRouter.address, uniswapOracle.address, controller.address);
   await proxyManager.createManyToOneProxyRelationship(
