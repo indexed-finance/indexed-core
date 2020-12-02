@@ -7,7 +7,8 @@ const { InfuraProvider } = require('@ethersproject/providers');
 const { fromPrivateKey } = require('ethereumjs-wallet');
 const { randomBytes } = require('crypto');
 
-const { types, internalTask } = require("@nomiclabs/buidler/config")
+const { types, internalTask } = require("@nomiclabs/buidler/config");
+const Logger = require('./lib/logger');
 
 usePlugin("buidler-ethers-v5");
 usePlugin("buidler-deploy");
@@ -25,6 +26,42 @@ const keys = {
       ? Buffer.from(process.env.RINKEBY_PVT_KEY.slice(2), 'hex')
       : randomBytes(32)).getPrivateKeyString()
 };
+
+internalTask('approve_pool_controller', 'Approves an address to deploy index pools if it is not already approved.')
+  .addParam('address', 'address to approve')
+  .addOptionalParam('gasPrice', 'Gas price to use for approval transaction.', 1000000000, types.int)
+  .setAction(async ({ address, gasPrice }) => {
+    require('@nomiclabs/buidler');
+    const poolFactory = await ethers.getContract('poolFactory');
+    const logger = Logger(await getChainId());
+    const isApproved = await poolFactory.isApprovedController(address);
+    if (isApproved) {
+      logger.info(`${address} is already approved`);
+    } else {
+      logger.info(`Approving ${address} as a pool controller...`);
+      await poolFactory.approvePoolController(address, { gasLimit: 150000, gasPrice });
+      logger.success(`Approved ${address} as a pool controller!`);
+    }
+  });
+
+
+
+internalTask('approve_proxy_deployer', 'Approves an address to deploy proxies if it is not already approved.')
+  .addParam('address', 'address to approve')
+  .addOptionalParam('gasPrice', 'Gas price to use for approval transaction.', 1000000000, types.int)
+  .setAction(async ({ address, gasPrice }) => {
+    require('@nomiclabs/buidler');
+    const proxyManager = await ethers.getContract('proxyManager');
+    const logger = Logger(await getChainId());
+    const isApproved = await proxyManager.isApprovedDeployer(address);
+    if (isApproved) {
+      logger.info(`${address} is already approved`);
+    } else {
+      logger.info(`Approving ${address} as a proxy deployer...`);
+      await proxyManager.approveDeployer(address, { gasLimit: 150000, gasPrice });
+      logger.success(`Approved ${address} as a proxy deployer!`);
+    }
+  });
 
 module.exports = {
   etherscan: {
