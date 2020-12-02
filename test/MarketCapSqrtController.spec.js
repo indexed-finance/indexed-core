@@ -169,10 +169,10 @@ describe('MarketCapSqrtController.sol', async () => {
     return { poolAddress, initializerAddress };
   }
 
-  describe('Constructor & Settings', async () => {
+  describe('Initializer & Settings', async () => {
     setupTests();
 
-    it('defaultSellerPremium(): initialized to 2', async () => {
+    it('defaultSellerPremium(): set to 2', async () => {
       const premium = await controller.defaultSellerPremium();
       expect(premium).to.eq(2);
     });
@@ -240,9 +240,9 @@ describe('MarketCapSqrtController.sol', async () => {
   describe('prepareIndexPool()', async () => {
     setupTests();
 
-    it('Reverts if size > 8', async () => {
+    it('Reverts if size > 10', async () => {
       await setupCategory();
-      await verifyRevert('prepareIndexPool', /ERR_MAX_INDEX_SIZE/g, 1, 9, zero, 'a', 'b');
+      await verifyRevert('prepareIndexPool', /ERR_MAX_INDEX_SIZE/g, 1, 11, zero, 'a', 'b');
     });
 
     it('Reverts if size < 2', async () => {
