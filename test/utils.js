@@ -119,6 +119,11 @@ const MAX_UINT112 = BigNumber.from(2).pow(112);
 const toFP = (num) => num.mul(MAX_UINT112);
 const fromFP = (num) => num.div(MAX_UINT112);
 
+async function expectEvent(receipt, eventName) {
+  const { events } = await receipt.wait();
+  expect(events.find(e => e.event == eventName)).to.not.be.null;
+}
+
 module.exports = {
   toBN,
   oneE18,
@@ -142,5 +147,6 @@ module.exports = {
   DAY,
   WEEK,
   toFP,
-  fromFP
+  fromFP,
+  expectEvent
 }
