@@ -2,36 +2,24 @@
 
 [Documentation](https://docs.indexed.finance)
 
-## Tests
+## Deploy
 
-## Test coverage
+To deploy with proper verification on Etherscan, use the scripts in package.json.
 
-`npm run coverage`
+The factory must be deployed first, followed by the controller. After these two, the pool, initializer and seller implementations can be deployed in any order.
 
-Runs solidity-coverage with all the tests.
+The deploy scripts can be run with:
 
-### Test pool
+> `yarn deploy:<contract> <network>`
 
-`npm run test:pool`
+e.g.
+> `yarn deploy:pool mainnet`
 
-This tests the `Ipool.sol` contract only, using a mock contract for the unbound token handler.
+## Test
 
-### Test controller
+> `npm run test`
 
-`npm run test:controller`
+## Coverage
 
-This tests the `MarketCapSqrtController.sol` contract and some of the interactions between the controller and the pool, token seller and pool initializer contracts.
+> `npm run coverage`
 
-### Test category management
-
-`npm run test:categories`
-
-This tests the `MarketCapSortedTokenCategories.sol` contract and its interactions with the price oracle.
-
-The controller inherits this contract, but they are separated for clarity.
-
-### Test token seller
-
-`npm run test:seller`
-
-Tests the `UnboundTokenSeller.sol` contract using a mock pool.
