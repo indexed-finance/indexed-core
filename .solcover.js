@@ -5,6 +5,10 @@ module.exports = {
   },
   skipFiles: [
     'mocks/',
-    'interfaces/'
+    'interfaces/',
+    'balancer/Btoken.sol',
+    'balancer/BNum.sol',
+    'lib/Babylonian.sol',
+    'lib/UniswapV2Library.sol'
   ]
 }

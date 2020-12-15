@@ -2,12 +2,12 @@
 pragma solidity ^0.6.0;
 pragma experimental ABIEncoderV2;
 
-/* ========== External Inheritance ========== */
-import "@openzeppelin/contracts/access/Ownable.sol";
-
 /* ========== External Interfaces ========== */
 import "@indexed-finance/uniswap-v2-oracle/contracts/interfaces/IIndexedUniswapV2Oracle.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+
+/* ========== Internal Inheritance ========== */
+import "./OwnableProxy.sol";
 
 
 /**
@@ -35,7 +35,7 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
  * 5.a. The control model should be considered if the supply can be modified arbitrarily.
  * ===============
  */
-contract MarketCapSortedTokenCategories is Ownable {
+contract MarketCapSortedTokenCategories is OwnableProxy {
 /* ==========  Constants  ========== */
 
   // TWAP parameters for capturing long-term price trends
@@ -50,7 +50,7 @@ contract MarketCapSortedTokenCategories is Ownable {
   uint256 internal constant MAX_SORT_DELAY = 1 days;
 
   // Maximum number of tokens in a category
-  uint256 internal constant MAX_CATEGORY_TOKENS = 15;
+  uint256 internal constant MAX_CATEGORY_TOKENS = 25;
 
   // Long term price oracle
   IIndexedUniswapV2Oracle public immutable oracle;
@@ -65,6 +65,9 @@ contract MarketCapSortedTokenCategories is Ownable {
 
   /** @dev Emitted when a token is added to a category. */
   event TokenAdded(address token, uint256 categoryID);
+
+  /** @dev Emitted when a token is removed from a category. */
+  event TokenRemoved(address token, uint256 categoryID);
 
 /* ==========  Storage  ========== */
 
@@ -89,8 +92,18 @@ contract MarketCapSortedTokenCategories is Ownable {
    * @dev Deploy the controller and configure the addresses
    * of the related contracts.
    */
-  constructor(IIndexedUniswapV2Oracle _oracle) public Ownable() {
+  constructor(IIndexedUniswapV2Oracle _oracle) public OwnableProxy() {
     oracle = _oracle;
+  }
+
+/* ==========  Initializer  ========== */
+
+  /**
+   * @dev Initialize the categories with the owner address.
+   * This sets up the contract which is deployed as a singleton proxy.
+   */
+  function initialize() public virtual {
+    _initializeOwnership();
   }
 
 /* ==========  Category Management  ========== */
@@ -115,14 +128,16 @@ contract MarketCapSortedTokenCategories is Ownable {
 
   /**
    * @dev Adds a new token to a category.
-   * Note: A token can only be assigned to one category at a time.
+   *
+   * @param categoryID Category identifier.
+   * @param token Token to add to the category.
    */
-  function addToken(address token, uint256 categoryID) external onlyOwner validCategory(categoryID) {
+  function addToken(uint256 categoryID, address token) external onlyOwner validCategory(categoryID) {
     require(
       _categoryTokens[categoryID].length < MAX_CATEGORY_TOKENS,
       "ERR_MAX_CATEGORY_TOKENS"
     );
-    _addToken(token, categoryID);
+    _addToken(categoryID, token);
     oracle.updatePrice(token);
     // Decrement the timestamp for the last category update to ensure
     // that the new token is sorted before the category's top tokens
@@ -145,7 +160,7 @@ contract MarketCapSortedTokenCategories is Ownable {
       "ERR_MAX_CATEGORY_TOKENS"
     );
     for (uint256 i = 0; i < tokens.length; i++) {
-      _addToken(tokens[i], categoryID);
+      _addToken(categoryID, tokens[i]);
     }
     oracle.updatePrices(tokens);
     // Decrement the timestamp for the last category update to ensure
@@ -154,10 +169,17 @@ contract MarketCapSortedTokenCategories is Ownable {
     _lastCategoryUpdate[categoryID] -= MAX_SORT_DELAY;
   }
 
+  /**
+   * @dev Remove token from a category.
+   * @param categoryID Category identifier.
+   * @param token Token to remove from the category.
+   */
   function removeToken(uint256 categoryID, address token) external onlyOwner validCategory(categoryID) {
     uint256 i = 0;
     uint256 len = _categoryTokens[categoryID].length;
     require(len > 0, "ERR_EMPTY_CATEGORY");
+    require(_isCategoryToken[categoryID][token], "ERR_TOKEN_NOT_BOUND");
+    _isCategoryToken[categoryID][token] = false;
     for (; i < len; i++) {
       if (_categoryTokens[categoryID][i] == token) {
         uint256 last = len - 1;
@@ -167,10 +189,12 @@ contract MarketCapSortedTokenCategories is Ownable {
         }
         _lastCategoryUpdate[categoryID] -= MAX_SORT_DELAY;
         _categoryTokens[categoryID].pop();
+        emit TokenRemoved(token, categoryID);
         return;
       }
     }
-    revert("ERR_TOKEN_NOT_FOUND");
+    // This will never occur.
+    revert("ERR_NOT_FOUND");
   }
 
   /**
@@ -331,7 +355,7 @@ contract MarketCapSortedTokenCategories is Ownable {
   /**
    * @dev Adds a new token to a category.
    */
-  function _addToken(address token, uint256 categoryID) internal {
+  function _addToken(uint256 categoryID, address token) internal {
     require(!_isCategoryToken[categoryID][token], "ERR_TOKEN_BOUND");
     _isCategoryToken[categoryID][token] = true;
     _categoryTokens[categoryID].push(token);

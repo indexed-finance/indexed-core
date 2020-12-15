@@ -165,14 +165,14 @@ describe('IndexPool.sol', async () => {
       );
     });
 
-    it('Reverts if more than 8 tokens are provided', async () => {
+    it('Reverts if more than 10 tokens are provided', async () => {
       await verifyRejection(
         pool,
         'initialize',
         /ERR_MAX_TOKENS/g,
-        new Array(9).fill(zeroAddress),
-        new Array(9).fill(zero),
-        new Array(9).fill(zero),
+        new Array(11).fill(zeroAddress),
+        new Array(11).fill(zero),
+        new Array(11).fill(zero),
         zeroAddress,
         zeroAddress
       );

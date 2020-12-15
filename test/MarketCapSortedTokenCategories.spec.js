@@ -1,6 +1,6 @@
 const { expect } = require("chai");
 const { categoriesFixture } = require("./fixtures/categories.fixture");
-const { verifyRejection, zero, toWei, zeroAddress, fastForward, fromWei, oneE18, getTransactionTimestamp, DAY, HOUR } = require("./utils");
+const { verifyRejection, zero, toWei, sha3, zeroAddress, fastForward, fromWei, oneE18, getTransactionTimestamp, DAY, HOUR } = require("./utils");
 const { calcRelativeDiff } = require('./lib/calc_comparisons');
 const { BigNumber } = require("ethers");
 
@@ -30,19 +30,24 @@ describe('MarketCapSortedTokenCategories.sol', () => {
       } = await deployments.createFixture(categoriesFixture)());
       tokens = wrappedTokens.map(t => t.address);
       
-      const MarketCapSortedTokenCategories = await ethers.getContractFactory('MarketCapSortedTokenCategories');
-      categories = await MarketCapSortedTokenCategories.deploy(oracle.address);
+      const deploy = async (name, ...args) => (await ethers.getContractFactory(name)).deploy(...args);
+      const proxyManager = await deploy('DelegateCallProxyManager');
+      const proxyAddress = await proxyManager.computeProxyAddressOneToOne(await owner.getAddress(), sha3('MarketCapSortedTokenCategories.sol'));
+      const categoriesImplementation = await deploy('MarketCapSortedTokenCategories', oracle.address);
+      await proxyManager.deployProxyOneToOne(sha3('MarketCapSortedTokenCategories.sol'), categoriesImplementation.address);
+      categories = await ethers.getContractAt('MarketCapSortedTokenCategories', proxyAddress);
+      await categories.initialize();
       verifyRevert = (...args) => verifyRejection(categories, ...args);
     });
   }
 
   const makeCategory = () => categories.createCategory(`0x${'ff'.repeat(32)}`);
 
-  const deployTestToken = async () => {
+  const deployTestToken = async (liqA = 1, liqB = 1) => {
     const name = `Token${tokenIndex++}`;
     const symbol = `TK${tokenIndex++}`;
     const erc20 = await deployTokenAndMarket(name, symbol);
-    await addLiquidity(erc20, toWei(1), toWei(1));
+    await addLiquidity(erc20, toWei(liqA), toWei(liqB));
     return erc20;
   }
 
@@ -117,6 +122,13 @@ describe('MarketCapSortedTokenCategories.sol', () => {
         expect(await categories.isTokenInCategory(1, token)).to.be.true;
       }
     });
+
+    it('Returns false if token is removed', async () => {
+      for (let token of tokens) {
+        await categories.removeToken(1, token);
+        expect(await categories.isTokenInCategory(1, token)).to.be.false;
+      }
+    });
   });
 
   describe('createCategory()', async () => {
@@ -141,45 +153,47 @@ describe('MarketCapSortedTokenCategories.sol', () => {
 
   describe('addToken()', async () => {
     setupTests();
+    let newTokens = [];
 
     it('Reverts if caller is not owner', async () => {
       await verifyRejection(
         categories.connect(notOwner),
         'addToken',
         /Ownable: caller is not the owner/g,
-        zeroAddress,
-        0
+        0,
+        zeroAddress
       );
     });
 
     it('Reverts if categoryIndex is 0', async () => {
-      await verifyRevert('addToken', /ERR_CATEGORY_ID/g, zeroAddress, zero);
+      await verifyRevert('addToken', /ERR_CATEGORY_ID/g, zero, zeroAddress);
     });
 
     it('Reverts if categoryID > categoryIndex', async () => {
       await makeCategory();
-      await verifyRevert('addToken', /ERR_CATEGORY_ID/g, zeroAddress, 2);
+      await verifyRevert('addToken', /ERR_CATEGORY_ID/g, 2, zeroAddress);
     });
 
     it('Reverts if category is already at the maximum', async () => {
-      for (let i = 0; i < 15; i++) {
-        const token = await deployTestToken();
-        await categories.addToken(token.address, 1);
+      for (let i = 0; i < 25; i++) {
+        const token = await deployTestToken(1, 1);
+        await categories.addToken(1, token.address);
       }
-      await verifyRevert('addToken', /ERR_MAX_CATEGORY_TOKENS/g, tokens[0], 1);
+      await verifyRevert('addToken', /ERR_MAX_CATEGORY_TOKENS/g, 1, tokens[0]);
     });
 
     it('Reverts if token is already bound to same category', async () => {
       await makeCategory();
       const token = await deployTestToken();
-      await categories.addToken(token.address, 2);
-      await verifyRevert('addToken', /ERR_TOKEN_BOUND/g, token.address, 2);
+      newTokens.push(token.address);
+      await categories.addToken(2, token.address);
+      await verifyRevert('addToken', /ERR_TOKEN_BOUND/g, 2, token.address);
     });
 
     it('Resets the lastCategoryUpdate time', async () => {
       const token = await deployTestToken();
       expect((await categories.getCategoryTokens(2)).length).to.eq(1);
-      await categories.addToken(token.address, 2);
+      await categories.addToken(2, token.address);
       expect((await categories.getCategoryTokens(2)).length).to.eq(2);
       await categories.updateCategoryPrices(2)
       await fastForward(DAY * 2)
@@ -187,11 +201,18 @@ describe('MarketCapSortedTokenCategories.sol', () => {
       const lastUpdate1 = await categories.getLastCategoryUpdate(2);
       expect(lastUpdate1.gt(0)).to.be.true;
       const token1 = await deployTestToken();
-      await categories.addToken(token1.address, 2);
+      await categories.addToken(2, token1.address);
       expect((await categories.getCategoryTokens(2)).length).to.eq(3);
       const lastUpdate2 = await categories.getLastCategoryUpdate(2);
       expect(lastUpdate2.eq(lastUpdate1.sub(DAY))).to.be.true;
-    })
+      newTokens.push(token.address);
+      newTokens.push(token1.address);
+    });
+
+    it('Returns tokens', async () => {
+      const tokens = await categories.getCategoryTokens(2);
+      expect(tokens).to.deep.eq(newTokens);
+    });
   });
 
   describe('removeToken()', async () => {
@@ -223,14 +244,14 @@ describe('MarketCapSortedTokenCategories.sol', () => {
 
     it('Reverts if token not found', async () => {
       const token = await deployTestToken();
-      await categories.addToken(token.address, 2);
-      await verifyRevert('removeToken', /ERR_TOKEN_NOT_FOUND/g, 2, zeroAddress);
+      await categories.addToken(2, token.address);
+      await verifyRevert('removeToken', /ERR_TOKEN_NOT_BOUND/g, 2, zeroAddress);
     });
 
     it('Resets the lastCategoryUpdate time', async () => {
       const token = await deployTestToken();
       expect((await categories.getCategoryTokens(2)).length).to.eq(1);
-      await categories.addToken(token.address, 2);
+      await categories.addToken(2, token.address);
       expect((await categories.getCategoryTokens(2)).length).to.eq(2);
       await categories.updateCategoryPrices(2)
       await fastForward(DAY * 2)
@@ -241,7 +262,23 @@ describe('MarketCapSortedTokenCategories.sol', () => {
       expect((await categories.getCategoryTokens(2)).length).to.eq(1);
       const lastUpdate2 = await categories.getLastCategoryUpdate(2);
       expect(lastUpdate2.eq(lastUpdate1.sub(DAY))).to.be.true;
-    })
+      const [last] = await categories.getCategoryTokens(2);
+      await categories.removeToken(2, last);
+      expect((await categories.getCategoryTokens(2)).length).to.eq(0);
+    });
+
+    it('Swaps with last token in list', async () => {
+      const tokenList = [];
+      for (let i = 0; i < 25; i++) {
+        const token = await deployTestToken();
+        tokenList.push(token.address);
+      }
+      await categories.addTokens(2, tokenList);
+      await categories.removeToken(2, tokenList[5]);
+      tokenList[5] = tokenList.pop();
+      const catTokens = await categories.getCategoryTokens(2);
+      expect(catTokens).to.deep.eq(tokenList);
+    });
   })
 
   describe('addTokens()', async () => {
@@ -267,9 +304,9 @@ describe('MarketCapSortedTokenCategories.sol', () => {
     });
 
     it('Reverts if category would exceed maximum after adding the tokens', async () => {
-      for (let i = 0; i < 14; i++) {
+      for (let i = 0; i < 24; i++) {
         const token = await deployTestToken();
-        await categories.addToken(token.address, 1);
+        await categories.addToken(1, token.address);
       }
       await verifyRevert('addTokens', /ERR_MAX_CATEGORY_TOKENS/g, 1, [zeroAddress, zeroAddress]);
     });
@@ -277,7 +314,7 @@ describe('MarketCapSortedTokenCategories.sol', () => {
     it('Reverts if any of the tokens are already bound', async () => {
       await makeCategory();
       const token = await deployTestToken();
-      await categories.addToken(token.address, 2);
+      await categories.addToken(2, token.address);
       await verifyRevert('addTokens', /ERR_TOKEN_BOUND/g, 2, [token.address]);
     });
   });

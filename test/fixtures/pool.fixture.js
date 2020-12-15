@@ -2,14 +2,12 @@ const Decimal = require('decimal.js');
 const PoolHelper = require("../lib/pool-helper");
 const { toWei, fromWei, getTransactionTimestamp, verifyRejection, getFakerContract } = require("../utils");
 const { wrappedTokensFixture } = require("./tokens.fixture");
+const { uniswapFixture } = require('./uniswap.fixture');
 
 const swapFee = 0.025;
 
-const poolFixture = async ({ deployments, getNamedAccounts, ethers }) => {
+const poolFixture = async ({ getNamedAccounts, ethers, tokens: _wrappedTokens }) => {
   const { deployer } = await getNamedAccounts();
-
-  // Set up tokens
-  const {tokens: _wrappedTokens} = await deployments.createFixture(wrappedTokensFixture)();
 
   // Deploy contracts
   const IPoolFactory = await ethers.getContractFactory("IndexPool");
@@ -108,4 +106,25 @@ const poolFixture = async ({ deployments, getNamedAccounts, ethers }) => {
   };
 };
 
-module.exports = { poolFixture };
+async function poolFixtureWithDefaultTokens(_bre) {
+  const { tokens } = await deployments.createFixture(wrappedTokensFixture)();
+  return poolFixture({ ..._bre, tokens });
+}
+
+
+async function poolFixtureWithMaxTokens(_bre) {
+  const { deployments } = _bre;
+  const uniswapFixtures = await deployments.createFixture(uniswapFixture)();
+  // const wrappedTokens = testTokens.map(({ symbol, name, price }, i) => ({ symbol, name, initialPrice: price }));
+  const tokens = [];
+  for (let i = 0; i < 10; i++) {
+    const name = `TEST TOKEN ${i}`;
+    const symbol = `TT${i}`;
+    const initialPrice = i + 2;
+    const tokenAndPairData = await uniswapFixtures.deployTokenAndMarket(name, symbol);
+    tokens.push({ name, symbol, initialPrice, ...tokenAndPairData });
+  }
+  return poolFixture({ ..._bre, tokens });
+}
+
+module.exports = { poolFixture: poolFixtureWithDefaultTokens, poolFixtureWithMaxTokens };

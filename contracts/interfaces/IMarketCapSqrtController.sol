@@ -33,9 +33,11 @@ interface IMarketCapSqrtController {
 
   function createCategory(bytes32 metadataHash) external;
 
-  function addToken(address token, uint256 categoryID) external;
+  function addToken(uint256 categoryID, address token) external;
 
   function addTokens(uint256 categoryID, address[] calldata tokens) external;
+
+  function removeToken(uint256 categoryID, address token) external;
 
   function orderCategoryTokensByMarketCap(uint256 categoryID) external;
 

@@ -169,10 +169,10 @@ describe('MarketCapSqrtController.sol', async () => {
     return { poolAddress, initializerAddress };
   }
 
-  describe('Constructor & Settings', async () => {
+  describe('Initializer & Settings', async () => {
     setupTests();
 
-    it('defaultSellerPremium(): initialized to 2', async () => {
+    it('defaultSellerPremium(): set to 2', async () => {
       const premium = await controller.defaultSellerPremium();
       expect(premium).to.eq(2);
     });
@@ -235,14 +235,19 @@ describe('MarketCapSqrtController.sol', async () => {
       expect(balances[0].eq(expectedBalances[0])).to.be.true;
       expect(balances[1].eq(expectedBalances[1])).to.be.true;
     });
+
+    it('Reverts if any token has a target balance below the minimum', async () => {
+      const ethValue = toWei(1).div(1e12);
+      await verifyRevert('getInitialTokensAndBalances', /ERR_MIN_BALANCE/g, 1, 2, ethValue);
+    });
   });
 
   describe('prepareIndexPool()', async () => {
     setupTests();
 
-    it('Reverts if size > 8', async () => {
+    it('Reverts if size > 10', async () => {
       await setupCategory();
-      await verifyRevert('prepareIndexPool', /ERR_MAX_INDEX_SIZE/g, 1, 9, zero, 'a', 'b');
+      await verifyRevert('prepareIndexPool', /ERR_MAX_INDEX_SIZE/g, 1, 11, zero, 'a', 'b');
     });
 
     it('Reverts if size < 2', async () => {

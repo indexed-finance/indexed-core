@@ -22,8 +22,7 @@ contract BConst {
 
   // Maximum percent by which a weight can adjust at a time
   // relative to the current weight.
-  // The number of iterations needed to move from weight A to
-  // weight B is the floor of:
+  // The number of iterations needed to move from weight A to weight B is the floor of:
   // (A > B): (ln(A) - ln(B)) / ln(1.01)
   // (B > A): (ln(A) - ln(B)) / ln(0.99)
   uint256 internal constant WEIGHT_CHANGE_PCT = BONE/100;
@@ -31,7 +30,7 @@ contract BConst {
   uint256 internal constant BONE = 10**18;
 
   uint256 internal constant MIN_BOUND_TOKENS = 2;
-  uint256 internal constant MAX_BOUND_TOKENS = 8;
+  uint256 internal constant MAX_BOUND_TOKENS = 10;
 
   // Minimum swap fee.
   uint256 internal constant MIN_FEE = BONE / 10**6;
@@ -44,7 +43,7 @@ contract BConst {
   uint256 internal constant DEFAULT_TOTAL_WEIGHT = BONE * 25;
   // Minimum weight for any token (1/100).
   uint256 internal constant MIN_WEIGHT = BONE / 4;
-  uint256 internal constant MAX_WEIGHT = BONE * 50;
+  uint256 internal constant MAX_WEIGHT = BONE * 25;
   // Maximum total weight.
   uint256 internal constant MAX_TOTAL_WEIGHT = BONE * 26;
   // Minimum balance for a token (only applied at initialization)

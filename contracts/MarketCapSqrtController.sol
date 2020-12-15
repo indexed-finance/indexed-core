@@ -57,7 +57,10 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
   uint256 internal constant MIN_INDEX_SIZE = 2;
 
   // Maximum number of tokens in an index.
-  uint256 internal constant MAX_INDEX_SIZE = 8;
+  uint256 internal constant MAX_INDEX_SIZE = 10;
+
+  // Minimum balance for a token (only applied at initialization)
+  uint256 internal constant MIN_BALANCE = 1e6;
 
   // Identifier for the pool initializer implementation on the proxy manager.
   bytes32 internal constant INITIALIZER_IMPLEMENTATION_ID = keccak256("PoolInitializer.sol");
@@ -141,7 +144,7 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
 /* ==========  Storage  ========== */
 
   // Default slippage rate for token seller contracts.
-  uint8 public defaultSellerPremium = 2;
+  uint8 public defaultSellerPremium;
 
   // Metadata about index pools
   mapping(address => IndexPoolMeta) internal _poolMeta;
@@ -169,6 +172,17 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
   {
     _factory = factory;
     _proxyManager = proxyManager;
+  }
+
+/* ==========  Initializer  ========== */
+
+  /**
+   * @dev Initialize the controller with the owner address and default seller premium.
+   * This sets up the controller which is deployed as a singleton proxy.
+   */
+  function initialize() public override {
+    defaultSellerPremium = 2;
+    super.initialize();
   }
 
 /* ==========  Pool Deployment  ========== */
@@ -528,7 +542,9 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
     FixedPoint.uq112x112[] memory weights = MCapSqrtLibrary.computeTokenWeights(tokens, prices);
     balances = new uint256[](indexSize);
     for (uint256 i = 0; i < indexSize; i++) {
-      balances[i] = MCapSqrtLibrary.computeWeightedBalance(wethValue, weights[i], prices[i]);
+      uint256 targetBalance = MCapSqrtLibrary.computeWeightedBalance(wethValue, weights[i], prices[i]);
+      require(targetBalance >= MIN_BALANCE, "ERR_MIN_BALANCE");
+      balances[i] = targetBalance;
     }
   }
 
