@@ -1,4 +1,4 @@
-# indexed-core
+# @indexed-finance/indexed-core
 
 [Documentation](https://docs.indexed.finance)
 
