@@ -44,15 +44,15 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/indexed-finance/index-fund.git"
+    "url": "git+https://github.com/indexed-finance/indexed-core.git"
   },
   "keywords": [],
   "author": "",
   "license": "GPL-3.0-or-later",
   "bugs": {
-    "url": "https://github.com/indexed-finance/index-fund/issues"
+    "url": "https://github.com/indexed-finance/indexed-core/issues"
   },
-  "homepage": "https://github.com/indexed-finance/index-fund#readme",
+  "homepage": "https://github.com/indexed-finance/indexed-core#readme",
   "devDependencies": {
     "@ethersproject/providers": "^5.0.9",
     "@nomiclabs/buidler": "^1.4.3",
