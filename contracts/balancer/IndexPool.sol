@@ -234,8 +234,6 @@ contract IndexPool is BToken, BMath, IIndexPool {
     emit LOG_MAX_TOKENS_UPDATED(maxPoolTokens);
   }
 
-/* ==========  Configuration Actions  ========== */
-
   /**
    * @dev Set the swap fee.
    * Note: Swap fee must be between 0.0001% and 10%
