@@ -1040,4 +1040,15 @@ describe('IndexPool.sol', async () => {
       expect(bal.eq(0)).to.be.true;
     });
   });
+
+  describe('delegateCompLikeToken()', async () => {
+    setupTests();
+
+    it('delegates a comp-like token to the provided address', async () => {
+      await indexPool.delegateCompLikeToken(tokens[0], tokens[1]);
+      const token = await ethers.getContractAt('MockERC20', tokens[0]);
+      const delegatee = await token.delegateeByAddress(indexPool.address);
+      expect(delegatee).to.eq(tokens[1]);
+    });
+  });
 });
