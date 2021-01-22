@@ -392,11 +392,11 @@ describe('IndexPool.sol', async () => {
     });
 
     it('Reverts if swapFee < 0.0001%', async () => {
-      await verifyRevert('setSwapFee', /ERR_MIN_FEE/g, toWei('0.00000099'));
+      await verifyRevert('setSwapFee', /ERR_INVALID_FEE/g, toWei('0.00000099'));
     });
 
     it('Reverts if swapFee > 10%', async () => {
-      await verifyRevert('setSwapFee', /ERR_MAX_FEE/g, toWei(0.11));
+      await verifyRevert('setSwapFee', /ERR_INVALID_FEE/g, toWei(0.11));
     });
 
     it('Sets swap fee between min and max', async () => {
