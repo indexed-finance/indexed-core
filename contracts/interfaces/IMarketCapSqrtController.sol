@@ -49,7 +49,7 @@ interface IMarketCapSqrtController {
 
   function computeAverageMarketCap(address token) external view returns (uint144);
 
-  function computeAverageMarketCaps(address[] memory tokens) external view returns (uint144[] memory);
+  function computeAverageMarketCaps(address[] calldata tokens) external view returns (uint144[] memory);
 
   function hasCategory(uint256 categoryID) external view returns (bool);
 

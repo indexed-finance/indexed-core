@@ -9,6 +9,8 @@ import "./BMath.sol";
 /* ========== Internal Interfaces ========== */
 import "../interfaces/IFlashLoanRecipient.sol";
 import "../interfaces/IIndexPool.sol";
+import "../interfaces/ICompLikeToken.sol";
+
 
 /************************************************************************************************
 Originally from https://github.com/balancer-labs/balancer-core/blob/master/contracts/BPool.sol
@@ -234,17 +236,26 @@ contract IndexPool is BToken, BMath, IIndexPool {
     emit LOG_MAX_TOKENS_UPDATED(maxPoolTokens);
   }
 
-/* ==========  Configuration Actions  ========== */
-
   /**
    * @dev Set the swap fee.
    * Note: Swap fee must be between 0.0001% and 10%
    */
   function setSwapFee(uint256 swapFee) external override _control_ {
-    require(swapFee >= MIN_FEE, "ERR_MIN_FEE");
-    require(swapFee <= MAX_FEE, "ERR_MAX_FEE");
+    require(swapFee >= MIN_FEE && swapFee <= MAX_FEE, "ERR_INVALID_FEE");
     _swapFee = swapFee;
     emit LOG_SWAP_FEE_UPDATED(swapFee);
+  }
+
+  /**
+   * @dev Delegate a comp-like governance token to an address
+   * specified by the controller.
+   */
+  function delegateCompLikeToken(address token,address delegatee)
+    external
+    override
+    _control_
+  {
+    ICompLikeToken(token).delegate(delegatee);
   }
 
 /* ==========  Token Management Actions  ========== */
@@ -268,9 +279,8 @@ contract IndexPool is BToken, BMath, IIndexPool {
     _lock_
     _control_
   {
-    uint256 len = tokens.length;
-    require(desiredDenorms.length == len, "ERR_ARR_LEN");
-    for (uint256 i = 0; i < len; i++)
+    require(desiredDenorms.length == tokens.length, "ERR_ARR_LEN");
+    for (uint256 i = 0; i < tokens.length; i++)
       _setDesiredDenorm(tokens[i], desiredDenorms[i]);
   }
 
@@ -292,9 +302,8 @@ contract IndexPool is BToken, BMath, IIndexPool {
     _lock_
     _control_
   {
-    uint256 len = tokens.length;
     require(
-      desiredDenorms.length == len && minimumBalances.length == len,
+      desiredDenorms.length == tokens.length && minimumBalances.length == tokens.length,
       "ERR_ARR_LEN"
     );
     // This size may not be the same as the input size, as it is possible
@@ -304,10 +313,10 @@ contract IndexPool is BToken, BMath, IIndexPool {
     bool[] memory receivedIndices = new bool[](tLen);
     // We need to read token records in two separate loops, so
     // write them to memory to avoid duplicate storage reads.
-    Record[] memory records = new Record[](len);
+    Record[] memory records = new Record[](tokens.length);
     // Read all the records from storage and mark which of the existing tokens
     // were represented in the reindex call.
-    for (uint256 i = 0; i < len; i++) {
+    for (uint256 i = 0; i < tokens.length; i++) {
       records[i] = _records[tokens[i]];
       if (records[i].bound) receivedIndices[records[i].index] = true;
     }
@@ -317,7 +326,7 @@ contract IndexPool is BToken, BMath, IIndexPool {
         _setDesiredDenorm(_tokens[i], 0);
       }
     }
-    for (uint256 i = 0; i < len; i++) {
+    for (uint256 i = 0; i < tokens.length; i++) {
       address token = tokens[i];
       // If an input weight is less than the minimum weight, use that instead.
       uint96 denorm = desiredDenorms[i];
