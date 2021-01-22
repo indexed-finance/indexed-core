@@ -186,7 +186,7 @@ describe('MarketCapSqrtController.sol', async () => {
     setupTests();
 
     it('All functions with onlyOwner modifier revert if caller is not owner', async () => {
-      const onlyOwnerFns = ['prepareIndexPool', 'setDefaultSellerPremium', 'updateSellerPremium', 'setMaxPoolTokens', 'setSwapFee'];
+      const onlyOwnerFns = ['prepareIndexPool', 'setDefaultSellerPremium', 'updateSellerPremium', 'setMaxPoolTokens', 'setSwapFee', 'delegateCompLikeTokenFromPool'];
       for (let fn of onlyOwnerFns) {
         await verifyRejection(nonOwnerFaker, fn, /Ownable: caller is not the owner/g);
       }
@@ -453,6 +453,17 @@ describe('MarketCapSqrtController.sol', async () => {
       let actualMinimumBalance = await pool.getMinimumBalance(willBeIncluded);
       expect(actualMinimumBalance.gt(previousMinimum)).to.be.true;
       expect(+calcRelativeDiff(fromWei(expectedMinimumBalance), fromWei(actualMinimumBalance))).to.be.lte(errorDelta);
+    });
+  });
+
+  describe('delegateCompLikeTokenFromPool()', async () => {
+    setupTests({ pool: true, init: true, size: 4, ethValue: 10 });
+
+    it('Delegates a comp-like token in an index pool', async () => {
+      const {token} = sortedWrappedTokens[0];
+      const delegatee = sortedWrappedTokens[1].address;
+      await controller.delegateCompLikeTokenFromPool(pool.address, token.address, delegatee);
+      expect(await token.delegateeByAddress(pool.address)).to.eq(delegatee);
     });
   });
 });
