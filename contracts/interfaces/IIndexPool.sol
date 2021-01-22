@@ -84,6 +84,8 @@ interface IIndexPool {
 
   function setSwapFee(uint256 swapFee) external;
 
+  function delegateCompLikeToken(address token, address delegatee) external;
+
   function reweighTokens(
     address[] calldata tokens,
     uint96[] calldata desiredDenorms

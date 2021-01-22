@@ -9,6 +9,7 @@ import "./BMath.sol";
 /* ========== Internal Interfaces ========== */
 import "../interfaces/IFlashLoanRecipient.sol";
 import "../interfaces/IIndexPool.sol";
+import "../interfaces/ICompLikeToken.sol";
 
 
 /************************************************************************************************
@@ -243,6 +244,18 @@ contract IndexPool is BToken, BMath, IIndexPool {
     require(swapFee >= MIN_FEE && swapFee <= MAX_FEE, "ERR_INVALID_FEE");
     _swapFee = swapFee;
     emit LOG_SWAP_FEE_UPDATED(swapFee);
+  }
+
+  /**
+   * @dev Delegate a comp-like governance token to an address
+   * specified by the controller.
+   */
+  function delegateCompLikeToken(address token,address delegatee)
+    external
+    override
+    _control_
+  {
+    ICompLikeToken(token).delegate(delegatee);
   }
 
 /* ==========  Token Management Actions  ========== */
