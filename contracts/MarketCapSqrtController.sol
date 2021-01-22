@@ -377,6 +377,22 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
     pool.setMinimumBalance(tokenAddress, minimumBalance);
   }
 
+  /**
+   * @dev Delegates a comp-like governance token from an index pool
+   * to a provided address.
+   */
+  function delegateCompLikeTokenFromPool(
+    address pool,
+    address token,
+    address delegatee
+  )
+    external
+    onlyOwner
+    _havePool(pool)
+  {
+    IIndexPool(pool).delegateCompLikeToken(token, delegatee);
+  }
+
 /* ==========  Pool Rebalance Actions  ========== */
 
   /**
