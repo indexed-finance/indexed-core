@@ -13,7 +13,7 @@ Subject to the GPL-3.0 license
 
 
 contract BConst {
-  uint256 public constant VERSION_NUMBER = 0;
+  uint256 public constant VERSION_NUMBER = 1;
 
 /* ---  Weight Updates  --- */
 
