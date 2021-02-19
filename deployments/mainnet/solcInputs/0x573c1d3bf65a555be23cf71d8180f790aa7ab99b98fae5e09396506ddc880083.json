@@ -1,0 +1,45 @@
+{
+  "language": "Solidity",
+  "sources": {
+    "temp-contracts/interfaces/IPoolFactoryAccessControl.sol": {
+      "content": "// SPDX-License-Identifier: GPL-3.0\npragma solidity ^0.6.0;\n\n\ninterface IPoolFactoryAccessControl {\n/* ==========  Events  ========== */\n\n  event AdminAccessGranted(address newAdmin);\n  event AdminAccessRevoked(address newAdmin);\n\n/* ==========  Queries  ========== */\n\n  function poolFactory() external view returns (address);\n\n  function hasAdminAccess(address) external view returns (bool);\n\n/* ==========  Owner Controls  ========== */\n\n  function grantAdminAccess(address admin) external;\n\n  function revokeAdminAccess(address admin) external;\n\n  function transferPoolFactoryOwnership(address) external;\n\n  function disapprovePoolController(address) external;\n\n/* ==========  Admin Controls  ========== */\n\n  function approvePoolController(address) external;\n}"
+    },
+    "temp-contracts/PoolFactoryAccessControl.sol": {
+      "content": "// SPDX-License-Identifier: GPL-3.0\npragma solidity ^0.6.0;\n\n/* ========== External Inheritance ========== */\nimport \"@openzeppelin/contracts/access/Ownable.sol\";\n\n/* ========== Internal Interfaces ========== */\nimport \"./interfaces/IPoolFactoryAccessControl.sol\";\n\n\ncontract PoolFactoryAccessControl is IPoolFactoryAccessControl, Ownable {\n/* ==========  Constants  ========== */\n\n  address public immutable override poolFactory;\n\n/* ==========  Storage  ========== */\n\n  mapping(address => bool) public override hasAdminAccess;\n\n/* ==========  Modifiers  ========== */\n\n  modifier onlyAdminOrOwner {\n    require(\n      hasAdminAccess[msg.sender] || msg.sender == owner(),\n      \"ERR_NOT_ADMIN_OR_OWNER\"\n    );\n    _;\n  }\n\n/* ==========  Constructor  ========== */\n\n  constructor(address poolFactory_) public Ownable() {\n    poolFactory = poolFactory_;\n  }\n\n/* ==========  Owner Controls  ========== */\n\n  /**\n   * @dev Transfer ownership of the pool factory to another account.\n   */\n  function transferPoolFactoryOwnership(address newOwner) external override onlyOwner {\n    Ownable(poolFactory).transferOwnership(newOwner);\n  }\n\n  /**\n   * @dev Grants admin access to `admin`.\n   */\n  function grantAdminAccess(address admin) external override onlyOwner {\n    hasAdminAccess[admin] = true;\n    emit AdminAccessGranted(admin);\n  }\n\n  /**\n   * @dev Revokes admin access from `admin`.\n   */\n  function revokeAdminAccess(address admin) external override onlyOwner {\n    hasAdminAccess[admin] = false;\n    emit AdminAccessRevoked(admin);\n  }\n\n  /** @dev Removes the ability of `controller` to deploy pools. */\n  function disapprovePoolController(address controller) external override onlyOwner {\n    IPoolFactory(poolFactory).disapprovePoolController(controller);\n  }\n\n/* ==========  Admin Controls  ========== */\n\n  /** @dev Approves `controller` to deploy pools. */\n  function approvePoolController(address controller) external override onlyAdminOrOwner {\n    IPoolFactory(poolFactory).approvePoolController(controller);\n  }\n}\n\n\ninterface IPoolFactory {\n  function approvePoolController(address controller) external;\n\n  function disapprovePoolController(address controller) external;\n}"
+    },
+    "@openzeppelin/contracts/access/Ownable.sol": {
+      "content": "// SPDX-License-Identifier: MIT\n\npragma solidity ^0.6.0;\n\nimport \"../GSN/Context.sol\";\n/**\n * @dev Contract module which provides a basic access control mechanism, where\n * there is an account (an owner) that can be granted exclusive access to\n * specific functions.\n *\n * By default, the owner account will be the one that deploys the contract. This\n * can later be changed with {transferOwnership}.\n *\n * This module is used through inheritance. It will make available the modifier\n * `onlyOwner`, which can be applied to your functions to restrict their use to\n * the owner.\n */\ncontract Ownable is Context {\n    address private _owner;\n\n    event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);\n\n    /**\n     * @dev Initializes the contract setting the deployer as the initial owner.\n     */\n    constructor () internal {\n        address msgSender = _msgSender();\n        _owner = msgSender;\n        emit OwnershipTransferred(address(0), msgSender);\n    }\n\n    /**\n     * @dev Returns the address of the current owner.\n     */\n    function owner() public view returns (address) {\n        return _owner;\n    }\n\n    /**\n     * @dev Throws if called by any account other than the owner.\n     */\n    modifier onlyOwner() {\n        require(_owner == _msgSender(), \"Ownable: caller is not the owner\");\n        _;\n    }\n\n    /**\n     * @dev Leaves the contract without owner. It will not be possible to call\n     * `onlyOwner` functions anymore. Can only be called by the current owner.\n     *\n     * NOTE: Renouncing ownership will leave the contract without an owner,\n     * thereby removing any functionality that is only available to the owner.\n     */\n    function renounceOwnership() public virtual onlyOwner {\n        emit OwnershipTransferred(_owner, address(0));\n        _owner = address(0);\n    }\n\n    /**\n     * @dev Transfers ownership of the contract to a new account (`newOwner`).\n     * Can only be called by the current owner.\n     */\n    function transferOwnership(address newOwner) public virtual onlyOwner {\n        require(newOwner != address(0), \"Ownable: new owner is the zero address\");\n        emit OwnershipTransferred(_owner, newOwner);\n        _owner = newOwner;\n    }\n}\n"
+    },
+    "@openzeppelin/contracts/GSN/Context.sol": {
+      "content": "// SPDX-License-Identifier: MIT\n\npragma solidity ^0.6.0;\n\n/*\n * @dev Provides information about the current execution context, including the\n * sender of the transaction and its data. While these are generally available\n * via msg.sender and msg.data, they should not be accessed in such a direct\n * manner, since when dealing with GSN meta-transactions the account sending and\n * paying for execution may not be the actual sender (as far as an application\n * is concerned).\n *\n * This contract is only required for intermediate, library-like contracts.\n */\nabstract contract Context {\n    function _msgSender() internal view virtual returns (address payable) {\n        return msg.sender;\n    }\n\n    function _msgData() internal view virtual returns (bytes memory) {\n        this; // silence state mutability warning without generating bytecode - see https://github.com/ethereum/solidity/issues/2691\n        return msg.data;\n    }\n}\n"
+    }
+  },
+  "settings": {
+    "metadata": {
+      "useLiteralContent": false
+    },
+    "optimizer": {
+      "enabled": true,
+      "runs": 200
+    },
+    "outputSelection": {
+      "*": {
+        "*": [
+          "abi",
+          "evm.bytecode",
+          "evm.deployedBytecode",
+          "evm.methodIdentifiers",
+          "metadata",
+          "devdoc",
+          "userdoc",
+          "storageLayout",
+          "evm.gasEstimates"
+        ],
+        "": [
+          "id",
+          "ast"
+        ]
+      }
+    }
+  }
+}

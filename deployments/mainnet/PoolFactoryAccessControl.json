@@ -1,0 +1,321 @@
+{
+  "abi": [
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "poolFactory_",
+          "type": "address"
+        }
+      ],
+      "stateMutability": "nonpayable",
+      "type": "constructor"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": false,
+          "internalType": "address",
+          "name": "newAdmin",
+          "type": "address"
+        }
+      ],
+      "name": "AdminAccessGranted",
+      "type": "event"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": false,
+          "internalType": "address",
+          "name": "newAdmin",
+          "type": "address"
+        }
+      ],
+      "name": "AdminAccessRevoked",
+      "type": "event"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": true,
+          "internalType": "address",
+          "name": "previousOwner",
+          "type": "address"
+        },
+        {
+          "indexed": true,
+          "internalType": "address",
+          "name": "newOwner",
+          "type": "address"
+        }
+      ],
+      "name": "OwnershipTransferred",
+      "type": "event"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "controller",
+          "type": "address"
+        }
+      ],
+      "name": "approvePoolController",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "controller",
+          "type": "address"
+        }
+      ],
+      "name": "disapprovePoolController",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "admin",
+          "type": "address"
+        }
+      ],
+      "name": "grantAdminAccess",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "name": "hasAdminAccess",
+      "outputs": [
+        {
+          "internalType": "bool",
+          "name": "",
+          "type": "bool"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "owner",
+      "outputs": [
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "poolFactory",
+      "outputs": [
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "renounceOwnership",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "admin",
+          "type": "address"
+        }
+      ],
+      "name": "revokeAdminAccess",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "newOwner",
+          "type": "address"
+        }
+      ],
+      "name": "transferOwnership",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "newOwner",
+          "type": "address"
+        }
+      ],
+      "name": "transferPoolFactoryOwnership",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    }
+  ],
+  "receipt": {
+    "to": null,
+    "from": "0x236ECcAB8cdcfEDb099dE85c4060024bA3cE4d46",
+    "contractAddress": "0xb8fdBd8D10b394f85F777969564b6D49D6EbAAA2",
+    "transactionIndex": 45,
+    "gasUsed": "537926",
+    "logsBloom": "0x40000000000000000000000000000000000000000000000000800000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000020000000000000000000800000000040000000000000000000000400000000000000000000000000000000000000000000000008000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000020000000000000000001000000000000000000000000000000000000000000000000",
+    "blockHash": "0x64598e7d2491b027ae2965ba253df801ac7f01eff6dc433b6bcb972d20d73ba2",
+    "transactionHash": "0x37aac089fc8cc45a41f79509a44b3f54a80e63ef49e3f7f1201e5fb493c02112",
+    "logs": [
+      {
+        "transactionIndex": 45,
+        "blockNumber": 11885132,
+        "transactionHash": "0x37aac089fc8cc45a41f79509a44b3f54a80e63ef49e3f7f1201e5fb493c02112",
+        "address": "0xb8fdBd8D10b394f85F777969564b6D49D6EbAAA2",
+        "topics": [
+          "0x8be0079c531659141344cd1fd0a4f28419497f9722a3daafe3b4186f6b6457e0",
+          "0x0000000000000000000000000000000000000000000000000000000000000000",
+          "0x000000000000000000000000236eccab8cdcfedb099de85c4060024ba3ce4d46"
+        ],
+        "data": "0x",
+        "logIndex": 93,
+        "blockHash": "0x64598e7d2491b027ae2965ba253df801ac7f01eff6dc433b6bcb972d20d73ba2"
+      }
+    ],
+    "blockNumber": 11885132,
+    "cumulativeGasUsed": "5625553",
+    "status": 1,
+    "byzantium": true
+  },
+  "address": "0xb8fdBd8D10b394f85F777969564b6D49D6EbAAA2",
+  "args": [
+    "0x592f70cE43a310D15fF59BE1460F38Ab6DF3Fe65"
+  ],
+  "solcInputHash": "0x573c1d3bf65a555be23cf71d8180f790aa7ab99b98fae5e09396506ddc880083",
+  "metadata": "{\"compiler\":{\"version\":\"0.6.12+commit.27d51765\"},\"language\":\"Solidity\",\"output\":{\"abi\":[{\"inputs\":[{\"internalType\":\"address\",\"name\":\"poolFactory_\",\"type\":\"address\"}],\"stateMutability\":\"nonpayable\",\"type\":\"constructor\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":false,\"internalType\":\"address\",\"name\":\"newAdmin\",\"type\":\"address\"}],\"name\":\"AdminAccessGranted\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":false,\"internalType\":\"address\",\"name\":\"newAdmin\",\"type\":\"address\"}],\"name\":\"AdminAccessRevoked\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":true,\"internalType\":\"address\",\"name\":\"previousOwner\",\"type\":\"address\"},{\"indexed\":true,\"internalType\":\"address\",\"name\":\"newOwner\",\"type\":\"address\"}],\"name\":\"OwnershipTransferred\",\"type\":\"event\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"controller\",\"type\":\"address\"}],\"name\":\"approvePoolController\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"controller\",\"type\":\"address\"}],\"name\":\"disapprovePoolController\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"admin\",\"type\":\"address\"}],\"name\":\"grantAdminAccess\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"\",\"type\":\"address\"}],\"name\":\"hasAdminAccess\",\"outputs\":[{\"internalType\":\"bool\",\"name\":\"\",\"type\":\"bool\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"owner\",\"outputs\":[{\"internalType\":\"address\",\"name\":\"\",\"type\":\"address\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"poolFactory\",\"outputs\":[{\"internalType\":\"address\",\"name\":\"\",\"type\":\"address\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"renounceOwnership\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"admin\",\"type\":\"address\"}],\"name\":\"revokeAdminAccess\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"newOwner\",\"type\":\"address\"}],\"name\":\"transferOwnership\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"newOwner\",\"type\":\"address\"}],\"name\":\"transferPoolFactoryOwnership\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"}],\"devdoc\":{\"kind\":\"dev\",\"methods\":{\"approvePoolController(address)\":{\"details\":\"Approves `controller` to deploy pools. \"},\"disapprovePoolController(address)\":{\"details\":\"Removes the ability of `controller` to deploy pools. \"},\"grantAdminAccess(address)\":{\"details\":\"Grants admin access to `admin`.\"},\"owner()\":{\"details\":\"Returns the address of the current owner.\"},\"renounceOwnership()\":{\"details\":\"Leaves the contract without owner. It will not be possible to call `onlyOwner` functions anymore. Can only be called by the current owner. NOTE: Renouncing ownership will leave the contract without an owner, thereby removing any functionality that is only available to the owner.\"},\"revokeAdminAccess(address)\":{\"details\":\"Revokes admin access from `admin`.\"},\"transferOwnership(address)\":{\"details\":\"Transfers ownership of the contract to a new account (`newOwner`). Can only be called by the current owner.\"},\"transferPoolFactoryOwnership(address)\":{\"details\":\"Transfer ownership of the pool factory to another account.\"}},\"version\":1},\"userdoc\":{\"kind\":\"user\",\"methods\":{},\"version\":1}},\"settings\":{\"compilationTarget\":{\"temp-contracts/PoolFactoryAccessControl.sol\":\"PoolFactoryAccessControl\"},\"evmVersion\":\"istanbul\",\"libraries\":{},\"metadata\":{\"bytecodeHash\":\"ipfs\"},\"optimizer\":{\"enabled\":true,\"runs\":200},\"remappings\":[]},\"sources\":{\"@openzeppelin/contracts/GSN/Context.sol\":{\"keccak256\":\"0xdb26cbf4d028490f49831a7865c2fe1b28db44b535ca8d343785a3b768aae183\",\"license\":\"MIT\",\"urls\":[\"bzz-raw://840b14ce0315c47d49ba328f1f9fa7654ded1c9e1559e6c5e777a7b2dc28bf0a\",\"dweb:/ipfs/QmTLLabn4wcfGro9LEmUXUN2nwKqZSotXMvjDCLXEnLtZP\"]},\"@openzeppelin/contracts/access/Ownable.sol\":{\"keccak256\":\"0x4bd6402ca6b3419008c2b482aff54e66836e8cb4eba2680e42ac5884ae6424fc\",\"license\":\"MIT\",\"urls\":[\"bzz-raw://8f9f711fb8d0d92aeea1c327e3845d13ca1fa8f142e47f8723cd5b3106fb29a3\",\"dweb:/ipfs/QmVQUReDW9f4zGqhizwHnyU8EntMs95tbASdqkGncnikba\"]},\"temp-contracts/PoolFactoryAccessControl.sol\":{\"keccak256\":\"0x0a7ca7c18061d9e6adf1be0e8dd20a5b7bcad3c8bfd66d72ff9adb2fdcb04324\",\"license\":\"GPL-3.0\",\"urls\":[\"bzz-raw://c2737e5e17c9ae73050229a0b75b212a37f69f20f2164d7d96e6999b9f9f693e\",\"dweb:/ipfs/QmZWSqFsa2GXwtJ8oXgKFatTkDX2222uNqk41yGYuRVb7s\"]},\"temp-contracts/interfaces/IPoolFactoryAccessControl.sol\":{\"keccak256\":\"0x927733e19a31c45e621b9ba56f563dfb259edffd6bd136032251ae4b5f34cfb8\",\"license\":\"GPL-3.0\",\"urls\":[\"bzz-raw://6617cb54d2c62529261587245564a54eb5fd388e1e4260285f542babbf18c20d\",\"dweb:/ipfs/QmZMiQHuEu657HS19DpuZ4uq43uEAPPMxL1ssRe6wE9uui\"]}},\"version\":1}",
+  "bytecode": "0x60a060405234801561001057600080fd5b506040516109233803806109238339818101604052602081101561003357600080fd5b5051600061003f61009e565b600080546001600160a01b0319166001600160a01b0383169081178255604051929350917f8be0079c531659141344cd1fd0a4f28419497f9722a3daafe3b4186f6b6457e0908290a35060601b6001600160601b0319166080526100a2565b3390565b60805160601c6108556100ce600039806102ad528061041652806105a9528061067052506108556000f3fe608060405234801561001057600080fd5b506004361061009e5760003560e01c8063715018a611610066578063715018a6146101755780638da5cb5b1461017d578063dad8542d14610185578063e7952ee6146101ab578063f2fde38b146101d15761009e565b806322b3127a146100a35780634219dc40146100cb5780634842b3c4146100ef5780635fe6416e146101295780636a58f07b1461014f575b600080fd5b6100c9600480360360208110156100b957600080fd5b50356001600160a01b03166101f7565b005b6100d36102ab565b604080516001600160a01b039092168252519081900360200190f35b6101156004803603602081101561010557600080fd5b50356001600160a01b03166102cf565b604080519115158252519081900360200190f35b6100c96004803603602081101561013f57600080fd5b50356001600160a01b03166102e4565b6100c96004803603602081101561016557600080fd5b50356001600160a01b0316610394565b6100c961049e565b6100d3610540565b6100c96004803603602081101561019b57600080fd5b50356001600160a01b031661054f565b6100c9600480360360208110156101c157600080fd5b50356001600160a01b0316610616565b6100c9600480360360208110156101e757600080fd5b50356001600160a01b03166106dd565b6101ff6107d5565b6000546001600160a01b0390811691161461024f576040805162461bcd60e51b81526020600482018190526024820152600080516020610800833981519152604482015290519081900360640190fd5b6001600160a01b038116600081815260016020818152604092839020805460ff1916909217909155815192835290517fc36befb96151814c16fe0d20f29a5912794cda96453e57ab00edad0bb21d50fa9281900390910190a150565b7f000000000000000000000000000000000000000000000000000000000000000081565b60016020526000908152604090205460ff1681565b6102ec6107d5565b6000546001600160a01b0390811691161461033c576040805162461bcd60e51b81526020600482018190526024820152600080516020610800833981519152604482015290519081900360640190fd5b6001600160a01b038116600081815260016020908152604091829020805460ff19169055815192835290517f998b1c8c2c4e47baeddde4d4152dfae31548fb5e6aa5fc2026808fa365a30e7c9281900390910190a150565b3360009081526001602052604090205460ff16806103ca57506103b5610540565b6001600160a01b0316336001600160a01b0316145b610414576040805162461bcd60e51b815260206004820152601660248201527522a9292fa727aa2fa0a226a4a72fa7a92fa7aba722a960511b604482015290519081900360640190fd5b7f00000000000000000000000000000000000000000000000000000000000000006001600160a01b0316636a58f07b826040518263ffffffff1660e01b815260040180826001600160a01b03168152602001915050600060405180830381600087803b15801561048357600080fd5b505af1158015610497573d6000803e3d6000fd5b5050505050565b6104a66107d5565b6000546001600160a01b039081169116146104f6576040805162461bcd60e51b81526020600482018190526024820152600080516020610800833981519152604482015290519081900360640190fd5b600080546040516001600160a01b03909116907f8be0079c531659141344cd1fd0a4f28419497f9722a3daafe3b4186f6b6457e0908390a3600080546001600160a01b0319169055565b6000546001600160a01b031690565b6105576107d5565b6000546001600160a01b039081169116146105a7576040805162461bcd60e51b81526020600482018190526024820152600080516020610800833981519152604482015290519081900360640190fd5b7f00000000000000000000000000000000000000000000000000000000000000006001600160a01b031663dad8542d826040518263ffffffff1660e01b815260040180826001600160a01b03168152602001915050600060405180830381600087803b15801561048357600080fd5b61061e6107d5565b6000546001600160a01b0390811691161461066e576040805162461bcd60e51b81526020600482018190526024820152600080516020610800833981519152604482015290519081900360640190fd5b7f00000000000000000000000000000000000000000000000000000000000000006001600160a01b031663f2fde38b826040518263ffffffff1660e01b815260040180826001600160a01b03168152602001915050600060405180830381600087803b15801561048357600080fd5b6106e56107d5565b6000546001600160a01b03908116911614610735576040805162461bcd60e51b81526020600482018190526024820152600080516020610800833981519152604482015290519081900360640190fd5b6001600160a01b03811661077a5760405162461bcd60e51b81526004018080602001828103825260268152602001806107da6026913960400191505060405180910390fd5b600080546040516001600160a01b03808516939216917f8be0079c531659141344cd1fd0a4f28419497f9722a3daafe3b4186f6b6457e091a3600080546001600160a01b0319166001600160a01b0392909216919091179055565b339056fe4f776e61626c653a206e6577206f776e657220697320746865207a65726f20616464726573734f776e61626c653a2063616c6c6572206973206e6f7420746865206f776e6572a264697066735822122017f105e34ff757cb4365c7a97c2e35557731fa3dae25c4347d3c6c4788ce00ca64736f6c634300060c0033",
+  "deployedBytecode": "0x608060405234801561001057600080fd5b506004361061009e5760003560e01c8063715018a611610066578063715018a6146101755780638da5cb5b1461017d578063dad8542d14610185578063e7952ee6146101ab578063f2fde38b146101d15761009e565b806322b3127a146100a35780634219dc40146100cb5780634842b3c4146100ef5780635fe6416e146101295780636a58f07b1461014f575b600080fd5b6100c9600480360360208110156100b957600080fd5b50356001600160a01b03166101f7565b005b6100d36102ab565b604080516001600160a01b039092168252519081900360200190f35b6101156004803603602081101561010557600080fd5b50356001600160a01b03166102cf565b604080519115158252519081900360200190f35b6100c96004803603602081101561013f57600080fd5b50356001600160a01b03166102e4565b6100c96004803603602081101561016557600080fd5b50356001600160a01b0316610394565b6100c961049e565b6100d3610540565b6100c96004803603602081101561019b57600080fd5b50356001600160a01b031661054f565b6100c9600480360360208110156101c157600080fd5b50356001600160a01b0316610616565b6100c9600480360360208110156101e757600080fd5b50356001600160a01b03166106dd565b6101ff6107d5565b6000546001600160a01b0390811691161461024f576040805162461bcd60e51b81526020600482018190526024820152600080516020610800833981519152604482015290519081900360640190fd5b6001600160a01b038116600081815260016020818152604092839020805460ff1916909217909155815192835290517fc36befb96151814c16fe0d20f29a5912794cda96453e57ab00edad0bb21d50fa9281900390910190a150565b7f000000000000000000000000000000000000000000000000000000000000000081565b60016020526000908152604090205460ff1681565b6102ec6107d5565b6000546001600160a01b0390811691161461033c576040805162461bcd60e51b81526020600482018190526024820152600080516020610800833981519152604482015290519081900360640190fd5b6001600160a01b038116600081815260016020908152604091829020805460ff19169055815192835290517f998b1c8c2c4e47baeddde4d4152dfae31548fb5e6aa5fc2026808fa365a30e7c9281900390910190a150565b3360009081526001602052604090205460ff16806103ca57506103b5610540565b6001600160a01b0316336001600160a01b0316145b610414576040805162461bcd60e51b815260206004820152601660248201527522a9292fa727aa2fa0a226a4a72fa7a92fa7aba722a960511b604482015290519081900360640190fd5b7f00000000000000000000000000000000000000000000000000000000000000006001600160a01b0316636a58f07b826040518263ffffffff1660e01b815260040180826001600160a01b03168152602001915050600060405180830381600087803b15801561048357600080fd5b505af1158015610497573d6000803e3d6000fd5b5050505050565b6104a66107d5565b6000546001600160a01b039081169116146104f6576040805162461bcd60e51b81526020600482018190526024820152600080516020610800833981519152604482015290519081900360640190fd5b600080546040516001600160a01b03909116907f8be0079c531659141344cd1fd0a4f28419497f9722a3daafe3b4186f6b6457e0908390a3600080546001600160a01b0319169055565b6000546001600160a01b031690565b6105576107d5565b6000546001600160a01b039081169116146105a7576040805162461bcd60e51b81526020600482018190526024820152600080516020610800833981519152604482015290519081900360640190fd5b7f00000000000000000000000000000000000000000000000000000000000000006001600160a01b031663dad8542d826040518263ffffffff1660e01b815260040180826001600160a01b03168152602001915050600060405180830381600087803b15801561048357600080fd5b61061e6107d5565b6000546001600160a01b0390811691161461066e576040805162461bcd60e51b81526020600482018190526024820152600080516020610800833981519152604482015290519081900360640190fd5b7f00000000000000000000000000000000000000000000000000000000000000006001600160a01b031663f2fde38b826040518263ffffffff1660e01b815260040180826001600160a01b03168152602001915050600060405180830381600087803b15801561048357600080fd5b6106e56107d5565b6000546001600160a01b03908116911614610735576040805162461bcd60e51b81526020600482018190526024820152600080516020610800833981519152604482015290519081900360640190fd5b6001600160a01b03811661077a5760405162461bcd60e51b81526004018080602001828103825260268152602001806107da6026913960400191505060405180910390fd5b600080546040516001600160a01b03808516939216917f8be0079c531659141344cd1fd0a4f28419497f9722a3daafe3b4186f6b6457e091a3600080546001600160a01b0319166001600160a01b0392909216919091179055565b339056fe4f776e61626c653a206e6577206f776e657220697320746865207a65726f20616464726573734f776e61626c653a2063616c6c6572206973206e6f7420746865206f776e6572a264697066735822122017f105e34ff757cb4365c7a97c2e35557731fa3dae25c4347d3c6c4788ce00ca64736f6c634300060c0033",
+  "devdoc": {
+    "kind": "dev",
+    "methods": {
+      "approvePoolController(address)": {
+        "details": "Approves `controller` to deploy pools. "
+      },
+      "disapprovePoolController(address)": {
+        "details": "Removes the ability of `controller` to deploy pools. "
+      },
+      "grantAdminAccess(address)": {
+        "details": "Grants admin access to `admin`."
+      },
+      "owner()": {
+        "details": "Returns the address of the current owner."
+      },
+      "renounceOwnership()": {
+        "details": "Leaves the contract without owner. It will not be possible to call `onlyOwner` functions anymore. Can only be called by the current owner. NOTE: Renouncing ownership will leave the contract without an owner, thereby removing any functionality that is only available to the owner."
+      },
+      "revokeAdminAccess(address)": {
+        "details": "Revokes admin access from `admin`."
+      },
+      "transferOwnership(address)": {
+        "details": "Transfers ownership of the contract to a new account (`newOwner`). Can only be called by the current owner."
+      },
+      "transferPoolFactoryOwnership(address)": {
+        "details": "Transfer ownership of the pool factory to another account."
+      }
+    },
+    "version": 1
+  },
+  "userdoc": {
+    "kind": "user",
+    "methods": {},
+    "version": 1
+  },
+  "storageLayout": {
+    "storage": [
+      {
+        "astId": 30,
+        "contract": "temp-contracts/PoolFactoryAccessControl.sol:PoolFactoryAccessControl",
+        "label": "_owner",
+        "offset": 0,
+        "slot": "0",
+        "type": "t_address"
+      },
+      {
+        "astId": 147,
+        "contract": "temp-contracts/PoolFactoryAccessControl.sol:PoolFactoryAccessControl",
+        "label": "hasAdminAccess",
+        "offset": 0,
+        "slot": "1",
+        "type": "t_mapping(t_address,t_bool)"
+      }
+    ],
+    "types": {
+      "t_address": {
+        "encoding": "inplace",
+        "label": "address",
+        "numberOfBytes": "20"
+      },
+      "t_bool": {
+        "encoding": "inplace",
+        "label": "bool",
+        "numberOfBytes": "1"
+      },
+      "t_mapping(t_address,t_bool)": {
+        "encoding": "mapping",
+        "key": "t_address",
+        "label": "mapping(address => bool)",
+        "numberOfBytes": "32",
+        "value": "t_bool"
+      }
+    }
+  },
+  "gasEstimates": {
+    "creation": {
+      "codeDepositCost": "426600",
+      "executionCost": "infinite",
+      "totalCost": "infinite"
+    },
+    "external": {
+      "approvePoolController(address)": "infinite",
+      "disapprovePoolController(address)": "infinite",
+      "grantAdminAccess(address)": "infinite",
+      "hasAdminAccess(address)": "1181",
+      "owner()": "1059",
+      "poolFactory()": "infinite",
+      "renounceOwnership()": "infinite",
+      "revokeAdminAccess(address)": "infinite",
+      "transferOwnership(address)": "infinite",
+      "transferPoolFactoryOwnership(address)": "infinite"
+    }
+  }
+}
