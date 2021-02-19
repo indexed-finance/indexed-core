@@ -5,7 +5,6 @@ pragma solidity ^0.6.0;
 import "@openzeppelin/contracts/access/Ownable.sol";
 
 /* ========== Internal Interfaces ========== */
-import "./interfaces/IPoolFactory.sol";
 import "./interfaces/IPoolFactoryAccessControl.sol";
 
 
@@ -70,4 +69,11 @@ contract PoolFactoryAccessControl is IPoolFactoryAccessControl, Ownable {
   function approvePoolController(address controller) external override onlyAdminOrOwner {
     IPoolFactory(poolFactory).approvePoolController(controller);
   }
+}
+
+
+interface IPoolFactory {
+  function approvePoolController(address controller) external;
+
+  function disapprovePoolController(address controller) external;
 }
