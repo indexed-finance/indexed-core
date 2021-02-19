@@ -43,7 +43,6 @@ contract PoolFactoryAccessControl is IPoolFactoryAccessControl, Ownable {
     Ownable(poolFactory).transferOwnership(newOwner);
   }
 
-
   /**
    * @dev Grants admin access to `admin`.
    */
