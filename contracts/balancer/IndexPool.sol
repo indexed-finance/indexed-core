@@ -210,6 +210,7 @@ contract IndexPool is BToken, BMath, IIndexPool {
    * @dev Set the exit fee recipient address.
    */
   function setExitFeeRecipient(address exitFeeRecipient) external override _control_ {
+    require(exitFeeRecipient != address(0), "ERR_NULL_ADDRESS");
     _exitFeeRecipient = exitFeeRecipient;
     emit LOG_EXIT_FEE_RECIPIENT_UPDATED(exitFeeRecipient);
   }
