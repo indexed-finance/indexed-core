@@ -105,7 +105,7 @@ contract IndexPool is BToken, BMath, IIndexPool {
     address exitFeeRecipient
   ) external override {
     require(_controller == address(0), "ERR_CONFIGURED");
-    require(controller != address(0) && _exitFeeRecipient != address(0), "ERR_NULL_ADDRESS");
+    require(controller != address(0) && exitFeeRecipient != address(0), "ERR_NULL_ADDRESS");
     _controller = controller;
     // default fee is 2.5%
     _swapFee = BONE / 40;
