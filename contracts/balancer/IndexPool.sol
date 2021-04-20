@@ -672,60 +672,6 @@ contract IndexPool is BToken, BMath, IIndexPool {
     }
   }
 
-/* ==========  Flash Loan  ========== */
-
-  /**
-   * @dev Execute a flash loan, transferring `amount` of `token` to `recipient`.
-   * `amount` must be repaid with `swapFee` interest by the end of the transaction.
-   *
-   * @param recipient Must implement the IFlashLoanRecipient interface
-   * @param token Token to borrow
-   * @param amount Amount to borrow
-   * @param data Data to send to the recipient in `receiveFlashLoan` call
-   */
-  function flashBorrow(
-    address recipient,
-    address token,
-    uint256 amount,
-    bytes calldata data
-  )
-    external
-    override
-    _lock_
-  {
-    Record storage record = _records[token];
-    require(record.bound, "ERR_NOT_BOUND");
-    uint256 balStart = IERC20(token).balanceOf(address(this));
-    require(balStart >= amount, "ERR_INSUFFICIENT_BAL");
-    _pushUnderlying(token, address(recipient), amount);
-    uint256 fee = bmul(balStart, _swapFee);
-    uint256 amountDue = badd(amount, fee);
-    IFlashLoanRecipient(recipient).receiveFlashLoan(token, amount, amountDue, data);
-    uint256 balEnd = IERC20(token).balanceOf(address(this));
-    require(
-      balEnd > balStart && balEnd >= amountDue,
-      "ERR_INSUFFICIENT_PAYMENT"
-    );
-    record.balance = balEnd;
-    // If the payment brings the token above its minimum balance,
-    // clear the minimum and mark the token as ready.
-    if (!record.ready) {
-      uint256 minimumBalance = _minimumBalances[token];
-      if (balEnd >= minimumBalance) {
-        _minimumBalances[token] = 0;
-        record.ready = true;
-        emit LOG_TOKEN_READY(token);
-        uint256 additionalBalance = bsub(balEnd, minimumBalance);
-        uint256 balRatio = bdiv(additionalBalance, minimumBalance);
-        uint96 newDenorm = uint96(badd(MIN_WEIGHT, bmul(MIN_WEIGHT, balRatio)));
-        record.denorm = newDenorm;
-        record.lastDenormUpdate = uint40(now);
-        _totalWeight = badd(_totalWeight, newDenorm);
-        emit LOG_DENORM_UPDATED(token, record.denorm);
-      }
-    }
-  }
-
 /* ==========  Token Swaps  ========== */
 
   /**

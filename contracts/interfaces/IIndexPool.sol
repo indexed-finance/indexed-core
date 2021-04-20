@@ -150,13 +150,6 @@ interface IIndexPool {
 
   function gulp(address token) external;
 
-  function flashBorrow(
-    address recipient,
-    address token,
-    uint256 amount,
-    bytes calldata data
-  ) external;
-
   function swapExactAmountIn(
     address tokenIn,
     uint256 tokenAmountIn,
