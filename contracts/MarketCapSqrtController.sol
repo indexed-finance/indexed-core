@@ -149,6 +149,8 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
   // Metadata about index pools
   mapping(address => IndexPoolMeta) internal _poolMeta;
 
+  address public defaultExitFeeRecipient;
+
 /* ========== Modifiers ========== */
 
   modifier _havePool(address pool) {
@@ -213,7 +215,7 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
       POOL_IMPLEMENTATION_ID,
       keccak256(abi.encodePacked(categoryID, indexSize))
     );
-    IIndexPool(poolAddress).configure(address(this), name, symbol);
+    IIndexPool(poolAddress).configure(address(this), name, symbol, defaultExitFeeRecipient);
 
     _poolMeta[poolAddress] = IndexPoolMeta({
       initialized: false,
@@ -350,6 +352,22 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
     uint256 maxPoolTokens
   ) external onlyOwner _havePool(poolAddress) {
     IIndexPool(poolAddress).setMaxPoolTokens(maxPoolTokens);
+  }
+
+  /**
+   * @dev Sets the default exit fee recipient for new pools.
+   */
+  function setDefaultExitFeeRecipient(address defaultExitFeeRecipient_) external onlyOwner {
+    require(defaultExitFeeRecipient_ != address(0), "ERR_NULL_ADDRESS");
+    defaultExitFeeRecipient = defaultExitFeeRecipient_;
+  }
+
+  /**
+   * @dev Sets the exit fee recipient on an existing pool.
+   */
+  function setExitFeeRecipient(address poolAddress, address exitFeeRecipient) external onlyOwner _havePool(poolAddress) {
+    // No not-null requirement - already in pool function.
+    IIndexPool(poolAddress).setExitFeeRecipient(exitFeeRecipient);
   }
 
   /**
