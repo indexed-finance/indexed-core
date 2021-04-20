@@ -1287,8 +1287,10 @@ contract IndexPool is BToken, BMath, IIndexPool {
       denorm = uint96(badd(oldWeight, maxDiff));
       diff = maxDiff;
     }
-    _totalWeight = badd(_totalWeight, diff);
-    require(_totalWeight <= MAX_TOTAL_WEIGHT, "ERR_MAX_TOTAL_WEIGHT");
+    // If new total weight exceeds the maximum, do not update
+    uint256 newTotalWeight = badd(_totalWeight, diff);
+    if (newTotalWeight > MAX_TOTAL_WEIGHT) return;
+    _totalWeight = newTotalWeight;
     // Update the in-memory denorm value for spot-price computations.
     record.denorm = denorm;
     // Update the storage record
