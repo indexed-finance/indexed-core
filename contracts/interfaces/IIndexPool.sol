@@ -86,7 +86,8 @@ interface IIndexPool {
   function configure(
     address controller,
     string calldata name,
-    string calldata symbol
+    string calldata symbol,
+    address exitFeeRecipient
   ) external;
 
   function initialize(
