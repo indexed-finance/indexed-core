@@ -417,4 +417,45 @@ describe('reweighTokens()', async () => {
       expect(await indexPool.isBound(tokens[0])).to.be.false;
     });
   });
+
+  describe('MAX_TOTAL_WEIGHT', () => {
+    let pool, token0, token1;
+    async function prepare(maximumInitial = true) {
+      const IPoolFactory = await ethers.getContractFactory("IndexPool");
+      pool = await IPoolFactory.deploy();
+      const ERC20 =  await ethers.getContractFactory("MockERC20");
+      await pool.configure(from, 'n', 's', from);
+      token0 = await ERC20.deploy('a','a');
+      token1 = await ERC20.deploy('b','b');
+      await token0.getFreeTokens(from, toWei(20));
+      await token1.getFreeTokens(from, toWei(20));
+      await token0.approve(pool.address, toWei(20));
+      await token1.approve(pool.address, toWei(20));
+      await pool.initialize(
+        [token0.address, token1.address],
+        [toWei(10), toWei(10)],
+        maximumInitial ? [toWei(13), toWei(13)] : [toWei(10), toWei(13)],
+        from,
+        from
+      );
+      await pool.reweighTokens(
+        [token0.address, token1.address],
+        [toWei(14), toWei(10)],
+      );
+      await fastForward(3600);
+    }
+
+    it('Input weight update fails gracefully if weight would exceed maximum', async () => {
+      await prepare(true)
+      await pool.swapExactAmountIn(token0.address, toWei(1), token1.address, zero, maxPrice);
+      expect((await pool.getTotalDenormalizedWeight()).toString()).to.eq(toWei(25.87).toString())
+    })
+
+    it('Weight update succeeds otherwise', async () => {
+      await prepare(false);
+      await pool.swapExactAmountIn(token0.address, toWei(1), token1.address, zero, maxPrice);
+      // Decrease by .13 and increase by .1
+      expect((await pool.getTotalDenormalizedWeight()).toString()).to.eq(toWei(22.97).toString())
+    })
+  })
 });
