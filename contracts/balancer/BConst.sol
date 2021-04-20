@@ -37,7 +37,7 @@ contract BConst {
   // Maximum swap or exit fee.
   uint256 internal constant MAX_FEE = BONE / 10;
   // Actual exit fee.
-  uint256 internal constant EXIT_FEE = 0;
+  uint256 internal constant EXIT_FEE = 5e15;
 
   // Default total of all desired weights. Can differ by up to BONE.
   uint256 internal constant DEFAULT_TOTAL_WEIGHT = BONE * 25;
