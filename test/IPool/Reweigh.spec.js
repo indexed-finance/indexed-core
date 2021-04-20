@@ -336,7 +336,7 @@ describe('reweighTokens()', async () => {
       newToken = await erc20Factory.deploy('New Token', 'NTT');
       const IPool = await ethers.getContractFactory('IndexPool');
       indexPool = await IPool.deploy();
-      await indexPool.configure(from, 'pool', 'pool symbol');
+      await indexPool.configure(from, 'pool', 'pool symbol', from);
       for (let i = 0; i < tokens.length; i++) {
         const token = await ethers.getContractAt('MockERC20', tokens[i]);
         await token.getFreeTokens(from, toWei(1));
