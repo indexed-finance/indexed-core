@@ -80,6 +80,9 @@ interface IIndexPool {
   /** @dev Emitted when the swap fee is updated. */
   event LOG_SWAP_FEE_UPDATED(uint256 swapFee);
 
+  /** @dev Emitted when exit fee recipient is updated. */
+  event LOG_EXIT_FEE_RECIPIENT_UPDATED(address exitFeeRecipient);
+
   function configure(
     address controller,
     string calldata name,
