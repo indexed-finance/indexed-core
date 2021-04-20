@@ -141,6 +141,9 @@ contract IndexPool is BToken, BMath, IIndexPool {
   // not be exploited.
   uint256 internal _maxPoolTokens;
 
+  // Recipient for exit fees
+  address internal _exitFeeRecipient;
+
 /* ==========  Controls  ========== */
 
   /**
@@ -155,13 +158,15 @@ contract IndexPool is BToken, BMath, IIndexPool {
   function configure(
     address controller,
     string calldata name,
-    string calldata symbol
+    string calldata symbol,
+    address exitFeeRecipient
   ) external override {
     require(_controller == address(0), "ERR_CONFIGURED");
     require(controller != address(0), "ERR_NULL_ADDRESS");
     _controller = controller;
     // default fee is 2.5%
     _swapFee = BONE / 40;
+    _exitFeeRecipient = exitFeeRecipient;
     _initializeToken(name, symbol);
   }
 
@@ -256,6 +261,16 @@ contract IndexPool is BToken, BMath, IIndexPool {
     _control_
   {
     ICompLikeToken(token).delegate(delegatee);
+  }
+
+  /**
+   * @dev Set the exit fee recipient address. Can only be called
+   * by the current exit fee recipient.
+   */
+  function setExitFeeRecipient(address exitFeeRecipient) external override {
+    require(msg.sender == _exitFeeRecipient, "ERR_NOT_FEE_RECIPIENT");
+    _exitFeeRecipient = exitFeeRecipient;
+    emit LOG_EXIT_FEE_RECIPIENT_UPDATED(exitFeeRecipient);
   }
 
 /* ==========  Token Management Actions  ========== */
@@ -554,7 +569,7 @@ contract IndexPool is BToken, BMath, IIndexPool {
     require(ratio != 0, "ERR_MATH_APPROX");
 
     _pullPoolShare(msg.sender, poolAmountIn);
-    _pushPoolShare(_controller, exitFee);
+    _pushPoolShare(_exitFeeRecipient, exitFee);
     _burnPoolShare(pAiAfterExitFee);
     for (uint256 i = 0; i < minAmountsOut.length; i++) {
       address t = _tokens[i];
@@ -623,7 +638,7 @@ contract IndexPool is BToken, BMath, IIndexPool {
 
     _pullPoolShare(msg.sender, poolAmountIn);
     _burnPoolShare(bsub(poolAmountIn, exitFee));
-    _pushPoolShare(_controller, exitFee);
+    _pushPoolShare(_exitFeeRecipient, exitFee);
 
     return tokenAmountOut;
   }
@@ -678,7 +693,7 @@ contract IndexPool is BToken, BMath, IIndexPool {
 
     _pullPoolShare(msg.sender, poolAmountIn);
     _burnPoolShare(bsub(poolAmountIn, exitFee));
-    _pushPoolShare(_controller, exitFee);
+    _pushPoolShare(_exitFeeRecipient, exitFee);
 
     return poolAmountIn;
   }
@@ -970,6 +985,13 @@ contract IndexPool is BToken, BMath, IIndexPool {
   function getController() external view override returns (address)
   {
     return _controller;
+  }
+
+  /**
+   * @dev Returns the exit fee recipient address.
+   */
+  function getExitFeeRecipient() external view override returns (address) {
+    return _exitFeeRecipient;
   }
 
 /* ==========  Token Queries  ========== */
