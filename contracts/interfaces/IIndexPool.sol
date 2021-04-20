@@ -104,6 +104,8 @@ interface IIndexPool {
 
   function delegateCompLikeToken(address token, address delegatee) external;
 
+  function setExitFeeRecipient(address exitFeeRecipient) external;
+
   function reweighTokens(
     address[] calldata tokens,
     uint96[] calldata desiredDenorms
@@ -176,6 +178,8 @@ interface IIndexPool {
   function getSwapFee() external view returns (uint256/* swapFee */);
 
   function getController() external view returns (address);
+
+  function getExitFeeRecipient() external view returns (address);
 
   function getMaxPoolTokens() external view returns (uint256);
 
