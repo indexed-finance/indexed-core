@@ -732,17 +732,18 @@ contract IndexPool is BToken, BMath, IIndexPool {
     _pullUnderlying(tokenIn, msg.sender, tokenAmountIn);
     _pushUnderlying(tokenOut, msg.sender, tokenAmountOut);
 
-    realInBalance = badd(realInBalance, tokenAmountIn);
-    _updateInputToken(tokenIn, inRecord, realInBalance);
-    if (inRecord.ready) {
-      inRecord.balance = realInBalance;
-    }
     // Update the in-memory record for the spotPriceAfter calculation,
     // then update the storage record with the local balance.
     outRecord.balance = bsub(outRecord.balance, tokenAmountOut);
     _records[tokenOut].balance = outRecord.balance;
     // If needed, update the output token's weight.
     _decreaseDenorm(outRecord, tokenOut);
+
+    realInBalance = badd(realInBalance, tokenAmountIn);
+    _updateInputToken(tokenIn, inRecord, realInBalance);
+    if (inRecord.ready) {
+      inRecord.balance = realInBalance;
+    }
 
     uint256 spotPriceAfter = calcSpotPrice(
       inRecord.balance,
@@ -822,18 +823,19 @@ contract IndexPool is BToken, BMath, IIndexPool {
     _pullUnderlying(tokenIn, msg.sender, tokenAmountIn);
     _pushUnderlying(tokenOut, msg.sender, tokenAmountOut);
 
-    // Update the balance and (if necessary) weight of the input token.
-    realInBalance = badd(realInBalance, tokenAmountIn);
-    _updateInputToken(tokenIn, inRecord, realInBalance);
-    if (inRecord.ready) {
-      inRecord.balance = realInBalance;
-    }
     // Update the in-memory record for the spotPriceAfter calculation,
     // then update the storage record with the local balance.
     outRecord.balance = bsub(outRecord.balance, tokenAmountOut);
     _records[tokenOut].balance = outRecord.balance;
     // If needed, update the output token's weight.
     _decreaseDenorm(outRecord, tokenOut);
+
+    // Update the balance and (if necessary) weight of the input token.
+    realInBalance = badd(realInBalance, tokenAmountIn);
+    _updateInputToken(tokenIn, inRecord, realInBalance);
+    if (inRecord.ready) {
+      inRecord.balance = realInBalance;
+    }
 
     uint256 spotPriceAfter = calcSpotPrice(
       inRecord.balance,

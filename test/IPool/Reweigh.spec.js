@@ -420,7 +420,7 @@ describe('reweighTokens()', async () => {
 
   describe('MAX_TOTAL_WEIGHT', () => {
     let pool, token0, token1;
-    async function prepare(maximumInitial = true) {
+    async function prepare(denorms) {
       const IPoolFactory = await ethers.getContractFactory("IndexPool");
       pool = await IPoolFactory.deploy();
       const ERC20 =  await ethers.getContractFactory("MockERC20");
@@ -434,28 +434,32 @@ describe('reweighTokens()', async () => {
       await pool.initialize(
         [token0.address, token1.address],
         [toWei(10), toWei(10)],
-        maximumInitial ? [toWei(13), toWei(13)] : [toWei(10), toWei(13)],
+        denorms,
         from,
         from
       );
+    }
+
+    it('Input weight update fails gracefully if it would exceed maximum', async () => {
+      await prepare([toWei(13), toWei(13)])
+      await pool.reweighTokens(
+        [token0.address, token1.address],
+        [toWei(14), toWei(13)],
+      );
+      await fastForward(3600);
+      await pool.swapExactAmountIn(token0.address, toWei(1), token1.address, zero, maxPrice);
+      expect((await pool.getTotalDenormalizedWeight()).toString()).to.eq(toWei(26).toString())
+    })
+
+    it('Input weight update succeeds if reduction in output weight makes room', async () => {
+      await prepare([toWei(13), toWei(13)])
       await pool.reweighTokens(
         [token0.address, token1.address],
         [toWei(14), toWei(10)],
       );
       await fastForward(3600);
-    }
-
-    it('Input weight update fails gracefully if weight would exceed maximum', async () => {
-      await prepare(true)
       await pool.swapExactAmountIn(token0.address, toWei(1), token1.address, zero, maxPrice);
-      expect((await pool.getTotalDenormalizedWeight()).toString()).to.eq(toWei(25.87).toString())
-    })
-
-    it('Weight update succeeds otherwise', async () => {
-      await prepare(false);
-      await pool.swapExactAmountIn(token0.address, toWei(1), token1.address, zero, maxPrice);
-      // Decrease by .13 and increase by .1
-      expect((await pool.getTotalDenormalizedWeight()).toString()).to.eq(toWei(22.97).toString())
+      expect((await pool.getTotalDenormalizedWeight()).toString()).to.eq(toWei(26).toString())
     })
   })
 });
