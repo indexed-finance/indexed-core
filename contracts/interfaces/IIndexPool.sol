@@ -106,6 +106,8 @@ interface IIndexPool {
 
   function setExitFeeRecipient(address exitFeeRecipient) external;
 
+  function setController(address controller) external;
+
   function reweighTokens(
     address[] calldata tokens,
     uint96[] calldata desiredDenorms

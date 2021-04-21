@@ -378,6 +378,13 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
   }
 
   /**
+   * @dev Sets the controller on an index pool.
+   */
+  function setController(address poolAddress, address controller) external onlyOwner _havePool(poolAddress) {
+    IIndexPool(poolAddress).setController(controller);
+  }
+
+  /**
    * @dev Updates the minimum balance of an uninitialized token, which is
    * useful when the token's price on the pool is too low relative to
    * external prices for people to trade it in.

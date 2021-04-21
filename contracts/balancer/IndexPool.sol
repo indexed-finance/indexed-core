@@ -215,6 +215,14 @@ contract IndexPool is BToken, BMath, IIndexPool {
     emit LOG_EXIT_FEE_RECIPIENT_UPDATED(exitFeeRecipient);
   }
 
+  /**
+   * @dev Set the controller address
+   */
+  function setController(address controller) external override _control_ {
+    require(controller != address(0), "ERR_NULL_ADDRESS");
+    _controller = controller;
+  }
+
 /* ==========  Token Management Actions  ========== */
 
   /**
