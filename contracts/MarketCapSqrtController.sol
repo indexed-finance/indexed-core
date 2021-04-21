@@ -335,26 +335,6 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
   }
 
   /**
-   * @dev Sets the maximum number of pool tokens that can be minted
-   * for a particular pool.
-   *
-   * This value will be used in the alpha to limit the maximum damage
-   * that can be caused by a catastrophic error. It can be gradually
-   * increased as the pool continues to not be exploited.
-   *
-   * If it is set to 0, the limit will be removed.
-   *
-   * @param poolAddress Address of the pool to set the limit on.
-   * @param maxPoolTokens Maximum LP tokens the pool can mint.
-   */
-  function setMaxPoolTokens(
-    address poolAddress,
-    uint256 maxPoolTokens
-  ) external onlyOwner _havePool(poolAddress) {
-    IIndexPool(poolAddress).setMaxPoolTokens(maxPoolTokens);
-  }
-
-  /**
    * @dev Sets the default exit fee recipient for new pools.
    */
   function setDefaultExitFeeRecipient(address defaultExitFeeRecipient_) external onlyOwner {
