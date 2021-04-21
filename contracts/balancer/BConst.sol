@@ -18,7 +18,7 @@ contract BConst {
 /* ---  Weight Updates  --- */
 
   // Minimum time passed between each weight update for a token.
-  uint256 internal constant WEIGHT_UPDATE_DELAY = 1 hours;
+  uint256 internal constant WEIGHT_UPDATE_DELAY = 30 minutes;
 
   // Maximum percent by which a weight can adjust at a time
   // relative to the current weight.
