@@ -74,9 +74,6 @@ interface IIndexPool {
   /** @dev Emitted when public trades are enabled. */
   event LOG_PUBLIC_SWAP_ENABLED();
 
-  /** @dev Emitted when the maximum tokens value is updated. */
-  event LOG_MAX_TOKENS_UPDATED(uint256 maxPoolTokens);
-
   /** @dev Emitted when the swap fee is updated. */
   event LOG_SWAP_FEE_UPDATED(uint256 swapFee);
 
@@ -97,8 +94,6 @@ interface IIndexPool {
     address tokenProvider,
     address unbindHandler
   ) external;
-
-  function setMaxPoolTokens(uint256 maxPoolTokens) external;
 
   function setSwapFee(uint256 swapFee) external;
 
@@ -175,8 +170,6 @@ interface IIndexPool {
   function getController() external view returns (address);
 
   function getExitFeeRecipient() external view returns (address);
-
-  function getMaxPoolTokens() external view returns (uint256);
 
   function isBound(address t) external view returns (bool);
 

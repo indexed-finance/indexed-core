@@ -78,12 +78,6 @@ contract IndexPool is BToken, BMath, IIndexPool {
   // requisite initial balance.
   mapping(address => uint256) internal _minimumBalances;
 
-  // Maximum LP tokens that can be bound.
-  // Used in alpha to restrict the economic impact of a catastrophic
-  // failure. It can be gradually increased as the pool continues to
-  // not be exploited.
-  uint256 internal _maxPoolTokens;
-
   // Recipient for exit fees
   address internal _exitFeeRecipient;
 
@@ -168,20 +162,6 @@ contract IndexPool is BToken, BMath, IIndexPool {
     _mintPoolShare(INIT_POOL_SUPPLY);
     _pushPoolShare(tokenProvider, INIT_POOL_SUPPLY);
     _unbindHandler = TokenUnbindHandler(unbindHandler);
-  }
-
-  /**
-   * @dev Sets the maximum number of pool tokens that can be minted.
-   *
-   * This value will be used in the alpha to limit the maximum damage
-   * that can be caused by a catastrophic error. It can be gradually
-   * increased as the pool continues to not be exploited.
-   *
-   * If it is set to 0, the limit will be removed.
-   */
-  function setMaxPoolTokens(uint256 maxPoolTokens) external override _control_ {
-    _maxPoolTokens = maxPoolTokens;
-    emit LOG_MAX_TOKENS_UPDATED(maxPoolTokens);
   }
 
   /**
@@ -351,14 +331,6 @@ contract IndexPool is BToken, BMath, IIndexPool {
     require(ratio != 0, "ERR_MATH_APPROX");
     require(maxAmountsIn.length == _tokens.length, "ERR_ARR_LEN");
 
-    uint256 maxPoolTokens = _maxPoolTokens;
-    if (maxPoolTokens > 0) {
-      require(
-        badd(poolTotal, poolAmountOut) <= maxPoolTokens,
-        "ERR_MAX_POOL_TOKENS"
-      );
-    }
-
     for (uint256 i = 0; i < maxAmountsIn.length; i++) {
       address t = _tokens[i];
       (Record memory record, uint256 realBalance) = _getInputToken(t);
@@ -414,14 +386,6 @@ contract IndexPool is BToken, BMath, IIndexPool {
       _swapFee
     );
 
-    uint256 maxPoolTokens = _maxPoolTokens;
-    if (maxPoolTokens > 0) {
-      require(
-        badd(_totalSupply, poolAmountOut) <= maxPoolTokens,
-        "ERR_MAX_POOL_TOKENS"
-      );
-    }
-
     require(poolAmountOut >= minPoolAmountOut, "ERR_LIMIT_OUT");
 
     _updateInputToken(tokenIn, inRecord, badd(realInBalance, tokenAmountIn));
@@ -457,14 +421,6 @@ contract IndexPool is BToken, BMath, IIndexPool {
     _public_
     returns (uint256/* tokenAmountIn */)
   {
-    uint256 maxPoolTokens = _maxPoolTokens;
-    if (maxPoolTokens > 0) {
-      require(
-        badd(_totalSupply, poolAmountOut) <= maxPoolTokens,
-        "ERR_MAX_POOL_TOKENS"
-      );
-    }
-
     (Record memory inRecord, uint256 realInBalance) = _getInputToken(tokenIn);
 
     uint256 tokenAmountIn = calcSingleInGivenPoolOut(
@@ -893,9 +849,6 @@ contract IndexPool is BToken, BMath, IIndexPool {
   }
 
 /* ==========  Token Queries  ========== */
-  function getMaxPoolTokens() external view override returns (uint256) {
-    return _maxPoolTokens;
-  }
 
   /**
    * @dev Check if a token is bound to the pool.
