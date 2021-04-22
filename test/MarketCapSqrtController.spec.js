@@ -16,8 +16,11 @@ describe('MarketCapSqrtController.sol', async () => {
   let pool, initializer, tokenSeller;
   let poolSize;
 
-  const setupTests = ({ init, pool, category, size, ethValue } = {}) => {
+  const setupTests = ({ init, pool, category, size, ethValue, setRecipient } = {}) => {
     before(async () => {
+      if (setRecipient === undefined) {
+        setRecipient = true;
+      }
       ({
         poolFactory,
         proxyManager,
@@ -39,6 +42,7 @@ describe('MarketCapSqrtController.sol', async () => {
         if (a.marketcap > b.marketcap) return -1;
         return 0;
       });
+      if (setRecipient) await controller.setDefaultExitFeeRecipient(from);
       if (category) await setupCategory();
       if (pool) await setupPool(size, ethValue);
       if (init) await finishInitializer();
@@ -186,7 +190,11 @@ describe('MarketCapSqrtController.sol', async () => {
     setupTests();
 
     it('All functions with onlyOwner modifier revert if caller is not owner', async () => {
-      const onlyOwnerFns = ['prepareIndexPool', 'setDefaultSellerPremium', 'updateSellerPremium', 'setMaxPoolTokens', 'setSwapFee', 'delegateCompLikeTokenFromPool'];
+      const onlyOwnerFns = [
+        'prepareIndexPool', 'setDefaultSellerPremium', 'updateSellerPremium',
+        'setSwapFee', 'delegateCompLikeTokenFromPool',
+        'setDefaultExitFeeRecipient', 'setExitFeeRecipient'
+      ];
       for (let fn of onlyOwnerFns) {
         await verifyRejection(nonOwnerFaker, fn, /Ownable: caller is not the owner/g);
       }
@@ -198,7 +206,7 @@ describe('MarketCapSqrtController.sol', async () => {
 
     it('All functions with _havePool modifier revert if pool address not recognized', async () => {
       // reweighPool & reindexPool included even though there is no modifier because it uses the same validation
-      const onlyOwnerFns = ['setMaxPoolTokens', 'setSwapFee', 'updateMinimumBalance', 'reweighPool', 'reindexPool'];
+      const onlyOwnerFns = ['setExitFeeRecipient', 'setSwapFee', 'updateMinimumBalance', 'reweighPool', 'reindexPool'];
       for (let fn of onlyOwnerFns) {
         await verifyRejection(ownerFaker, fn, /ERR_POOL_NOT_FOUND/g);
       }
@@ -222,6 +230,29 @@ describe('MarketCapSqrtController.sol', async () => {
       expect(premium).to.eq(1);
     });
   });
+
+  describe('setDefaultExitFeeRecipient()', () => {
+    setupTests({ setRecipient: false });
+
+    it('Reverts if address is null', async () => {
+      await verifyRevert('setDefaultExitFeeRecipient', /ERR_NULL_ADDRESS/g, zeroAddress)
+    })
+
+    it('Sets default exit fee recipient', async () => {
+      await controller.setDefaultExitFeeRecipient(from)
+      expect(await controller.defaultExitFeeRecipient()).to.eq(from)
+    })
+  })
+
+  describe('setExitFeeRecipient()', () => {
+    setupTests({ category: true, pool: true, init: true });
+
+    it('Sets exit fee recipient on pool', async () => {
+      const recipient = `0xFFfFfFffFFfffFFfFFfFFFFFffFFFffffFfFFFfF`;
+      await controller.setExitFeeRecipient(pool.address, recipient);
+      expect(await pool.getExitFeeRecipient()).to.eq(recipient);
+    })
+  })
 
   describe('getInitialTokensAndBalances()', async () => {
     setupTests();
@@ -336,17 +367,6 @@ describe('MarketCapSqrtController.sol', async () => {
       await controller.updateSellerPremium(tokenSeller.address, 3);
       const premium = await tokenSeller.getPremiumPercent();
       expect(premium).to.eq(3);
-    });
-  });
-
-  describe('setMaxPoolTokens()', async () => {
-    setupTests({ pool: true, init: true, size: 2, ethValue: 1 });
-
-    it('Sets max pool tokens on the pool', async () => {
-      const max = toWei(1000);
-      await controller.setMaxPoolTokens(pool.address, max);
-      const newMax = await pool.getMaxPoolTokens();
-      expect(newMax.eq(max)).to.be.true;
     });
   });
 

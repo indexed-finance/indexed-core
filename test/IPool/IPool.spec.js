@@ -12,7 +12,7 @@ describe('IndexPool.sol', async () => {
   let getPoolData, verifyRevert, mintAndApprove, wrappedTokens;
   let tokens, balances, denormalizedWeights, normalizedWeights;
   let newToken;
-  let from;
+  let from, feeRecipient;
   let lastDenormUpdate;
 
   const setupTests = () => {
@@ -27,7 +27,8 @@ describe('IndexPool.sol', async () => {
         from,
         lastDenormUpdate,
         verifyRevert,
-        nonOwnerFaker
+        nonOwnerFaker,
+        feeRecipient
       } = await deployments.createFixture(poolFixture)());
       await updateData();
     });
@@ -78,22 +79,17 @@ describe('IndexPool.sol', async () => {
       const controllerAddress = await indexPool.getController();
       expect(controllerAddress).to.eq(from)
     });
-
-    it('getMaxPoolTokens()', async () => {
-      const maxPoolTokens = await indexPool.getMaxPoolTokens();
-      expect(maxPoolTokens.eq(0)).to.be.true;
-    });
   });
 
   describe('Control & Public', async () => {
     it('Functions with _control_ role are only callable by controller', async () => {
       const controllerOnlyFunctions = [
         'initialize',
-        'setMaxPoolTokens',
         'setSwapFee',
         'reweighTokens',
         'reindexTokens',
         'setMinimumBalance',
+        'setController'
       ];
       for (let fn of controllerOnlyFunctions) {
         await verifyRejection(nonOwnerFaker, fn, /ERR_NOT_CONTROLLER/g);
@@ -119,13 +115,19 @@ describe('IndexPool.sol', async () => {
 
   describe('configure(): fail', async () => {
     it('Reverts if controller is already set', async () => {
-      await verifyRevert('configure', /ERR_CONFIGURED/g, zeroAddress, 'name', 'symbol');
+      await verifyRevert('configure', /ERR_CONFIGURED/g, zeroAddress, 'name', 'symbol', feeRecipient);
     });
 
     it('Reverts if provided controller address is zero', async () => {
       const IPool = await ethers.getContractFactory("IndexPool");
       const pool = await IPool.deploy();
-      await verifyRejection(pool, 'configure', /ERR_NULL_ADDRESS/g, zeroAddress, 'name', 'symbol');
+      await verifyRejection(pool, 'configure', /ERR_NULL_ADDRESS/g, zeroAddress, 'name', 'symbol', feeRecipient);
+    });
+
+    it('Reverts if provided controller address is zero', async () => {
+      const IPool = await ethers.getContractFactory("IndexPool");
+      const pool = await IPool.deploy();
+      await verifyRejection(pool, 'configure', /ERR_NULL_ADDRESS/g, from, 'name', 'symbol', zeroAddress);
     });
   });
 
@@ -141,7 +143,7 @@ describe('IndexPool.sol', async () => {
     it('Reverts if array lengths do not match', async () => {
       const IPool = await ethers.getContractFactory("IndexPool");
       pool = await IPool.deploy();
-      await pool.configure(from, 'pool', 'pl');
+      await pool.configure(from, 'pool', 'pl', from);
       for (let i = 0; i < tokens.length; i++) {
         const token = await ethers.getContractAt('MockERC20', tokens[i]);
         await token.getFreeTokens(from, balances[i]);
@@ -214,7 +216,7 @@ describe('IndexPool.sol', async () => {
       pool = await IPool.deploy();
       await tokenA.approve(pool.address, toWei(100));
       await tokenB.approve(pool.address, toWei(100));
-      await pool.configure(from, "Gulper Pool", "GLPL");
+      await pool.configure(from, "Gulper Pool", "GLPL", from);
       const MockUnbindTokenHandler = await ethers.getContractFactory('MockUnbindTokenHandler');
       handler = await MockUnbindTokenHandler.deploy();
       await pool.initialize(
@@ -273,116 +275,6 @@ describe('IndexPool.sol', async () => {
     });
   });
 
-  describe('flashBorrow()', async () => {
-    let mockBorrower, pool, from;
-    let unboundToken, tokenA, tokenB;
-  
-    const borrowAmount = BigNumber.from(100).mul(BigNumber.from(10).pow(18));
-    const denorm = BigNumber.from(8).mul(BigNumber.from(10).pow(18));
-  
-    before(async () => {
-      ({ deployer: from } = await getNamedAccounts());
-      const MockERC20 = await ethers.getContractFactory('MockERC20');
-      unboundToken = await MockERC20.deploy('Unbound', 'UB');
-      tokenA = await MockERC20.deploy('TokenA', 'A');
-      tokenB = await MockERC20.deploy('TokenB', 'B');
-      const IPool = await ethers.getContractFactory('IndexPool');
-      pool = await IPool.deploy();
-      await pool.configure(
-        from,
-        "Test Pool",
-        "TPI"
-      );
-      await tokenA.getFreeTokens(from, borrowAmount);
-      await tokenB.getFreeTokens(from, borrowAmount);
-  
-      await tokenA.approve(pool.address, borrowAmount);
-      await tokenB.approve(pool.address, borrowAmount);
-  
-      await pool.initialize(
-        [tokenA.address, tokenB.address],
-        [borrowAmount, borrowAmount],
-        [denorm, denorm],
-        from,
-        `0x${'00'.repeat(20)}`
-      );
-      const MockBorrower = await ethers.getContractFactory('MockBorrower');
-      mockBorrower = await MockBorrower.deploy();
-    });
-  
-    it('Reverts when requested token is not bound', async () => {
-      await expect(
-        pool.flashBorrow(mockBorrower.address, unboundToken.address, borrowAmount, '0x')
-      ).to.be.rejectedWith(/ERR_NOT_BOUND/g);
-    });
-  
-    it('Reverts when requested amount exceeds balance', async () => {
-      await expect(
-        pool.flashBorrow(mockBorrower.address, tokenA.address, borrowAmount.add(1), '0x')
-      ).to.be.rejectedWith(/ERR_INSUFFICIENT_BAL/g);
-    });
-  
-    it('Reverts when the fee is not paid', async () => {
-      
-      const testScenarioBytes = defaultAbiCoder.encode(['uint256'], [1]);
-      await expect(
-        pool.flashBorrow(mockBorrower.address, tokenA.address, borrowAmount, testScenarioBytes)
-      ).to.be.rejectedWith(/ERR_INSUFFICIENT_PAYMENT/g);
-    });
-  
-    it('Reverts if reentry is attempted', async () => {
-      const testScenarioBytes = defaultAbiCoder.encode(['uint256'], [2]);
-      await expect(
-        pool.flashBorrow(mockBorrower.address, tokenA.address, borrowAmount, testScenarioBytes)
-      ).to.be.rejectedWith(/ERR_REENTRY/g);
-    });
-  
-    it('Succeeds when the full amount due is paid, and sets the correct balance in the token record', async () => {
-      const testScenarioBytes = defaultAbiCoder.encode(['uint256'], [0]);
-      const amountDue = borrowAmount.mul(1025).div(1000);
-      await pool.flashBorrow(mockBorrower.address, tokenA.address, borrowAmount, testScenarioBytes);
-      const newBalance = await pool.getBalance(tokenA.address);
-      expect(newBalance.eq(amountDue)).to.be.true;
-    });
-  
-    it('Only increases the balance of an uninitialized token if it is still below the minimum', async () => {
-      await pool.reindexTokens(
-        [tokenA.address, tokenB.address, unboundToken.address],
-        [denorm, denorm, denorm],
-        [borrowAmount, borrowAmount, borrowAmount.add(toWei(5))]
-      );
-      const amountDue = borrowAmount.mul(1025).div(1000);
-      await unboundToken.getFreeTokens(pool.address, borrowAmount);
-      const testScenarioBytes = defaultAbiCoder.encode(['uint256'], [0]);
-      await pool.flashBorrow(mockBorrower.address, unboundToken.address, borrowAmount, testScenarioBytes);
-      const newBalance = await pool.getBalance(tokenA.address);
-      expect(newBalance.eq(amountDue)).to.be.true;
-      const record = await pool.getTokenRecord(unboundToken.address);
-      expect(record.ready).to.be.false;
-    });
-  
-    it('Initializes the borrowed token if its balance is brought above the minimum', async () => {
-      unboundToken = await erc20Factory.deploy('Unbound2', 'UB2');
-      await unboundToken.getFreeTokens(pool.address, borrowAmount);
-      await pool.reindexTokens(
-        [tokenA.address, tokenB.address, unboundToken.address],
-        [denorm, denorm, denorm],
-        [borrowAmount, borrowAmount, borrowAmount]
-      );
-      const testScenarioBytes = defaultAbiCoder.encode(['uint256'], [0]);
-      const amountDue = borrowAmount.mul(1025).div(1000);
-      await pool.flashBorrow(mockBorrower.address, unboundToken.address, borrowAmount, testScenarioBytes);
-      const newBalance = await pool.getBalance(tokenA.address);
-      expect(newBalance.eq(amountDue)).to.be.true;
-      const record = await pool.getTokenRecord(unboundToken.address);
-      expect(record.ready).to.be.true;
-      const excessBalance = amountDue.sub(borrowAmount);
-      const minimumWeight = toWei('0.25');
-      const weightAdded = minimumWeight.mul(excessBalance).div(borrowAmount);
-      expect(record.denorm.eq(minimumWeight.add(weightAdded))).to.be.true;
-    });
-  });
-
   describe('setSwapFee()', async () => {
     setupTests();
 
@@ -406,6 +298,30 @@ describe('IndexPool.sol', async () => {
       expect(retFee.eq(fee)).to.be.true;
     });
   });
+
+  describe('setController()', () => {
+    it('Reverts if address is null', async () => {
+      await verifyRejection(indexPool, 'setController', /ERR_NULL_ADDRESS/g, zeroAddress)
+    })
+
+    it('Updates the controller address', async () => {
+      await indexPool.setController(`0x${'11'.repeat(20)}`)
+      expect(await indexPool.getController()).to.eq(`0x${'11'.repeat(20)}`)
+    })
+  })
+
+  describe('setExitFeeRecipient', () => {
+    setupTests()
+
+    it('Reverts if address is null', async () => {
+      await verifyRejection(indexPool, 'setExitFeeRecipient', /ERR_NULL_ADDRESS/g, zeroAddress);
+    })
+
+    it('Sets fee recipient', async () => {
+      await indexPool.setExitFeeRecipient(`0x${'11'.repeat(20)}`)
+      expect(await indexPool.getExitFeeRecipient()).to.eq(`0x${'11'.repeat(20)}`)
+    })
+  })
 
   describe('setMinimumBalance()', async () => {
     setupTests();
@@ -768,18 +684,6 @@ describe('IndexPool.sol', async () => {
       await verifyRevert('joinswapExternAmountIn', /ERR_MAX_IN_RATIO/g, tokens[0], balances[0].div(2).add(1e3), zero);
     });
 
-    it('Reverts if totalSupply + pAO > maxPoolTokens', async () => {
-      await indexPool.setMaxPoolTokens(await indexPool.totalSupply());
-      await verifyRevert('joinswapExternAmountIn', /ERR_MAX_POOL_TOKENS/g, tokens[0], toWei(1), zero);
-      await indexPool.setMaxPoolTokens(0);
-    });
-
-    it('Allows tokens to be minted up to maxPoolTokens', async () => {
-      await indexPool.setMaxPoolTokens((await indexPool.totalSupply()).add(toWei(1)));
-      await indexPool.callStatic.joinswapExternAmountIn(tokens[0], toWei(1), zero);
-      await indexPool.setMaxPoolTokens(0);
-    });
-
     it('Reverts if poolAmountOut < minPoolAmountOut', async () => {
       const expectedAmountOut = poolHelper.calcPoolOutGivenSingleIn(tokens[0], 1);
       await verifyRevert('joinswapExternAmountIn', /ERR_LIMIT_OUT/g, tokens[0], toWei(1), toWei(expectedAmountOut).mul(2));
@@ -806,18 +710,6 @@ describe('IndexPool.sol', async () => {
     it('Reverts if tokenAmountIn > balanceIn / 2', async () => {
       const poolAmountOut = poolHelper.calcPoolOutGivenSingleIn(tokens[0], fromWei(balances[0]));
       await verifyRevert('joinswapPoolAmountOut', /ERR_MAX_IN_RATIO/g, tokens[0], toWei(poolAmountOut), maxPrice);
-    });
-
-    it('Reverts if totalSupply + pAO > maxPoolTokens', async () => {
-      await indexPool.setMaxPoolTokens(await indexPool.totalSupply());
-      await verifyRevert('joinswapPoolAmountOut', /ERR_MAX_POOL_TOKENS/g, tokens[0], toWei(1), zero);
-      await indexPool.setMaxPoolTokens(0);
-    });
-
-    it('Allows tokens to be minted up to maxPoolTokens', async () => {
-      await indexPool.setMaxPoolTokens((await indexPool.totalSupply()).add(toWei(1)));
-      await indexPool.callStatic.joinswapPoolAmountOut(tokens[0], toWei(1), maxPrice);
-      await indexPool.setMaxPoolTokens(0);
     });
 
     it('Reverts if tokenAmountIn > maxAmountIn', async () => {
@@ -854,18 +746,6 @@ describe('IndexPool.sol', async () => {
 
     it('Reverts if tokenAmountIn > maxAmountIn', async () => {
       await verifyRevert('joinPool', /ERR_LIMIT_IN/g, toWei(1), [maxPrice, 0, maxPrice]);
-    });
-
-    it('Reverts if totalSupply + pAO > maxPoolTokens', async () => {
-      await indexPool.setMaxPoolTokens(await indexPool.totalSupply());
-      await verifyRevert('joinPool', /ERR_MAX_POOL_TOKENS/g, toWei(1), [maxPrice, maxPrice, maxPrice]);
-      await indexPool.setMaxPoolTokens(0);
-    });
-
-    it('Allows tokens to be minted up to maxPoolTokens', async () => {
-      await indexPool.setMaxPoolTokens((await indexPool.totalSupply()).add(toWei(1)));
-      await indexPool.callStatic.joinPool(toWei(1), [maxPrice, maxPrice, maxPrice]);
-      await indexPool.setMaxPoolTokens(0);
     });
 
     it('Prices initialized tokens normally', async () => {
@@ -974,15 +854,6 @@ describe('IndexPool.sol', async () => {
       await verifyRevert('exitswapExternAmountOut', /ERR_MATH_APPROX/g, tokens[0], 1, maxPrice);
     });
 
-    it('Reverts if poolAmountIn > maxPoolAmountIn', async () => {
-      for (let i = 0; i < tokens.length; i++) {
-        const token = tokens[i];
-        const tokenAmountOut = balances[i].div(10);
-        const expectedAmountOut = poolHelper.calcPoolInGivenSingleOut(token, fromWei(tokenAmountOut), false);
-        await verifyRevert('exitswapExternAmountOut', /ERR_LIMIT_IN/g, token, tokenAmountOut, toWei(expectedAmountOut).div(2));
-      }
-    });
-
     it('Reverts if tokenAmountOut > balanceOut / 3', async () => {
       for (let i = 0; i < tokens.length; i++) {
         const token = tokens[i];
@@ -1003,11 +874,15 @@ describe('IndexPool.sol', async () => {
     it('Prices initialized tokens normally', async () => {
       const poolAmountIn = 1;
       const expectedAmountsOut = poolHelper.calcAllOutGivenPoolIn(poolAmountIn, true);
+      const previousRecipientBalance = await indexPool.balanceOf(feeRecipient);
       const previousPoolBalance = await indexPool.totalSupply();
       await indexPool.exitPool(toWei(poolAmountIn), [0, 0, 0]);
       const currentPoolBalance = await indexPool.totalSupply();
       const poolSupplyDiff = previousPoolBalance.sub(currentPoolBalance);
-      expect(+calcRelativeDiff(1, fromWei(poolSupplyDiff))).to.be.lte(errorDelta);
+      expect(+calcRelativeDiff(0.995, fromWei(poolSupplyDiff))).to.be.lte(errorDelta);
+      const newRecipientBalance = await indexPool.balanceOf(feeRecipient);
+      const feesGained = fromWei(newRecipientBalance.sub(previousRecipientBalance));
+      expect(+calcRelativeDiff(0.005, feesGained)).to.be.lte(errorDelta)
       for (let i = 0; i < tokens.length; i++) {
         const previousTokenBalance = balances[i];
         const currentTokenBalance = await indexPool.getBalance(tokens[i]);

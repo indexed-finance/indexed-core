@@ -8,6 +8,7 @@ const swapFee = 0.025;
 
 const poolFixture = async ({ getNamedAccounts, ethers, tokens: _wrappedTokens }) => {
   const { deployer } = await getNamedAccounts();
+  const feeRecipient = `0xFFfFfFffFFfffFFfFFfFFFFFffFFFffffFfFFFfF`;
 
   // Deploy contracts
   const IPoolFactory = await ethers.getContractFactory("IndexPool");
@@ -41,7 +42,7 @@ const poolFixture = async ({ getNamedAccounts, ethers, tokens: _wrappedTokens })
   }
 
   // Initialize pool
-  await indexPool.configure(deployer, "Test Pool", "TPI");
+  await indexPool.configure(deployer, "Test Pool", "TPI", feeRecipient);
   const lastDenormUpdate = await getTransactionTimestamp(indexPool.initialize(
     wrappedTokens.map(t => t.address),
     balances,
@@ -102,7 +103,8 @@ const poolFixture = async ({ getNamedAccounts, ethers, tokens: _wrappedTokens })
     verifyRevert,
     callAndSend,
     faker,
-    nonOwnerFaker
+    nonOwnerFaker,
+    feeRecipient
   };
 };
 

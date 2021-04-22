@@ -12,7 +12,7 @@ describe('IndexPool.sol', async () => {
   let getPoolData, verifyRevert, mintAndApprove, wrappedTokens;
   let tokens, balances, denormalizedWeights, normalizedWeights;
   let newToken;
-  let from;
+  let from, feeRecipient;
   let lastDenormUpdate;
 
   const setupTests = () => {
@@ -27,7 +27,8 @@ describe('IndexPool.sol', async () => {
         from,
         lastDenormUpdate,
         verifyRevert,
-        nonOwnerFaker
+        nonOwnerFaker,
+        feeRecipient
       } = await deployments.createFixture(poolFixtureWithMaxTokens)());
       await updateData();
     });
@@ -331,18 +332,6 @@ describe('IndexPool.sol', async () => {
       await verifyRevert('joinswapExternAmountIn', /ERR_MAX_IN_RATIO/g, tokens[0], balances[0].div(2).add(1e3), zero);
     });
 
-    it('Reverts if totalSupply + pAO > maxPoolTokens', async () => {
-      await indexPool.setMaxPoolTokens(await indexPool.totalSupply());
-      await verifyRevert('joinswapExternAmountIn', /ERR_MAX_POOL_TOKENS/g, tokens[0], toWei(1), zero);
-      await indexPool.setMaxPoolTokens(0);
-    });
-
-    it('Allows tokens to be minted up to maxPoolTokens', async () => {
-      await indexPool.setMaxPoolTokens((await indexPool.totalSupply()).add(toWei(1)));
-      await indexPool.callStatic.joinswapExternAmountIn(tokens[0], toWei(1), zero);
-      await indexPool.setMaxPoolTokens(0);
-    });
-
     it('Reverts if poolAmountOut < minPoolAmountOut', async () => {
       const expectedAmountOut = poolHelper.calcPoolOutGivenSingleIn(tokens[0], 1);
       await verifyRevert('joinswapExternAmountIn', /ERR_LIMIT_OUT/g, tokens[0], toWei(1), toWei(expectedAmountOut).mul(2));
@@ -371,18 +360,6 @@ describe('IndexPool.sol', async () => {
     it('Reverts if tokenAmountIn > balanceIn / 2', async () => {
       const poolAmountOut = poolHelper.calcPoolOutGivenSingleIn(tokens[0], fromWei(balances[0]));
       await verifyRevert('joinswapPoolAmountOut', /ERR_MAX_IN_RATIO/g, tokens[0], toWei(poolAmountOut), maxPrice);
-    });
-
-    it('Reverts if totalSupply + pAO > maxPoolTokens', async () => {
-      await indexPool.setMaxPoolTokens(await indexPool.totalSupply());
-      await verifyRevert('joinswapPoolAmountOut', /ERR_MAX_POOL_TOKENS/g, tokens[0], toWei(1), zero);
-      await indexPool.setMaxPoolTokens(0);
-    });
-
-    it('Allows tokens to be minted up to maxPoolTokens', async () => {
-      await indexPool.setMaxPoolTokens((await indexPool.totalSupply()).add(toWei(1)));
-      await indexPool.callStatic.joinswapPoolAmountOut(tokens[0], toWei(1), maxPrice);
-      await indexPool.setMaxPoolTokens(0);
     });
 
     it('Reverts if tokenAmountIn > maxAmountIn', async () => {
@@ -421,18 +398,6 @@ describe('IndexPool.sol', async () => {
       const maxPrices = new Array(tokens.length).fill(maxPrice);
       maxPrices[0] = 0;
       await verifyRevert('joinPool', /ERR_LIMIT_IN/g, toWei(1), maxPrices);
-    });
-
-    it('Reverts if totalSupply + pAO > maxPoolTokens', async () => {
-      await indexPool.setMaxPoolTokens(await indexPool.totalSupply());
-      await verifyRevert('joinPool', /ERR_MAX_POOL_TOKENS/g, toWei(1), new Array(tokens.length).fill(maxPrice));
-      await indexPool.setMaxPoolTokens(0);
-    });
-
-    it('Allows tokens to be minted up to maxPoolTokens', async () => {
-      await indexPool.setMaxPoolTokens((await indexPool.totalSupply()).add(toWei(1)));
-      await indexPool.callStatic.joinPool(toWei(1), new Array(tokens.length).fill(maxPrice));
-      await indexPool.setMaxPoolTokens(0);
     });
 
     it('Prices initialized tokens normally', async () => {
@@ -541,15 +506,6 @@ describe('IndexPool.sol', async () => {
       await verifyRevert('exitswapExternAmountOut', /ERR_MATH_APPROX/g, tokens[0], 1, maxPrice);
     });
 
-    it('Reverts if poolAmountIn > maxPoolAmountIn', async () => {
-      for (let i = 0; i < tokens.length; i++) {
-        const token = tokens[i];
-        const tokenAmountOut = balances[i].div(10);
-        const expectedAmountOut = poolHelper.calcPoolInGivenSingleOut(token, fromWei(tokenAmountOut), false);
-        await verifyRevert('exitswapExternAmountOut', /ERR_LIMIT_IN/g, token, tokenAmountOut, toWei(expectedAmountOut).div(2));
-      }
-    });
-
     it('Reverts if tokenAmountOut > balanceOut / 3', async () => {
       for (let i = 0; i < tokens.length; i++) {
         const token = tokens[i];
@@ -570,12 +526,16 @@ describe('IndexPool.sol', async () => {
     it('Prices initialized tokens normally', async () => {
       const poolAmountIn = 1;
       const expectedAmountsOut = poolHelper.calcAllOutGivenPoolIn(poolAmountIn, true);
+      const previousRecipientBalance = await indexPool.balanceOf(feeRecipient);
       const previousPoolBalance = await indexPool.totalSupply();
       const amounts = new Array(tokens.length).fill(0);
       await indexPool.exitPool(toWei(poolAmountIn), amounts);
       const currentPoolBalance = await indexPool.totalSupply();
       const poolSupplyDiff = previousPoolBalance.sub(currentPoolBalance);
-      expect(+calcRelativeDiff(1, fromWei(poolSupplyDiff))).to.be.lte(errorDelta);
+      expect(+calcRelativeDiff(0.995, fromWei(poolSupplyDiff))).to.be.lte(errorDelta);
+      const newRecipientBalance = await indexPool.balanceOf(feeRecipient);
+      const feesGained = fromWei(newRecipientBalance.sub(previousRecipientBalance));
+      expect(+calcRelativeDiff(0.005, feesGained)).to.be.lte(errorDelta)
       for (let i = 0; i < tokens.length; i++) {
         const previousTokenBalance = balances[i];
         const currentTokenBalance = await indexPool.getBalance(tokens[i]);
