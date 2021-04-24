@@ -550,7 +550,7 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
    */
   function getPoolMeta(address poolAddress) external view returns (IndexPoolMeta memory meta) {
     meta = _poolMeta[poolAddress];
-    require(meta.initialized, "ERR_POOL_NOT_FOUND");
+    require(meta.indexSize > 0, "ERR_POOL_NOT_FOUND");
   }
 
   /**
