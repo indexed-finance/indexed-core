@@ -72,7 +72,7 @@ describe('IndexPool.sol', async () => {
 
     it('getSwapFee()', async () => {
       const swapFee = await indexPool.getSwapFee();
-      expect(swapFee.eq(toWei('0.025'))).to.be.true;
+      expect(swapFee.eq(toWei('0.02'))).to.be.true;
     });
 
     it('getController()', async () => {
