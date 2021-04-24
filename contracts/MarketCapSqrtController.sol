@@ -104,6 +104,12 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
     uint256 indexSize
   );
 
+  /** @dev Emitted when a pool is reweighed. */
+  event PoolReweighed(address pool);
+
+  /** @dev Emitted when a pool is reindexed. */
+  event PoolReindexed(address pool);
+
 /* ==========  Structs  ========== */
 
   /**
@@ -446,6 +452,7 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
       denormalizedWeights,
       minimumBalances
     );
+    emit PoolReindexed(poolAddress);
   }
 
   /**
@@ -482,6 +489,7 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
     meta.lastReweigh = uint64(now);
     _poolMeta[poolAddress] = meta;
     IIndexPool(poolAddress).reweighTokens(tokens, denormalizedWeights);
+    emit PoolReweighed(poolAddress);
   }
 
 /* ==========  Pool Queries  ========== */
