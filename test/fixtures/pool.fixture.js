@@ -4,7 +4,7 @@ const { toWei, fromWei, getTransactionTimestamp, verifyRejection, getFakerContra
 const { wrappedTokensFixture } = require("./tokens.fixture");
 const { uniswapFixture } = require('./uniswap.fixture');
 
-const swapFee = 0.025;
+const swapFee = 0.02;
 
 const poolFixture = async ({ getNamedAccounts, ethers, tokens: _wrappedTokens }) => {
   const { deployer } = await getNamedAccounts();
