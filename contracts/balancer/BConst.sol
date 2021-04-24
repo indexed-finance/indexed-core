@@ -45,7 +45,7 @@ contract BConst {
   uint256 internal constant MIN_WEIGHT = BONE / 4;
   uint256 internal constant MAX_WEIGHT = BONE * 25;
   // Maximum total weight.
-  uint256 internal constant MAX_TOTAL_WEIGHT = BONE * 26;
+  uint256 internal constant MAX_TOTAL_WEIGHT = BONE * 27;
   // Minimum balance for a token (only applied at initialization)
   uint256 internal constant MIN_BALANCE = BONE / 10**12;
   // Initial pool tokens
