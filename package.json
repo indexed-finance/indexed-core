@@ -42,7 +42,7 @@
     "test:categories": "buidler test ./test/test-categories.spec.js",
     "test:controller": "buidler test ./test/test-controller.spec.js",
     "test": "buidler test",
-    "prepublish": "npm run clean:build && npm run build && node ./scripts/purge-periphery-artifacts.js"
+    "prepublishOnly": "npm run clean:build && npm run build && node ./scripts/purge-periphery-artifacts.js"
   },
   "repository": {
     "type": "git",
@@ -84,7 +84,7 @@
     "prettier": "^2.0.5",
     "prettier-plugin-solidity": "^1.0.0-alpha.55",
     "rimraf": "^3.0.2",
-    "solidity-coverage": "^0.7.10",
+    "solidity-coverage": "^0.7.16",
     "solium": "^1.2.5",
     "solium-plugin-security": "^0.1.1",
     "web3": "^1.2.11"
