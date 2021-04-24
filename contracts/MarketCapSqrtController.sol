@@ -546,6 +546,14 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
   }
 
   /**
+   * @dev Returns the IndexPoolMeta struct for `poolAddress`.
+   */
+  function getPoolMeta(address poolAddress) external view returns (IndexPoolMeta memory meta) {
+    meta = _poolMeta[poolAddress];
+    require(meta.initialized, "ERR_POOL_NOT_FOUND");
+  }
+
+  /**
    * @dev Queries the top `indexSize` tokens in a category from the market oracle,
    * computes their relative weights by market cap square root and determines
    * the weighted balance of each token to meet a specified total value.
