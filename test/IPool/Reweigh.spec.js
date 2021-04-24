@@ -441,25 +441,25 @@ describe('reweighTokens()', async () => {
     }
 
     it('Input weight update fails gracefully if it would exceed maximum', async () => {
-      await prepare([toWei(13), toWei(13)])
+      await prepare([toWei(13.5), toWei(13.5)])
       await pool.reweighTokens(
         [token0.address, token1.address],
         [toWei(14), toWei(13)],
       );
       await fastForward(3600);
       await pool.swapExactAmountIn(token0.address, toWei(1), token1.address, zero, maxPrice);
-      expect((await pool.getTotalDenormalizedWeight()).toString()).to.eq(toWei(26).toString())
+      expect((await pool.getTotalDenormalizedWeight()).toString()).to.eq(toWei(27).toString())
     })
 
     it('Input weight update succeeds if reduction in output weight makes room', async () => {
-      await prepare([toWei(13), toWei(13)])
+      await prepare([toWei(13.5), toWei(13.5)])
       await pool.reweighTokens(
         [token0.address, token1.address],
         [toWei(14), toWei(10)],
       );
       await fastForward(3600);
       await pool.swapExactAmountIn(token0.address, toWei(1), token1.address, zero, maxPrice);
-      expect((await pool.getTotalDenormalizedWeight()).toString()).to.eq(toWei(26).toString())
+      expect((await pool.getTotalDenormalizedWeight()).toString()).to.eq(toWei(27).toString())
     })
   })
 });
