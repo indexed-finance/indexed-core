@@ -80,6 +80,9 @@ interface IIndexPool {
   /** @dev Emitted when exit fee recipient is updated. */
   event LOG_EXIT_FEE_RECIPIENT_UPDATED(address exitFeeRecipient);
 
+  /** @dev Emitted when controller is updated. */
+  event LOG_CONTROLLER_UPDATED(address exitFeeRecipient);
+
   function configure(
     address controller,
     string calldata name,
@@ -166,6 +169,8 @@ interface IIndexPool {
   function isPublicSwap() external view returns (bool);
 
   function getSwapFee() external view returns (uint256/* swapFee */);
+
+  function getExitFee() external view returns (uint256/* exitFee */);
 
   function getController() external view returns (address);
 
