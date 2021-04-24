@@ -152,7 +152,7 @@ describe('MarketCapSqrtController.sol', async () => {
       await token.approve(initializer.address, desiredAmounts[i]);
     }
     await initializer['contributeTokens(address[],uint256[],uint256)'](desiredTokens, desiredAmounts, 0);
-    await initializer.finish();
+    const tx = await initializer.finish();
     await initializer['claimTokens()']();
     const myBal = await pool.balanceOf(from);
     expect(myBal.eq(toWei(100))).to.be.true;
@@ -161,6 +161,7 @@ describe('MarketCapSqrtController.sol', async () => {
     const sellerAddress = await controller.computeSellerAddress(pool.address);
     tokenSeller = await ethers.getContractAt('UnboundTokenSeller', sellerAddress);
     expect(await tokenSeller.getPremiumPercent()).to.eq(defaultPremium);
+    return tx;
   }
 
   const setupPool = async (size = 5, ethValue = 1) => {
@@ -201,12 +202,65 @@ describe('MarketCapSqrtController.sol', async () => {
     });
   });
 
+  describe('getPoolMeta', async () => {
+    setupTests({ category: true, pool: true, init: false, setRecipient: true, ethValue: 1, size: 5 });
+
+    it('Returns expected struct before init', async () => {
+      const {
+        initialized,
+        categoryID,
+        indexSize,
+        reweighIndex,
+        lastReweigh
+      } = await controller.getPoolMeta(pool.address);
+      expect([
+        initialized,
+        categoryID,
+        indexSize,
+        reweighIndex,
+        lastReweigh.toNumber()
+      ]).to.deep.eq([
+        false, // initialized
+        1, // categoryID
+        5, // indexSize
+        0, // reweighIndex
+        0 // lastReweigh
+      ]);
+    });
+
+    it('Returns expected struct after init', async () => {
+      const tx = await finishInitializer();
+      const receipt = await tx.wait();
+      const { timestamp } = await ethers.provider.getBlock(receipt.blockNumber);
+      const {
+        initialized,
+        categoryID,
+        indexSize,
+        reweighIndex,
+        lastReweigh
+      } = await controller.getPoolMeta(pool.address);
+      expect([
+        initialized,
+        categoryID,
+        indexSize,
+        reweighIndex,
+        lastReweigh.toNumber()
+      ]).to.deep.eq([
+        true, // initialized
+        1, // categoryID
+        5, // indexSize
+        0, // reweighIndex
+        timestamp // lastReweigh
+      ]);
+    });
+  });
+
   describe('_havePool', async () => {
     setupTests();
 
     it('All functions with _havePool modifier revert if pool address not recognized', async () => {
       // reweighPool & reindexPool included even though there is no modifier because it uses the same validation
-      const onlyOwnerFns = ['setExitFeeRecipient', 'setSwapFee', 'updateMinimumBalance', 'reweighPool', 'reindexPool'];
+      const onlyOwnerFns = ['setExitFeeRecipient', 'setSwapFee', 'updateMinimumBalance', 'reweighPool', 'reindexPool', 'getPoolMeta'];
       for (let fn of onlyOwnerFns) {
         await verifyRejection(ownerFaker, fn, /ERR_POOL_NOT_FOUND/g);
       }
