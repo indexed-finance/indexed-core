@@ -7,7 +7,6 @@ import "./BToken.sol";
 import "./BMath.sol";
 
 /* ========== Internal Interfaces ========== */
-import "../interfaces/IFlashLoanRecipient.sol";
 import "../interfaces/IIndexPool.sol";
 import "../interfaces/ICompLikeToken.sol";
 
@@ -91,6 +90,7 @@ contract IndexPool is BToken, BMath, IIndexPool {
    * @param controller Controller of the pool
    * @param name Name of the pool token
    * @param symbol Symbol of the pool token
+   * @param exitFeeRecipient Address that receives exit fees
    */
   function configure(
     address controller,
@@ -201,6 +201,7 @@ contract IndexPool is BToken, BMath, IIndexPool {
   function setController(address controller) external override _control_ {
     require(controller != address(0), "ERR_NULL_ADDRESS");
     _controller = controller;
+    emit LOG_CONTROLLER_UPDATED(controller);
   }
 
 /* ==========  Token Management Actions  ========== */
@@ -831,6 +832,10 @@ contract IndexPool is BToken, BMath, IIndexPool {
 
   function getSwapFee() external view override _viewlock_ returns (uint256/* swapFee */) {
     return _swapFee;
+  }
+
+  function getExitFee() external view override _viewlock_ returns (uint256/* exitFee */) {
+    return EXIT_FEE;
   }
 
   /**
