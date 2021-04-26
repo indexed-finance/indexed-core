@@ -357,10 +357,34 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
   }
 
   /**
-   * @dev Sets the swap fee on an index pool.
+   * @dev Sets the exit fee recipient on multiple existing pools.
+   */
+  function setExitFeeRecipient(address[] calldata poolAddresses, address exitFeeRecipient) external onlyOwner {
+    for (uint256 i = 0; i < poolAddresses.length; i++) {
+      address poolAddress = poolAddresses[i];
+      require(_poolMeta[poolAddress].initialized, "ERR_POOL_NOT_FOUND");
+      // No not-null requirement - already in pool function.
+      IIndexPool(poolAddress).setExitFeeRecipient(exitFeeRecipient);
+    }
+  }
+
+  /**
+   * @dev Sets the swap fee on multiple index pools.
    */
   function setSwapFee(address poolAddress, uint256 swapFee) external onlyOwner _havePool(poolAddress) {
     IIndexPool(poolAddress).setSwapFee(swapFee);
+  }
+
+  /**
+   * @dev Sets the swap fee on an index pool.
+   */
+  function setSwapFee(address[] calldata poolAddresses, uint256 swapFee) external onlyOwner {
+    for (uint256 i = 0; i < poolAddresses.length; i++) {
+      address poolAddress = poolAddresses[i];
+      require(_poolMeta[poolAddress].initialized, "ERR_POOL_NOT_FOUND");
+      // No not-null requirement - already in pool function.
+      IIndexPool(poolAddress).setSwapFee(swapFee);
+    }
   }
 
   /**
