@@ -13,6 +13,7 @@ describe('PoolInitializer.sol', async () => {
   let signer1, signer2, signer3, signer4;
   let addresses;
   let tokens, desiredAmounts;
+  let from;
 
   const getMarketCapSqrts = async (_tokens) => {
     const actualMarketCaps = await Promise.all(
@@ -68,7 +69,7 @@ describe('PoolInitializer.sol', async () => {
     before(async () => {
       await deployments.createFixture(async () => {
         ({
-          wrappedTokens, controller, updatePrices,
+          wrappedTokens, controller, updatePrices, from,
           addLiquidityAll, uniswapOracle, liquidityManager
         } = await deployments.createFixture(controllerFixture)());
         wrappedTokens = wrappedTokens.slice(0, 5);
@@ -78,6 +79,7 @@ describe('PoolInitializer.sol', async () => {
           return 0;
         });
         tokens = sortedWrappedTokens.map(t => t.address);
+        await controller.setDefaultExitFeeRecipient(from);
         await controller.createCategory(`0x${'ff'.repeat(32)}`);
         await controller.addTokens(1, tokens);
         await fastForward(3600 * 48);

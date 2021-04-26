@@ -10,7 +10,8 @@ const {
 } = require("./calc_comparisons");
 
 const { default: Decimal } = require("decimal.js");
-const { logger } = require("ethers");
+
+const EXIT_FEE = 0.005;
 
 module.exports = class PoolHelper {
   /* token objects should have { address, price, totalSupply, balance } */
@@ -313,13 +314,15 @@ module.exports = class PoolHelper {
   calcAllOutGivenPoolIn(poolAmountIn, applyChanges = false) {
     let previousPoolBalance = this.poolSupply;
     const amountsOut = [];
+    const paiAfterExitFee = Decimal(poolAmountIn).times(Decimal(1).minus(Decimal(EXIT_FEE)));
+    const ratio = paiAfterExitFee.div(previousPoolBalance)
     for (let tokenOut of this.tokens) {
       const recordOut = this.records[tokenOut];
       if (!recordOut.ready) {
         amountsOut.push(0);
         continue;
       }
-      const balanceChange = (Decimal(poolAmountIn).div(Decimal(previousPoolBalance))).mul(recordOut.balance);
+      const balanceChange = ratio.times(recordOut.balance);
       amountsOut.push(balanceChange.toNumber());
       if (applyChanges) {
         recordOut.realBalance = (+recordOut.realBalance) - (balanceChange.toNumber());
@@ -327,7 +330,7 @@ module.exports = class PoolHelper {
       }
     }
     if (applyChanges) {
-      this.poolSupply = (+this.poolSupply) - (+poolAmountIn);
+      this.poolSupply = (+this.poolSupply) - (+paiAfterExitFee);
     }
     return amountsOut;
   }
@@ -380,6 +383,7 @@ module.exports = class PoolHelper {
 
   calcSingleOutGivenPoolIn(tokenOut, poolAmountIn, applyChanges = false) {
     const recordOut = this.records[tokenOut];
+    const paiAfterExitFee = Decimal(poolAmountIn).times(Decimal(1).minus(Decimal(EXIT_FEE)));
     const tokenAmountOut = calcSingleOutGivenPoolIn(
       recordOut.balance,
       recordOut.denorm,
@@ -391,7 +395,7 @@ module.exports = class PoolHelper {
     if (applyChanges) {
       this.records[tokenOut].balance = Decimal(recordOut.balance).sub(tokenAmountOut);
       this.records[tokenOut].denorm = this.calcWeightDecrease(tokenOut);
-      this.poolSupply = (+this.poolSupply) - (+poolAmountIn);
+      this.poolSupply = (+this.poolSupply) - (+paiAfterExitFee);
     }
     return tokenAmountOut;
   }
@@ -406,10 +410,11 @@ module.exports = class PoolHelper {
       tokenAmountOut,
       this.swapFee
     );
+    const paiAfterExitFee = Decimal(poolAmountIn).times(Decimal(1).minus(Decimal(EXIT_FEE)));
     if (applyChanges) {
       this.records[tokenOut].balance = Decimal(recordOut.balance).sub(tokenAmountOut);
       this.records[tokenOut].denorm = this.calcWeightDecrease(tokenOut);
-      this.poolSupply = (+this.poolSupply) - (+poolAmountIn);
+      this.poolSupply = (+this.poolSupply) - (+paiAfterExitFee);
     }
     return poolAmountIn;
   }
