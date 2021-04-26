@@ -106,6 +106,7 @@ const controllerFixture = async ({ deployments, getNamedAccounts, ethers }) => {
     nonOwnerFaker,
     addLiquidityAll,
     ownerFaker,
+    notOwner: signer2,
     initializerImplementation: poolInitializerImplementation.address
   };
 };

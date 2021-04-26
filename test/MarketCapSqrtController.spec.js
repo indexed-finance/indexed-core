@@ -8,7 +8,7 @@ const errorDelta = 10 ** -8;
 const WEIGHT_MULTIPLIER = toWei(25);
 
 describe('MarketCapSqrtController.sol', async () => {
-  let controller, from, verifyRevert;
+  let controller, notOwner, from, verifyRevert;
   let nonOwnerFaker, ownerFaker;
   let updatePrices, addLiquidityAll, liquidityManager;
   let sortedWrappedTokens;
@@ -34,7 +34,8 @@ describe('MarketCapSqrtController.sol', async () => {
         addLiquidity,
         ownerFaker,
         initializerImplementation,
-        liquidityManager
+        liquidityManager,
+        notOwner
       } = await deployments.createFixture(controllerFixture)());
       tokens = wrappedTokens.map(t => t.address);
       sortedWrappedTokens = [...wrappedTokens].sort((a, b) => {
@@ -94,10 +95,11 @@ describe('MarketCapSqrtController.sol', async () => {
 
   const setupCategory = async () => {
     await controller.createCategory(`0x${'ff'.repeat(32)}`);
-    await controller.addTokens(1, tokens);
+    const id = await controller.categoryIndex();
+    await controller.addTokens(id, tokens);
     await fastForward(3600 * 48);
     await addLiquidityAll();
-    await controller.orderCategoryTokensByMarketCap(1);
+    await controller.orderCategoryTokensByMarketCap(id);
   };
 
   const getExpectedDenorms = async (numTokens) => {
@@ -164,10 +166,10 @@ describe('MarketCapSqrtController.sol', async () => {
     return tx;
   }
 
-  const setupPool = async (size = 5, ethValue = 1) => {
+  const setupPool = async (size = 5, ethValue = 1, id = 1) => {
     poolSize = size;
     if ((await controller.categoryIndex()).eq(0)) await setupCategory();
-    const { events } = await controller.prepareIndexPool(1, size, toWei(ethValue), 'Test Index Pool', 'TIP').then(tx => tx.wait());
+    const { events } = await controller.prepareIndexPool(id, size, toWei(ethValue), 'Test Index Pool', 'TIP').then(tx => tx.wait());
     const { args: { pool: poolAddress, initializer: initializerAddress } } = events.filter(e => e.event == 'NewPoolInitializer')[0];
     pool = await ethers.getContractAt('IndexPool', poolAddress);
     initializer = await ethers.getContractAt('PoolInitializer', initializerAddress);
@@ -193,11 +195,24 @@ describe('MarketCapSqrtController.sol', async () => {
     it('All functions with onlyOwner modifier revert if caller is not owner', async () => {
       const onlyOwnerFns = [
         'prepareIndexPool', 'setDefaultSellerPremium', 'updateSellerPremium',
-        'setSwapFee', 'delegateCompLikeTokenFromPool',
-        'setDefaultExitFeeRecipient', 'setExitFeeRecipient'
+        'delegateCompLikeTokenFromPool', 'setDefaultExitFeeRecipient',
       ];
       for (let fn of onlyOwnerFns) {
         await verifyRejection(nonOwnerFaker, fn, /Ownable: caller is not the owner/g);
+      }
+    });
+  });
+
+  describe('_havePool', async () => {
+    setupTests();
+
+    it('All functions with _havePool modifier revert if pool address not recognized', async () => {
+      // reweighPool & reindexPool included even though there is no modifier because it uses the same validation
+      const onlyOwnerFns = [
+        'updateMinimumBalance', 'reweighPool', 'reindexPool', 'getPoolMeta'
+      ];
+      for (let fn of onlyOwnerFns) {
+        await verifyRejection(ownerFaker, fn, /ERR_POOL_NOT_FOUND/g);
       }
     });
   });
@@ -255,18 +270,6 @@ describe('MarketCapSqrtController.sol', async () => {
     });
   });
 
-  describe('_havePool', async () => {
-    setupTests();
-
-    it('All functions with _havePool modifier revert if pool address not recognized', async () => {
-      // reweighPool & reindexPool included even though there is no modifier because it uses the same validation
-      const onlyOwnerFns = ['setExitFeeRecipient', 'setSwapFee', 'updateMinimumBalance', 'reweighPool', 'reindexPool', 'getPoolMeta'];
-      for (let fn of onlyOwnerFns) {
-        await verifyRejection(ownerFaker, fn, /ERR_POOL_NOT_FOUND/g);
-      }
-    });
-  });
-
   describe('setDefaultSellerPremium()', async () => {
     setupTests();
 
@@ -298,15 +301,128 @@ describe('MarketCapSqrtController.sol', async () => {
     })
   })
 
-  describe('setExitFeeRecipient()', () => {
+  describe('setExitFeeRecipient(address,address)', () => {
     setupTests({ category: true, pool: true, init: true });
+
+    it('Reverts if not owner', async () => {
+      await verifyRejection(
+        controller.connect(notOwner),
+        'setExitFeeRecipient(address,address)',
+        /Ownable: caller is not the owner/g,
+        pool.address, zeroAddress
+      );
+    })
+
+    it('Reverts if pool does not exist', async () => {
+      await verifyRejection(
+        controller,
+        'setExitFeeRecipient(address,address)',
+        /ERR_POOL_NOT_FOUND/g,
+        zeroAddress, zeroAddress
+      );
+    })
 
     it('Sets exit fee recipient on pool', async () => {
       const recipient = `0xFFfFfFffFFfffFFfFFfFFFFFffFFFffffFfFFFfF`;
-      await controller.setExitFeeRecipient(pool.address, recipient);
+      await controller['setExitFeeRecipient(address,address)'](pool.address, recipient);
       expect(await pool.getExitFeeRecipient()).to.eq(recipient);
     })
   })
+
+  describe('setExitFeeRecipient(address[],address)', () => {
+    setupTests({ category: true, pool: true, init: true });
+
+    it('Reverts if not owner', async () => {
+      await verifyRejection(
+        await controller.connect(notOwner),
+        'setExitFeeRecipient(address[],address)',
+        /Ownable: caller is not the owner/g,
+        [pool.address], zeroAddress
+      )
+    })
+
+    it('Reverts if any of the pools do not exist', async () => {
+      await verifyRejection(
+        controller,
+        'setExitFeeRecipient(address[],address)',
+        /ERR_POOL_NOT_FOUND/g,
+        [zeroAddress], `0xFFfFfFffFFfffFFfFFfFFFFFffFFFffffFfFFFfF`
+      );
+    })
+
+    it('Sets exit fee recipient on pools', async () => {
+      const recipient = `0xFFfFfFffFFfffFFfFFfFFFFFffFFFffffFfFFFfF`;
+      const pool1 = pool.address;
+      await setupCategory()
+      const { poolAddress: pool2 } = await setupPool(5, 1, 2);
+      await finishInitializer()
+      await controller['setExitFeeRecipient(address[],address)']([pool1, pool2], recipient);
+      expect(await (await ethers.getContractAt('IndexPool', pool1)).getExitFeeRecipient()).to.eq(recipient);
+      expect(await (await ethers.getContractAt('IndexPool', pool2)).getExitFeeRecipient()).to.eq(recipient);
+    })
+  })
+
+  describe('setSwapFee(address,uint256)', async () => {
+    setupTests({ pool: true, init: true, size: 2, ethValue: 1 });
+
+    it('Reverts if not owner', async () => {
+      await verifyRejection(
+        await controller.connect(notOwner),
+        'setSwapFee(address,uint256)',
+        /Ownable: caller is not the owner/g,
+        pool.address, 0
+      )
+    })
+
+    it('Reverts if any of the pools do not exist', async () => {
+      await verifyRejection(
+        controller,
+        'setSwapFee(address,uint256)',
+        /ERR_POOL_NOT_FOUND/g,
+        zeroAddress, 0
+      );
+    })
+
+    it('Sets swap fee on the pool', async () => {
+      const fee = toWei('0.01');
+      await controller['setSwapFee(address,uint256)'](pool.address, fee);
+      const newFee = await pool.getSwapFee();
+      expect(newFee.eq(fee)).to.be.true;
+    });
+  });
+
+  describe('setSwapFee(address[],uint256)', async () => {
+    setupTests({ pool: true, init: true, size: 2, ethValue: 1 });
+
+    it('Reverts if not owner', async () => {
+      await verifyRejection(
+        await controller.connect(notOwner),
+        'setSwapFee(address[],uint256)',
+        /Ownable: caller is not the owner/g,
+        [pool.address], 0
+      )
+    })
+
+    it('Reverts if any of the pools do not exist', async () => {
+      await verifyRejection(
+        controller,
+        'setSwapFee(address[],uint256)',
+        /ERR_POOL_NOT_FOUND/g,
+        [zeroAddress], 0
+      );
+    })
+
+    it('Sets swap fee on the pool', async () => {
+      const pool1 = pool.address;
+      await setupCategory()
+      const { poolAddress: pool2 } = await setupPool(5, 1, 2);
+      await finishInitializer()
+      const fee = toWei('0.01');
+      await controller['setSwapFee(address[],uint256)']([pool1, pool2], fee);
+      expect((await (await ethers.getContractAt('IndexPool', pool1)).getSwapFee()).eq(fee)).to.be.true;
+      expect((await (await ethers.getContractAt('IndexPool', pool2)).getSwapFee()).eq(fee)).to.be.true;
+    });
+  });
 
   describe('getInitialTokensAndBalances()', async () => {
     setupTests();
@@ -421,17 +537,6 @@ describe('MarketCapSqrtController.sol', async () => {
       await controller.updateSellerPremium(tokenSeller.address, 3);
       const premium = await tokenSeller.getPremiumPercent();
       expect(premium).to.eq(3);
-    });
-  });
-
-  describe('setSwapFee()', async () => {
-    setupTests({ pool: true, init: true, size: 2, ethValue: 1 });
-
-    it('Sets swap fee on the pool', async () => {
-      const fee = toWei('0.01');
-      await controller.setSwapFee(pool.address, fee);
-      const newFee = await pool.getSwapFee();
-      expect(newFee.eq(fee)).to.be.true;
     });
   });
 
