@@ -75,6 +75,11 @@ describe('IndexPool.sol', async () => {
       expect(swapFee.eq(toWei('0.02'))).to.be.true;
     });
 
+    it('getExitFee()', async () => {
+      const exitFee = await indexPool.getExitFee();
+      expect(exitFee.eq(toWei('0.005'))).to.be.true;
+    });
+
     it('getController()', async () => {
       const controllerAddress = await indexPool.getController();
       expect(controllerAddress).to.eq(from)
@@ -831,6 +836,15 @@ describe('IndexPool.sol', async () => {
       await triggerReindex();
       await verifyRevert('exitswapPoolAmountIn', /ERR_OUT_NOT_READY/g, newToken.address, zero, zero);
     });
+
+    it('Gives exit fee to exit fee recipient', async () => {
+      const poolAmountIn = toWei(1);
+      const feeRecipientBalanceBefore = await indexPool.balanceOf(feeRecipient)
+      const token = tokens[0];
+      await indexPool.exitswapPoolAmountIn(token, poolAmountIn, 0);
+      const feeRecipientBalanceAfter = await indexPool.balanceOf(feeRecipient);
+      expect(feeRecipientBalanceAfter.sub(feeRecipientBalanceBefore).eq(poolAmountIn.div(200))).to.be.true;
+    })
   });
 
   describe('exitswapExternAmountOut()', async () => {
@@ -866,6 +880,19 @@ describe('IndexPool.sol', async () => {
       await triggerReindex();
       await verifyRevert('exitswapExternAmountOut', /ERR_OUT_NOT_READY/g, newToken.address, zero, zero);
     });
+
+    it('Gives exit fee to exit fee recipient', async () => {
+      const feeRecipientBalanceBefore = await indexPool.balanceOf(feeRecipient)
+      const token = tokens[0];
+      const tokenAmountOut = balances[0].div(10);
+      const amountIn = await indexPool.callStatic.exitswapExternAmountOut(token, tokenAmountOut, maxPrice);
+      await indexPool.exitswapExternAmountOut(token, tokenAmountOut, maxPrice);
+      const feeRecipientBalanceAfter = await indexPool.balanceOf(feeRecipient);
+      expect(+calcRelativeDiff(
+        Decimal(fromWei(feeRecipientBalanceAfter.sub(feeRecipientBalanceBefore))),
+        Decimal(fromWei(amountIn.div(200)))
+      )).to.be.lte(errorDelta);
+    })
   });
 
   describe('exitPool()', async () => {
