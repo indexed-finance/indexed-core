@@ -104,6 +104,12 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
     uint256 indexSize
   );
 
+  /** @dev Emitted when a pool is reweighed. */
+  event PoolReweighed(address pool);
+
+  /** @dev Emitted when a pool is reindexed. */
+  event PoolReindexed(address pool);
+
 /* ==========  Structs  ========== */
 
   /**
@@ -148,6 +154,8 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
 
   // Metadata about index pools
   mapping(address => IndexPoolMeta) internal _poolMeta;
+
+  address public defaultExitFeeRecipient;
 
 /* ========== Modifiers ========== */
 
@@ -213,7 +221,7 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
       POOL_IMPLEMENTATION_ID,
       keccak256(abi.encodePacked(categoryID, indexSize))
     );
-    IIndexPool(poolAddress).configure(address(this), name, symbol);
+    IIndexPool(poolAddress).configure(address(this), name, symbol, defaultExitFeeRecipient);
 
     _poolMeta[poolAddress] = IndexPoolMeta({
       initialized: false,
@@ -333,30 +341,57 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
   }
 
   /**
-   * @dev Sets the maximum number of pool tokens that can be minted
-   * for a particular pool.
-   *
-   * This value will be used in the alpha to limit the maximum damage
-   * that can be caused by a catastrophic error. It can be gradually
-   * increased as the pool continues to not be exploited.
-   *
-   * If it is set to 0, the limit will be removed.
-   *
-   * @param poolAddress Address of the pool to set the limit on.
-   * @param maxPoolTokens Maximum LP tokens the pool can mint.
+   * @dev Sets the default exit fee recipient for new pools.
    */
-  function setMaxPoolTokens(
-    address poolAddress,
-    uint256 maxPoolTokens
-  ) external onlyOwner _havePool(poolAddress) {
-    IIndexPool(poolAddress).setMaxPoolTokens(maxPoolTokens);
+  function setDefaultExitFeeRecipient(address defaultExitFeeRecipient_) external onlyOwner {
+    require(defaultExitFeeRecipient_ != address(0), "ERR_NULL_ADDRESS");
+    defaultExitFeeRecipient = defaultExitFeeRecipient_;
+  }
+
+  /**
+   * @dev Sets the exit fee recipient on an existing pool.
+   */
+  function setExitFeeRecipient(address poolAddress, address exitFeeRecipient) external onlyOwner _havePool(poolAddress) {
+    // No not-null requirement - already in pool function.
+    IIndexPool(poolAddress).setExitFeeRecipient(exitFeeRecipient);
+  }
+
+  /**
+   * @dev Sets the exit fee recipient on multiple existing pools.
+   */
+  function setExitFeeRecipient(address[] calldata poolAddresses, address exitFeeRecipient) external onlyOwner {
+    for (uint256 i = 0; i < poolAddresses.length; i++) {
+      address poolAddress = poolAddresses[i];
+      require(_poolMeta[poolAddress].initialized, "ERR_POOL_NOT_FOUND");
+      // No not-null requirement - already in pool function.
+      IIndexPool(poolAddress).setExitFeeRecipient(exitFeeRecipient);
+    }
+  }
+
+  /**
+   * @dev Sets the swap fee on multiple index pools.
+   */
+  function setSwapFee(address poolAddress, uint256 swapFee) external onlyOwner _havePool(poolAddress) {
+    IIndexPool(poolAddress).setSwapFee(swapFee);
   }
 
   /**
    * @dev Sets the swap fee on an index pool.
    */
-  function setSwapFee(address poolAddress, uint256 swapFee) external onlyOwner _havePool(poolAddress) {
-    IIndexPool(poolAddress).setSwapFee(swapFee);
+  function setSwapFee(address[] calldata poolAddresses, uint256 swapFee) external onlyOwner {
+    for (uint256 i = 0; i < poolAddresses.length; i++) {
+      address poolAddress = poolAddresses[i];
+      require(_poolMeta[poolAddress].initialized, "ERR_POOL_NOT_FOUND");
+      // No not-null requirement - already in pool function.
+      IIndexPool(poolAddress).setSwapFee(swapFee);
+    }
+  }
+
+  /**
+   * @dev Sets the controller on an index pool.
+   */
+  function setController(address poolAddress, address controller) external onlyOwner _havePool(poolAddress) {
+    IIndexPool(poolAddress).setController(controller);
   }
 
   /**
@@ -441,6 +476,7 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
       denormalizedWeights,
       minimumBalances
     );
+    emit PoolReindexed(poolAddress);
   }
 
   /**
@@ -477,6 +513,7 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
     meta.lastReweigh = uint64(now);
     _poolMeta[poolAddress] = meta;
     IIndexPool(poolAddress).reweighTokens(tokens, denormalizedWeights);
+    emit PoolReweighed(poolAddress);
   }
 
 /* ==========  Pool Queries  ========== */
@@ -530,6 +567,14 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
         keccak256(abi.encodePacked(categoryID, indexSize))
       ))
     );
+  }
+
+  /**
+   * @dev Returns the IndexPoolMeta struct for `poolAddress`.
+   */
+  function getPoolMeta(address poolAddress) external view returns (IndexPoolMeta memory meta) {
+    meta = _poolMeta[poolAddress];
+    require(meta.indexSize > 0, "ERR_POOL_NOT_FOUND");
   }
 
   /**

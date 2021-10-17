@@ -18,7 +18,7 @@ contract BConst {
 /* ---  Weight Updates  --- */
 
   // Minimum time passed between each weight update for a token.
-  uint256 internal constant WEIGHT_UPDATE_DELAY = 1 hours;
+  uint256 internal constant WEIGHT_UPDATE_DELAY = 30 minutes;
 
   // Maximum percent by which a weight can adjust at a time
   // relative to the current weight.
@@ -37,7 +37,7 @@ contract BConst {
   // Maximum swap or exit fee.
   uint256 internal constant MAX_FEE = BONE / 10;
   // Actual exit fee.
-  uint256 internal constant EXIT_FEE = 0;
+  uint256 internal constant EXIT_FEE = 5e15;
 
   // Default total of all desired weights. Can differ by up to BONE.
   uint256 internal constant DEFAULT_TOTAL_WEIGHT = BONE * 25;
@@ -45,7 +45,7 @@ contract BConst {
   uint256 internal constant MIN_WEIGHT = BONE / 4;
   uint256 internal constant MAX_WEIGHT = BONE * 25;
   // Maximum total weight.
-  uint256 internal constant MAX_TOTAL_WEIGHT = BONE * 26;
+  uint256 internal constant MAX_TOTAL_WEIGHT = BONE * 27;
   // Minimum balance for a token (only applied at initialization)
   uint256 internal constant MIN_BALANCE = BONE / 10**12;
   // Initial pool tokens

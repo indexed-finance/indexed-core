@@ -1,5 +1,7 @@
 const Decimal = require('decimal.js');
 
+const EXIT_FEE = 0.005;
+
 function calcRelativeDiff(expected, actual) {
   return ((Decimal(expected).minus(Decimal(actual))).div(expected)).abs();
 }
@@ -85,7 +87,8 @@ function calcSingleOutGivenPoolIn(
   swapFee
 ) {
   const normalizedWeight = Decimal(tokenWeightOut).div(Decimal(totalWeight));
-  const newPoolSupply = Decimal(poolSupply).minus(Decimal(poolAmountIn));
+  const poolAmountInAfterExitFee = Decimal(poolAmountIn).times(Decimal(1).minus(EXIT_FEE))
+  const newPoolSupply = Decimal(poolSupply).minus(poolAmountInAfterExitFee);
   const poolRatio = newPoolSupply.div(Decimal(poolSupply));
   const boo = Decimal(1).div(normalizedWeight);
   const tokenOutRatio = poolRatio.pow(boo);
@@ -113,9 +116,8 @@ function calcPoolInGivenSingleOut(
   const poolRatio = tokenOutRatio.pow(normalizedWeight);
   const newPoolSupply = poolRatio.mul(Decimal(poolSupply));
   const poolAmountInAfterExitFee = Decimal(poolSupply).minus(newPoolSupply);
-  const poolAmountIn = poolAmountInAfterExitFee.div(Decimal(1));
+  const poolAmountIn = poolAmountInAfterExitFee.div(Decimal(1).minus(EXIT_FEE));
   return poolAmountIn;
-
 }
 
 module.exports = {

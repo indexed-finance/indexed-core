@@ -7,7 +7,6 @@ import "./BToken.sol";
 import "./BMath.sol";
 
 /* ========== Internal Interfaces ========== */
-import "../interfaces/IFlashLoanRecipient.sol";
 import "../interfaces/IIndexPool.sol";
 import "../interfaces/ICompLikeToken.sol";
 
@@ -23,63 +22,6 @@ Subject to the GPL-3.0 license
 
 
 contract IndexPool is BToken, BMath, IIndexPool {
-
-/* ==========  EVENTS  ========== */
-
-  /** @dev Emitted when tokens are swapped. */
-  event LOG_SWAP(
-    address indexed caller,
-    address indexed tokenIn,
-    address indexed tokenOut,
-    uint256 tokenAmountIn,
-    uint256 tokenAmountOut
-  );
-
-  /** @dev Emitted when underlying tokens are deposited for pool tokens. */
-  event LOG_JOIN(
-    address indexed caller,
-    address indexed tokenIn,
-    uint256 tokenAmountIn
-  );
-
-  /** @dev Emitted when pool tokens are burned for underlying. */
-  event LOG_EXIT(
-    address indexed caller,
-    address indexed tokenOut,
-    uint256 tokenAmountOut
-  );
-
-  /** @dev Emitted when a token's weight updates. */
-  event LOG_DENORM_UPDATED(address indexed token, uint256 newDenorm);
-
-  /** @dev Emitted when a token's desired weight is set. */
-  event LOG_DESIRED_DENORM_SET(address indexed token, uint256 desiredDenorm);
-
-  /** @dev Emitted when a token is unbound from the pool. */
-  event LOG_TOKEN_REMOVED(address token);
-
-  /** @dev Emitted when a token is unbound from the pool. */
-  event LOG_TOKEN_ADDED(
-    address indexed token,
-    uint256 desiredDenorm,
-    uint256 minimumBalance
-  );
-
-  /** @dev Emitted when a token's minimum balance is updated. */
-  event LOG_MINIMUM_BALANCE_UPDATED(address token, uint256 minimumBalance);
-
-  /** @dev Emitted when a token reaches its minimum balance. */
-  event LOG_TOKEN_READY(address indexed token);
-
-  /** @dev Emitted when public trades are enabled. */
-  event LOG_PUBLIC_SWAP_ENABLED();
-
-  /** @dev Emitted when the maximum tokens value is updated. */
-  event LOG_MAX_TOKENS_UPDATED(uint256 maxPoolTokens);
-
-  /** @dev Emitted when the swap fee is updated. */
-  event LOG_SWAP_FEE_UPDATED(uint256 swapFee);
-
 /* ==========  Modifiers  ========== */
 
   modifier _lock_ {
@@ -135,11 +77,8 @@ contract IndexPool is BToken, BMath, IIndexPool {
   // requisite initial balance.
   mapping(address => uint256) internal _minimumBalances;
 
-  // Maximum LP tokens that can be bound.
-  // Used in alpha to restrict the economic impact of a catastrophic
-  // failure. It can be gradually increased as the pool continues to
-  // not be exploited.
-  uint256 internal _maxPoolTokens;
+  // Recipient for exit fees
+  address internal _exitFeeRecipient;
 
 /* ==========  Controls  ========== */
 
@@ -151,17 +90,20 @@ contract IndexPool is BToken, BMath, IIndexPool {
    * @param controller Controller of the pool
    * @param name Name of the pool token
    * @param symbol Symbol of the pool token
+   * @param exitFeeRecipient Address that receives exit fees
    */
   function configure(
     address controller,
     string calldata name,
-    string calldata symbol
+    string calldata symbol,
+    address exitFeeRecipient
   ) external override {
     require(_controller == address(0), "ERR_CONFIGURED");
-    require(controller != address(0), "ERR_NULL_ADDRESS");
+    require(controller != address(0) && exitFeeRecipient != address(0), "ERR_NULL_ADDRESS");
     _controller = controller;
-    // default fee is 2.5%
-    _swapFee = BONE / 40;
+    // default fee is 2%
+    _swapFee = BONE / 50;
+    _exitFeeRecipient = exitFeeRecipient;
     _initializeToken(name, symbol);
   }
 
@@ -223,20 +165,6 @@ contract IndexPool is BToken, BMath, IIndexPool {
   }
 
   /**
-   * @dev Sets the maximum number of pool tokens that can be minted.
-   *
-   * This value will be used in the alpha to limit the maximum damage
-   * that can be caused by a catastrophic error. It can be gradually
-   * increased as the pool continues to not be exploited.
-   *
-   * If it is set to 0, the limit will be removed.
-   */
-  function setMaxPoolTokens(uint256 maxPoolTokens) external override _control_ {
-    _maxPoolTokens = maxPoolTokens;
-    emit LOG_MAX_TOKENS_UPDATED(maxPoolTokens);
-  }
-
-  /**
    * @dev Set the swap fee.
    * Note: Swap fee must be between 0.0001% and 10%
    */
@@ -256,6 +184,24 @@ contract IndexPool is BToken, BMath, IIndexPool {
     _control_
   {
     ICompLikeToken(token).delegate(delegatee);
+  }
+
+  /**
+   * @dev Set the exit fee recipient address.
+   */
+  function setExitFeeRecipient(address exitFeeRecipient) external override _control_ {
+    require(exitFeeRecipient != address(0), "ERR_NULL_ADDRESS");
+    _exitFeeRecipient = exitFeeRecipient;
+    emit LOG_EXIT_FEE_RECIPIENT_UPDATED(exitFeeRecipient);
+  }
+
+  /**
+   * @dev Set the controller address
+   */
+  function setController(address controller) external override _control_ {
+    require(controller != address(0), "ERR_NULL_ADDRESS");
+    _controller = controller;
+    emit LOG_CONTROLLER_UPDATED(controller);
   }
 
 /* ==========  Token Management Actions  ========== */
@@ -386,14 +332,6 @@ contract IndexPool is BToken, BMath, IIndexPool {
     require(ratio != 0, "ERR_MATH_APPROX");
     require(maxAmountsIn.length == _tokens.length, "ERR_ARR_LEN");
 
-    uint256 maxPoolTokens = _maxPoolTokens;
-    if (maxPoolTokens > 0) {
-      require(
-        badd(poolTotal, poolAmountOut) <= maxPoolTokens,
-        "ERR_MAX_POOL_TOKENS"
-      );
-    }
-
     for (uint256 i = 0; i < maxAmountsIn.length; i++) {
       address t = _tokens[i];
       (Record memory record, uint256 realBalance) = _getInputToken(t);
@@ -449,14 +387,6 @@ contract IndexPool is BToken, BMath, IIndexPool {
       _swapFee
     );
 
-    uint256 maxPoolTokens = _maxPoolTokens;
-    if (maxPoolTokens > 0) {
-      require(
-        badd(_totalSupply, poolAmountOut) <= maxPoolTokens,
-        "ERR_MAX_POOL_TOKENS"
-      );
-    }
-
     require(poolAmountOut >= minPoolAmountOut, "ERR_LIMIT_OUT");
 
     _updateInputToken(tokenIn, inRecord, badd(realInBalance, tokenAmountIn));
@@ -492,14 +422,6 @@ contract IndexPool is BToken, BMath, IIndexPool {
     _public_
     returns (uint256/* tokenAmountIn */)
   {
-    uint256 maxPoolTokens = _maxPoolTokens;
-    if (maxPoolTokens > 0) {
-      require(
-        badd(_totalSupply, poolAmountOut) <= maxPoolTokens,
-        "ERR_MAX_POOL_TOKENS"
-      );
-    }
-
     (Record memory inRecord, uint256 realInBalance) = _getInputToken(tokenIn);
 
     uint256 tokenAmountIn = calcSingleInGivenPoolOut(
@@ -554,7 +476,7 @@ contract IndexPool is BToken, BMath, IIndexPool {
     require(ratio != 0, "ERR_MATH_APPROX");
 
     _pullPoolShare(msg.sender, poolAmountIn);
-    _pushPoolShare(_controller, exitFee);
+    _pushPoolShare(_exitFeeRecipient, exitFee);
     _burnPoolShare(pAiAfterExitFee);
     for (uint256 i = 0; i < minAmountsOut.length; i++) {
       address t = _tokens[i];
@@ -623,7 +545,7 @@ contract IndexPool is BToken, BMath, IIndexPool {
 
     _pullPoolShare(msg.sender, poolAmountIn);
     _burnPoolShare(bsub(poolAmountIn, exitFee));
-    _pushPoolShare(_controller, exitFee);
+    _pushPoolShare(_exitFeeRecipient, exitFee);
 
     return tokenAmountOut;
   }
@@ -678,7 +600,7 @@ contract IndexPool is BToken, BMath, IIndexPool {
 
     _pullPoolShare(msg.sender, poolAmountIn);
     _burnPoolShare(bsub(poolAmountIn, exitFee));
-    _pushPoolShare(_controller, exitFee);
+    _pushPoolShare(_exitFeeRecipient, exitFee);
 
     return poolAmountIn;
   }
@@ -713,60 +635,6 @@ contract IndexPool is BToken, BMath, IIndexPool {
     } else {
       _pushUnderlying(token, address(_unbindHandler), balance);
       _unbindHandler.handleUnbindToken(token, balance);
-    }
-  }
-
-/* ==========  Flash Loan  ========== */
-
-  /**
-   * @dev Execute a flash loan, transferring `amount` of `token` to `recipient`.
-   * `amount` must be repaid with `swapFee` interest by the end of the transaction.
-   *
-   * @param recipient Must implement the IFlashLoanRecipient interface
-   * @param token Token to borrow
-   * @param amount Amount to borrow
-   * @param data Data to send to the recipient in `receiveFlashLoan` call
-   */
-  function flashBorrow(
-    address recipient,
-    address token,
-    uint256 amount,
-    bytes calldata data
-  )
-    external
-    override
-    _lock_
-  {
-    Record storage record = _records[token];
-    require(record.bound, "ERR_NOT_BOUND");
-    uint256 balStart = IERC20(token).balanceOf(address(this));
-    require(balStart >= amount, "ERR_INSUFFICIENT_BAL");
-    _pushUnderlying(token, address(recipient), amount);
-    uint256 fee = bmul(balStart, _swapFee);
-    uint256 amountDue = badd(amount, fee);
-    IFlashLoanRecipient(recipient).receiveFlashLoan(token, amount, amountDue, data);
-    uint256 balEnd = IERC20(token).balanceOf(address(this));
-    require(
-      balEnd > balStart && balEnd >= amountDue,
-      "ERR_INSUFFICIENT_PAYMENT"
-    );
-    record.balance = balEnd;
-    // If the payment brings the token above its minimum balance,
-    // clear the minimum and mark the token as ready.
-    if (!record.ready) {
-      uint256 minimumBalance = _minimumBalances[token];
-      if (balEnd >= minimumBalance) {
-        _minimumBalances[token] = 0;
-        record.ready = true;
-        emit LOG_TOKEN_READY(token);
-        uint256 additionalBalance = bsub(balEnd, minimumBalance);
-        uint256 balRatio = bdiv(additionalBalance, minimumBalance);
-        uint96 newDenorm = uint96(badd(MIN_WEIGHT, bmul(MIN_WEIGHT, balRatio)));
-        record.denorm = newDenorm;
-        record.lastDenormUpdate = uint40(now);
-        _totalWeight = badd(_totalWeight, newDenorm);
-        emit LOG_DENORM_UPDATED(token, record.denorm);
-      }
     }
   }
 
@@ -829,17 +697,18 @@ contract IndexPool is BToken, BMath, IIndexPool {
     _pullUnderlying(tokenIn, msg.sender, tokenAmountIn);
     _pushUnderlying(tokenOut, msg.sender, tokenAmountOut);
 
-    realInBalance = badd(realInBalance, tokenAmountIn);
-    _updateInputToken(tokenIn, inRecord, realInBalance);
-    if (inRecord.ready) {
-      inRecord.balance = realInBalance;
-    }
     // Update the in-memory record for the spotPriceAfter calculation,
     // then update the storage record with the local balance.
     outRecord.balance = bsub(outRecord.balance, tokenAmountOut);
     _records[tokenOut].balance = outRecord.balance;
     // If needed, update the output token's weight.
     _decreaseDenorm(outRecord, tokenOut);
+
+    realInBalance = badd(realInBalance, tokenAmountIn);
+    _updateInputToken(tokenIn, inRecord, realInBalance);
+    if (inRecord.ready) {
+      inRecord.balance = realInBalance;
+    }
 
     uint256 spotPriceAfter = calcSpotPrice(
       inRecord.balance,
@@ -919,18 +788,19 @@ contract IndexPool is BToken, BMath, IIndexPool {
     _pullUnderlying(tokenIn, msg.sender, tokenAmountIn);
     _pushUnderlying(tokenOut, msg.sender, tokenAmountOut);
 
-    // Update the balance and (if necessary) weight of the input token.
-    realInBalance = badd(realInBalance, tokenAmountIn);
-    _updateInputToken(tokenIn, inRecord, realInBalance);
-    if (inRecord.ready) {
-      inRecord.balance = realInBalance;
-    }
     // Update the in-memory record for the spotPriceAfter calculation,
     // then update the storage record with the local balance.
     outRecord.balance = bsub(outRecord.balance, tokenAmountOut);
     _records[tokenOut].balance = outRecord.balance;
     // If needed, update the output token's weight.
     _decreaseDenorm(outRecord, tokenOut);
+
+    // Update the balance and (if necessary) weight of the input token.
+    realInBalance = badd(realInBalance, tokenAmountIn);
+    _updateInputToken(tokenIn, inRecord, realInBalance);
+    if (inRecord.ready) {
+      inRecord.balance = realInBalance;
+    }
 
     uint256 spotPriceAfter = calcSpotPrice(
       inRecord.balance,
@@ -964,6 +834,10 @@ contract IndexPool is BToken, BMath, IIndexPool {
     return _swapFee;
   }
 
+  function getExitFee() external view override _viewlock_ returns (uint256/* exitFee */) {
+    return EXIT_FEE;
+  }
+
   /**
    * @dev Returns the controller address.
    */
@@ -972,10 +846,14 @@ contract IndexPool is BToken, BMath, IIndexPool {
     return _controller;
   }
 
-/* ==========  Token Queries  ========== */
-  function getMaxPoolTokens() external view override returns (uint256) {
-    return _maxPoolTokens;
+  /**
+   * @dev Returns the exit fee recipient address.
+   */
+  function getExitFeeRecipient() external view override returns (address) {
+    return _exitFeeRecipient;
   }
+
+/* ==========  Token Queries  ========== */
 
   /**
    * @dev Check if a token is bound to the pool.
@@ -1324,8 +1202,10 @@ contract IndexPool is BToken, BMath, IIndexPool {
       denorm = uint96(badd(oldWeight, maxDiff));
       diff = maxDiff;
     }
-    _totalWeight = badd(_totalWeight, diff);
-    require(_totalWeight <= MAX_TOTAL_WEIGHT, "ERR_MAX_TOTAL_WEIGHT");
+    // If new total weight exceeds the maximum, do not update
+    uint256 newTotalWeight = badd(_totalWeight, diff);
+    if (newTotalWeight > MAX_TOTAL_WEIGHT) return;
+    _totalWeight = newTotalWeight;
     // Update the in-memory denorm value for spot-price computations.
     record.denorm = denorm;
     // Update the storage record
