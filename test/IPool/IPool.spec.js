@@ -1,7 +1,7 @@
 const Decimal = require('decimal.js');
 const { calcRelativeDiff } = require('../lib/calc_comparisons');
 const { poolFixture } = require("../fixtures/pool.fixture");
-const { toWei, fromWei, zero, zeroAddress, expect, maxUint256: maxPrice, getTransactionTimestamp, verifyRejection, getFakerContract } = require('../utils');
+const { toWei, fromWei, zero, zeroAddress, expect, maxUint256: maxPrice, getTransactionTimestamp, verifyRejection, getFakerContract, fastForward } = require('../utils');
 const { BigNumber } = require('ethers');
 const { defaultAbiCoder } = require('ethers/lib/utils');
 
@@ -344,12 +344,23 @@ describe('IndexPool.sol', async () => {
       await verifyRevert('setMinimumBalance', /ERR_READY/g, tokens[0], zero);
     });
 
-    it('Sets minimum balance of uninitialized token', async () => {
+    it('Reverts if MIN_BAL_UPDATE_DELAY has not elapsed since reindex', async () => {
       await triggerReindex();
+      await verifyRevert('setMinimumBalance', /MIN_BAL_UPDATE_DELAY/g, newToken.address, toWei(10));
+    })
+
+    it('Sets minimum balance of uninitialized token', async () => {
+      await fastForward(3600 * 7)
       await indexPool.setMinimumBalance(newToken.address, toWei(10));
       const minimumBalance = await indexPool.getMinimumBalance(newToken.address);
       expect(minimumBalance.eq(toWei(10))).to.be.true;
     });
+
+    it('Updates lastDenormUpdate', async () => {
+      const update = (await indexPool.getTokenRecord(newToken.address)).lastDenormUpdate;
+      const { timestamp } = await ethers.provider.getBlock('latest');
+      expect(timestamp).to.eq(update)
+    })
   });
 
   describe('Token Queries', async () => {
@@ -449,26 +460,6 @@ describe('IndexPool.sol', async () => {
 
     it('Reverts if token is not bound', async () => {
       await verifyRevert('getTokenRecord', /ERR_NOT_BOUND/g, zeroAddress);
-    });
-  });
-
-  describe('extrapolatePoolValueFromToken()', async () => {
-    setupTests();
-
-    it('Succeeds if any token is ready and desired', async () => {
-      const [token, extrapolatedValue] = await indexPool.extrapolatePoolValueFromToken();
-      expect(token).to.eq(tokens[0]);
-      const total = await indexPool.getTotalDenormalizedWeight();
-      const expected = total.mul(balances[0]).div(denormalizedWeights[0]);
-      expect(+calcRelativeDiff(fromWei(expected), fromWei(extrapolatedValue))).to.be.lte(errorDelta);
-    });
-
-    it('Reverts if no tokens are both ready and desired', async () => {
-      await indexPool.reweighTokens(
-        tokens,
-        [zero, zero, zero]
-      );
-      await verifyRevert('extrapolatePoolValueFromToken', /ERR_NONE_READY/g);
     });
   });
 
