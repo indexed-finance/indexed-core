@@ -457,7 +457,7 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
 
     uint256[] memory minimumBalances = new uint256[](size);
     uint96[] memory denormalizedWeights = new uint96[](size);
-    uint144 totalValue = _estimatePoolValue(IIndexPool(poolAddress));
+    uint256 totalValue = _estimatePoolValue(IIndexPool(poolAddress));
 
     for (uint256 i = 0; i < size; i++) {
       // The minimum balance is the number of tokens worth the minimum weight
@@ -616,14 +616,19 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
    * "virtual balance" (balance * (totalWeight/weight)) and multiplying
    * by that token's average ether price from UniSwap.
    */
-  function _estimatePoolValue(IIndexPool pool) internal view returns (uint144) {
-    (address token, uint256 value) = pool.extrapolatePoolValueFromToken();
-    return oracle.computeAverageEthForTokens(
-      token,
-      value,
+  function _estimatePoolValue(IIndexPool pool) internal view returns (uint256 totalValue) {
+    address[] memory tokens = pool.getCurrentTokens();
+    uint256 len = tokens.length;
+    uint256[] memory balances = new uint256[](len);
+    for (uint256 i; i < len; i++) balances[i] = IERC20(tokens[i]).balanceOf(address(pool));
+    uint144[] memory ethValues = oracle.computeAverageEthForTokens(
+      tokens,
+      balances,
       SHORT_TWAP_MIN_TIME_ELAPSED,
       SHORT_TWAP_MAX_TIME_ELAPSED
     );
+    // Safe math is not needed because we are taking the sum of an array of uint144s as a uint256.
+    for (uint256 i; i < len; i++) totalValue += ethValues[i];
   }
 
 /* ==========  General Utility Functions  ========== */
