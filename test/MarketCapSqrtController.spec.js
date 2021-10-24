@@ -555,7 +555,7 @@ describe('MarketCapSqrtController.sol', async () => {
     setupTests({ pool: true, init: true, size: 5, ethValue: 1});
 
     it('Reverts if < 2 weeks have passed', async () => {
-      await verifyRevert('reindexPool', /ERR_POOL_REWEIGH_DELAY/g, pool.address);
+      await verifyRevert('reweighPool', /ERR_POOL_REWEIGH_DELAY/g, pool.address);
     });
 
     it('Reweighs the pool and sets desired weights proportional to mcap sqrts', async () => {
