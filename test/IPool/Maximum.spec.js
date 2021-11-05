@@ -93,26 +93,6 @@ describe('IndexPool.sol', async () => {
     });
   });
 
-  describe('extrapolatePoolValueFromToken()', async () => {
-    setupTests();
-
-    it('Succeeds if any token is ready and desired', async () => {
-      const [token, extrapolatedValue] = await indexPool.extrapolatePoolValueFromToken();
-      expect(token).to.eq(tokens[0]);
-      const total = await indexPool.getTotalDenormalizedWeight();
-      const expected = total.mul(balances[0]).div(denormalizedWeights[0]);
-      expect(+calcRelativeDiff(fromWei(expected), fromWei(extrapolatedValue))).to.be.lte(errorDelta);
-    });
-
-    it('Reverts if no tokens are both ready and desired', async () => {
-      await indexPool.reweighTokens(
-        tokens,
-        new Array(tokens.length).fill(0)
-      );
-      await verifyRevert('extrapolatePoolValueFromToken', /ERR_NONE_READY/g);
-    });
-  });
-
   describe('getSpotPrice()', async () => {
     setupTests();
 
