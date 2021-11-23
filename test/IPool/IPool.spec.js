@@ -1,7 +1,7 @@
 const Decimal = require('decimal.js');
 const { calcRelativeDiff } = require('../lib/calc_comparisons');
 const { poolFixture } = require("../fixtures/pool.fixture");
-const { toWei, fromWei, zero, zeroAddress, expect, maxUint256: maxPrice, getTransactionTimestamp, verifyRejection, getFakerContract } = require('../utils');
+const { toWei, fromWei, zero, zeroAddress, expect, maxUint256: maxPrice, getTransactionTimestamp, verifyRejection, getFakerContract, fastForward } = require('../utils');
 const { BigNumber } = require('ethers');
 const { defaultAbiCoder } = require('ethers/lib/utils');
 
@@ -209,7 +209,7 @@ describe('IndexPool.sol', async () => {
     let from, pool, handler;
     let tokenA, tokenB, tokenC;
   
-    before(async () => {
+    beforeEach(async () => {
       ({ deployer: from } = await getNamedAccounts());
       const erc20Factory = await ethers.getContractFactory('MockERC20');
       tokenA = await erc20Factory.deploy('TokenA', 'A');
@@ -264,18 +264,56 @@ describe('IndexPool.sol', async () => {
       expect(balPost.gt(balPre)).to.be.true;
       const diff = balPost.sub(balPre);
       expect(diff.eq(toWei(1))).to.be.true;
-  
     });
   
-    it('Initializes token if minimumm balance is hit', async () => {
+    it('Initializes token if minimum balance is hit', async () => {
+      await pool.reindexTokens(
+        [tokenA.address, tokenC.address],
+        [toWei(20), toWei(5)],
+        [0, toWei(10)]
+      );
       const denormPre = await pool.getDenormalizedWeight(tokenC.address);
       expect(denormPre.eq(0)).to.be.true;
-      await tokenC.getFreeTokens(pool.address, toWei(9));
+      await tokenC.getFreeTokens(pool.address, toWei(10));
       await pool.gulp(tokenC.address);
       const balPost = await pool.getBalance(tokenC.address);
       expect(balPost.eq(toWei(10))).to.be.true;
       const denormPost = await pool.getDenormalizedWeight(tokenC.address);
       const minWeight = toWei('0.25');
+      expect(denormPost.eq(minWeight)).to.be.true;
+    });
+  
+    it('Increases weight if minimum balance is exceeded', async () => {
+      await pool.reindexTokens(
+        [tokenA.address, tokenC.address],
+        [toWei(20), toWei(5)],
+        [0, toWei(10)]
+      );
+      const denormPre = await pool.getDenormalizedWeight(tokenC.address);
+      expect(denormPre.eq(0)).to.be.true;
+      await tokenC.getFreeTokens(pool.address, toWei(15));
+      await pool.gulp(tokenC.address);
+      const balPost = await pool.getBalance(tokenC.address);
+      expect(balPost.eq(toWei(15))).to.be.true;
+      const denormPost = await pool.getDenormalizedWeight(tokenC.address);
+      const minWeight = toWei('0.375');
+      expect(denormPost.eq(minWeight)).to.be.true;
+    });
+  
+    it('Caps weight on initialized token to 2%', async () => {
+      await pool.reindexTokens(
+        [tokenA.address, tokenC.address],
+        [toWei(20), toWei(5)],
+        [0, toWei(10)]
+      );
+      const denormPre = await pool.getDenormalizedWeight(tokenC.address);
+      expect(denormPre.eq(0)).to.be.true;
+      await tokenC.getFreeTokens(pool.address, toWei(25));
+      await pool.gulp(tokenC.address);
+      const balPost = await pool.getBalance(tokenC.address);
+      expect(balPost.eq(toWei(25))).to.be.true;
+      const denormPost = await pool.getDenormalizedWeight(tokenC.address);
+      const minWeight = toWei('0.5');
       expect(denormPost.eq(minWeight)).to.be.true;
     });
   });
@@ -344,12 +382,23 @@ describe('IndexPool.sol', async () => {
       await verifyRevert('setMinimumBalance', /ERR_READY/g, tokens[0], zero);
     });
 
-    it('Sets minimum balance of uninitialized token', async () => {
+    it('Reverts if MIN_BAL_UPDATE_DELAY has not elapsed since reindex', async () => {
       await triggerReindex();
+      await verifyRevert('setMinimumBalance', /MIN_BAL_UPDATE_DELAY/g, newToken.address, toWei(10));
+    })
+
+    it('Sets minimum balance of uninitialized token', async () => {
+      await fastForward(3600 * 7)
       await indexPool.setMinimumBalance(newToken.address, toWei(10));
       const minimumBalance = await indexPool.getMinimumBalance(newToken.address);
       expect(minimumBalance.eq(toWei(10))).to.be.true;
     });
+
+    it('Updates lastDenormUpdate', async () => {
+      const update = (await indexPool.getTokenRecord(newToken.address)).lastDenormUpdate;
+      const { timestamp } = await ethers.provider.getBlock('latest');
+      expect(timestamp).to.eq(update)
+    })
   });
 
   describe('Token Queries', async () => {
@@ -449,26 +498,6 @@ describe('IndexPool.sol', async () => {
 
     it('Reverts if token is not bound', async () => {
       await verifyRevert('getTokenRecord', /ERR_NOT_BOUND/g, zeroAddress);
-    });
-  });
-
-  describe('extrapolatePoolValueFromToken()', async () => {
-    setupTests();
-
-    it('Succeeds if any token is ready and desired', async () => {
-      const [token, extrapolatedValue] = await indexPool.extrapolatePoolValueFromToken();
-      expect(token).to.eq(tokens[0]);
-      const total = await indexPool.getTotalDenormalizedWeight();
-      const expected = total.mul(balances[0]).div(denormalizedWeights[0]);
-      expect(+calcRelativeDiff(fromWei(expected), fromWei(extrapolatedValue))).to.be.lte(errorDelta);
-    });
-
-    it('Reverts if no tokens are both ready and desired', async () => {
-      await indexPool.reweighTokens(
-        tokens,
-        [zero, zero, zero]
-      );
-      await verifyRevert('extrapolatePoolValueFromToken', /ERR_NONE_READY/g);
     });
   });
 
@@ -595,6 +624,64 @@ describe('IndexPool.sol', async () => {
         expect(+calcRelativeDiff(expectedAmountOut, fromWei(actualAmountOut))).to.be.lte(errorDelta);
         expect(+calcRelativeDiff(expectedSpotPrice, fromWei(actualSpotPrice))).to.be.lte(errorDelta);
       }
+    });
+
+    it('Initializes token if minimum balance is reached', async () => {
+      await triggerReindex();
+      const tokenIn = newToken.address;
+      const tokenOut = tokens[0];
+      const tokenAmountIn = await indexPool.getMinimumBalance(tokenIn);
+      await mintAndApprove(tokenIn, tokenAmountIn);
+      await indexPool.swapExactAmountIn(
+        tokenIn,
+        tokenAmountIn.div(2),
+        tokenOut,
+        0,
+        maxPrice
+      );
+      await indexPool.swapExactAmountIn(
+        tokenIn,
+        tokenAmountIn.div(2),
+        tokenOut,
+        0,
+        maxPrice
+      );
+      const record = await indexPool.getTokenRecord(tokenIn);
+      expect(record.balance.eq(tokenAmountIn)).to.be.true;
+      expect(record.ready).to.be.true;
+      expect(record.denorm.eq(toWei(0.25))).to.be.true;
+    });
+
+    it('Initialized token weight exceeds min weight by proportion of min balance exceeded', async () => {
+      await triggerReindex();
+      const tokenIn = newToken.address;
+      const tokenOut = tokens[0];
+      const tokenAmountIn = await indexPool.getMinimumBalance(tokenIn);
+      await mintAndApprove(tokenIn, tokenAmountIn.mul(2));
+      await indexPool.swapExactAmountIn(
+        tokenIn,
+        tokenAmountIn.div(2).sub(1),
+        tokenOut,
+        0,
+        maxPrice
+      );
+      await indexPool.swapExactAmountIn(
+        tokenIn,
+        tokenAmountIn.div(2).sub(1),
+        tokenOut,
+        0,
+        maxPrice
+      );
+      await indexPool.swapExactAmountIn(
+        tokenIn,
+        tokenAmountIn.div(5).add(2),
+        tokenOut,
+        0,
+        maxPrice
+      );
+      const record = await indexPool.getTokenRecord(tokenIn);
+      expect(record.ready).to.be.true;
+      expect(record.denorm.eq(toWei(0.3))).to.be.true;
     });
 
     it('Reverts if tokenOut is uninitialized', async () => {
@@ -795,6 +882,19 @@ describe('IndexPool.sol', async () => {
       expect(actualSupply.equals(expectedSupply)).to.be.true;
       ({tokens, balances, denormalizedWeights, normalizedWeights} = await getPoolData());
     });
+
+    it('Caps weight of initialized tokens at 2%', async () => {
+      await triggerReindex();
+      const poolAmountOut = (await indexPool.totalSupply()).mul(6);
+      const amountsIn = poolHelper.calcAllInGivenPoolOut(+fromWei(poolAmountOut), true);
+      for (let i = 0; i < poolHelper.tokens.length; i++) {
+        await mintAndApprove(poolHelper.tokens[i], toWei(amountsIn[i]).mul(2));
+      }
+      await indexPool.joinPool(poolAmountOut, [maxPrice, maxPrice, maxPrice, maxPrice, maxPrice]);
+      const record = await indexPool.getTokenRecord(newToken.address)
+      expect(record.ready).to.be.true;
+      expect(record.denorm.eq(toWei(0.5))).to.be.true;
+    })
   });
 
   describe('exitswapPoolAmountIn()', async () => {

@@ -298,11 +298,14 @@ contract IndexPool is BToken, BMath, IIndexPool {
   )
     external
     override
+    _lock_
     _control_
   {
     Record storage record = _records[token];
     require(record.bound, "ERR_NOT_BOUND");
     require(!record.ready, "ERR_READY");
+    require(now - record.lastDenormUpdate >= MIN_BAL_UPDATE_DELAY, "MIN_BAL_UPDATE_DELAY");
+    record.lastDenormUpdate = uint40(now);
     _minimumBalances[token] = minimumBalance;
     emit LOG_MINIMUM_BALANCE_UPDATED(token, minimumBalance);
   }
@@ -625,6 +628,7 @@ contract IndexPool is BToken, BMath, IIndexPool {
           uint256 additionalBalance = bsub(balance, minimumBalance);
           uint256 balRatio = bdiv(additionalBalance, minimumBalance);
           uint96 newDenorm = uint96(badd(MIN_WEIGHT, bmul(MIN_WEIGHT, balRatio)));
+          if (newDenorm > 2 * MIN_WEIGHT) newDenorm = uint96(2 * MIN_WEIGHT);
           record.denorm = newDenorm;
           record.lastDenormUpdate = uint40(now);
           _totalWeight = badd(_totalWeight, newDenorm);
@@ -934,40 +938,6 @@ contract IndexPool is BToken, BMath, IIndexPool {
   }
 
   /**
-   * @dev Finds the first token which is both initialized and has a
-   * desired weight above 0, then returns the address of that token
-   * and the extrapolated value of the pool in terms of that token.
-   *
-   * The value is extrapolated by multiplying the token's
-   * balance by the reciprocal of its normalized weight.
-   * @return (token, extrapolatedValue)
-   */
-  function extrapolatePoolValueFromToken()
-    external
-    view
-    override
-    _viewlock_
-    returns (address/* token */, uint256/* extrapolatedValue */)
-  {
-    address token;
-    uint256 extrapolatedValue;
-    uint256 len = _tokens.length;
-    for (uint256 i = 0; i < len; i++) {
-      token = _tokens[i];
-      Record storage record = _records[token];
-      if (record.ready && record.desiredDenorm > 0) {
-        extrapolatedValue = bmul(
-          record.balance,
-          bdiv(_totalWeight, record.denorm)
-        );
-        break;
-      }
-    }
-    require(extrapolatedValue > 0, "ERR_NONE_READY");
-    return (token, extrapolatedValue);
-  }
-
-  /**
    * @dev Get the total denormalized weight of the pool.
    */
   function getTotalDenormalizedWeight()
@@ -1122,7 +1092,7 @@ contract IndexPool is BToken, BMath, IIndexPool {
     _records[token] = Record({
       bound: true,
       ready: false,
-      lastDenormUpdate: 0,
+      lastDenormUpdate: uint40(now),
       denorm: 0,
       desiredDenorm: desiredDenorm,
       index: uint8(_tokens.length),
@@ -1289,6 +1259,7 @@ contract IndexPool is BToken, BMath, IIndexPool {
         uint256 additionalBalance = bsub(realBalance, record.balance);
         uint256 balRatio = bdiv(additionalBalance, record.balance);
         record.denorm = uint96(badd(MIN_WEIGHT, bmul(MIN_WEIGHT, balRatio)));
+        if (record.denorm > 2 * MIN_WEIGHT) record.denorm = uint96(2 * MIN_WEIGHT);
         _records[token].denorm = record.denorm;
         _records[token].lastDenormUpdate = uint40(now);
         _totalWeight = badd(_totalWeight, record.denorm);

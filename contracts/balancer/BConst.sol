@@ -20,6 +20,9 @@ contract BConst {
   // Minimum time passed between each weight update for a token.
   uint256 internal constant WEIGHT_UPDATE_DELAY = 30 minutes;
 
+  // Minimum time between each change to a token's minimum balance.
+  uint256 internal constant MIN_BAL_UPDATE_DELAY = 6 hours;
+
   // Maximum percent by which a weight can adjust at a time
   // relative to the current weight.
   // The number of iterations needed to move from weight A to weight B is the floor of:
