@@ -94,7 +94,7 @@
     "@indexed-finance/uniswap-deployments": "^1.0.2",
     "@indexed-finance/uniswap-v2-oracle": "^1.0.4",
     "@openzeppelin/contracts": "^3.2.0",
-    "axios": "^0.20.0",
+    "axios": "^0.21.2",
     "cids": "^1.0.0",
     "graphql-request": "^3.0.0",
     "keccak": "^3.0.1",
