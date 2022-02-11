@@ -93,7 +93,7 @@
     "@indexed-finance/proxies": "^1.0.15",
     "@indexed-finance/uniswap-deployments": "^1.0.2",
     "@indexed-finance/uniswap-v2-oracle": "^1.0.4",
-    "@openzeppelin/contracts": "^3.2.0",
+    "@openzeppelin/contracts": "^4.4.2",
     "axios": "^0.20.0",
     "cids": "^1.0.0",
     "graphql-request": "^3.0.0",
